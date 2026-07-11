@@ -32,6 +32,10 @@ function App() {
 
   const [tab, setTab] = useState(defaultTabFor(isMobileLike() ? "mobil" : "pc"));
   const [loading, setLoading] = useState(true);
+  // Fehlermeldung, falls das Laden der Daten fehlschlägt (siehe load() unten).
+  // Verhindert, dass die App bei einem Supabase-Fehler dauerhaft im
+  // Ladezustand hängen bleibt (Produktionsfehler, siehe MONTA_CHANGELOG.md).
+  const [loadError, setLoadError] = useState(null);
   const [deviceMode, setDeviceMode] = useState(isMobileLike() ? "mobil" : "pc");
 
   const [showArchived, setShowArchived] = useState(false);
@@ -82,23 +86,44 @@ function App() {
   // Daten -> wird als false behandelt (Filter greift nur bei archived === true).
   const visibleProjects = showArchived ? projects : projects.filter((p) => !p.archived);
 
+  // Lädt Projekte + Materialpositionen. Robust gegenüber Fehlern: schlägt
+  // Supabase fehl (Netzwerk, falsche Zugangsdaten, Policy-Fehler o. Ä.),
+  // bleibt die App NICHT dauerhaft im Ladezustand hängen, sondern zeigt eine
+  // verständliche Fehlermeldung mit "Erneut versuchen" (siehe loadError
+  // unten). Der lokale Fallback (kein Supabase konfiguriert) bleibt
+  // unverändert bestehen.
   async function load() {
     setLoading(true);
-    if (!supabase) {
-      const p = JSON.parse(localStorage.getItem("monta_projects_v04") || "null") || demoProjects;
-      const i = JSON.parse(localStorage.getItem("monta_items_v04") || "null") || demoItems;
-      setProjects(p);
-      setItems(i);
+    setLoadError(null);
+    try {
+      if (!supabase) {
+        const p = JSON.parse(localStorage.getItem("monta_projects_v04") || "null") || demoProjects;
+        const i = JSON.parse(localStorage.getItem("monta_items_v04") || "null") || demoItems;
+        setProjects(p);
+        setItems(i);
+        return;
+      }
+      const [projectsRes, itemsRes] = await Promise.all([
+        supabase.from("projects").select("*").order("created_at", { ascending: false }),
+        supabase.from("material_items").select("*").order("created_at", { ascending: true }),
+      ]);
+      if (projectsRes.error) {
+        throw new Error(`Projekte: ${projectsRes.error.message || "unbekannter Fehler"}`);
+      }
+      if (itemsRes.error) {
+        throw new Error(`Materialpositionen: ${itemsRes.error.message || "unbekannter Fehler"}`);
+      }
+      setProjects(projectsRes.data || []);
+      setItems(itemsRes.data || []);
+    } catch (err) {
+      // Fehler bewusst nicht verschlucken: in der Konsole protokollieren
+      // (für Diagnose in Vercel-Logs/Browser-Konsole) und dem Nutzer eine
+      // verständliche, kurze Meldung ohne Zugangsdaten anzeigen.
+      console.error("MONTA: Laden der Daten fehlgeschlagen.", err);
+      setLoadError(err?.message || "Unbekannter Fehler beim Laden der Daten.");
+    } finally {
       setLoading(false);
-      return;
     }
-    const [{ data: p }, { data: i }] = await Promise.all([
-      supabase.from("projects").select("*").order("created_at", { ascending: false }),
-      supabase.from("material_items").select("*").order("created_at", { ascending: true }),
-    ]);
-    setProjects(p || []);
-    setItems(i || []);
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -288,6 +313,21 @@ function App() {
   }
 
   if (loading) return <Shell deviceMode={deviceMode} setDeviceMode={setDeviceMode}><p>Lade MONTA…</p></Shell>;
+
+  // Fehler beim Laden: statt leerer Seite oder dauerhaftem Ladezustand eine
+  // klare Meldung mit Möglichkeit zum erneuten Versuch. Keine Zugangsdaten
+  // in der Anzeige.
+  if (loadError) {
+    return (
+      <Shell deviceMode={deviceMode} setDeviceMode={setDeviceMode}>
+        <div className="card loadErrorCard">
+          <h2>MONTA konnte die Daten nicht laden.</h2>
+          <p className="hint">{loadError}</p>
+          <button onClick={load}>Erneut versuchen</button>
+        </div>
+      </Shell>
+    );
+  }
 
   return (
     <Shell deviceMode={deviceMode} setDeviceMode={setDeviceMode}>
