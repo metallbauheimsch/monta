@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import ProjectHeader from "../../components/ProjectHeader";
 import { projectStatus, baugruppeStatus } from "../../utils/helpers";
 import { buildProjectStructure, addBaugruppeToRegistry, addBauteilToRegistry, parseEinbauort } from "../../utils/structure";
@@ -8,6 +8,12 @@ import { buildProjectStructure, addBaugruppeToRegistry, addBauteilToRegistry, pa
 //
 // Sprint 5 Erweiterung #4/#5: jede Baugruppe zeigt zusätzlich ihre
 // Materialstatus-Ampel (🔴 Offen / 🟡 Bestellt / 🟢 Bereit).
+//
+// Sprint 6 Ergänzung #11: Baugruppen und Bauteile können umbenannt werden
+// (einfaches Inline-Formular statt Dialog, siehe unten).
+// Sprint 6 Ergänzung #12: Ein neues Projekt legt keine Baugruppe automatisch
+// an - ist die Liste leer, erscheint stattdessen ein deutlicher Button
+// "Baugruppe anlegen", der zum vorhandenen Anlegen-Formular springt.
 export default function ProjectDetail({
   project,
   items,
@@ -15,11 +21,19 @@ export default function ProjectDetail({
   openBauteil,
   setProjectArchived,
   deleteProject,
+  deleteBaugruppe,
+  renameBaugruppe,
+  renameBauteil,
   isBaugruppeBestellt,
 }) {
   const [newBaugruppe, setNewBaugruppe] = useState("");
   const [addingBauteilTo, setAddingBauteilTo] = useState(null);
   const [newBauteil, setNewBauteil] = useState("");
+  const [renamingBaugruppe, setRenamingBaugruppe] = useState(null);
+  const [renameBaugruppeValue, setRenameBaugruppeValue] = useState("");
+  const [renamingBauteil, setRenamingBauteil] = useState(null); // { baugruppe, bauteil }
+  const [renameBauteilValue, setRenameBauteilValue] = useState("");
+  const newBaugruppeInputRef = useRef(null);
 
   const structure = buildProjectStructure(project, items);
 
@@ -44,12 +58,57 @@ export default function ProjectDetail({
     setView("projects");
   }
 
+  // Baugruppe löschen ist bewusst nur nach ausdrücklicher Bestätigung
+  // möglich und funktioniert auch, wenn die Baugruppe bereits Material
+  // enthält. Andere Baugruppen/Projekte bleiben unberührt (siehe
+  // App.jsx deleteBaugruppe).
+  function handleDeleteBaugruppe(baugruppeName) {
+    const ok = confirm(
+      "Baugruppe wirklich löschen? Alle enthaltenen Bauteile und Materialpositionen werden dauerhaft gelöscht."
+    );
+    if (!ok) return;
+    deleteBaugruppe?.(project.id, baugruppeName);
+  }
+
+  function startRenameBaugruppe(name) {
+    setRenamingBaugruppe(name);
+    setRenameBaugruppeValue(name);
+  }
+
+  function submitRenameBaugruppe(e, oldName) {
+    e.preventDefault();
+    const clean = renameBaugruppeValue.trim();
+    if (!clean) return;
+    renameBaugruppe?.(project.id, oldName, clean);
+    setRenamingBaugruppe(null);
+  }
+
+  function startRenameBauteil(baugruppeName, bauteilName) {
+    setRenamingBauteil({ baugruppe: baugruppeName, bauteil: bauteilName });
+    setRenameBauteilValue(bauteilName);
+  }
+
+  function submitRenameBauteil(e, baugruppeName, oldName) {
+    e.preventDefault();
+    const clean = renameBauteilValue.trim();
+    if (!clean) return;
+    renameBauteil?.(project.id, baugruppeName, oldName, clean);
+    setRenamingBauteil(null);
+  }
+
   return (
     <>
       <button className="ghost" onClick={() => setView("projects")}>← Projekte</button>
       <ProjectHeader project={project} status={projectStatus(project, items)} />
 
       <h3>Baugruppen &amp; Bauteile</h3>
+
+      {structure.length === 0 && (
+        <div className="card emptyState">
+          <p>Noch keine Baugruppe angelegt.</p>
+          <button onClick={() => newBaugruppeInputRef.current?.focus()}>Baugruppe anlegen</button>
+        </div>
+      )}
 
       {structure.map(({ baugruppe, bauteile }) => {
         const baugruppeItems = items.filter(
@@ -58,16 +117,72 @@ export default function ProjectDetail({
         const status = baugruppeStatus(baugruppeItems, isBaugruppeBestellt?.(project.id, baugruppe));
         return (
           <div className="card" key={baugruppe}>
-            <h3>
-              {baugruppe} <span className="statusPill" title={status.label}>{status.emoji} {status.label}</span>
-            </h3>
+            {renamingBaugruppe === baugruppe ? (
+              <form className="inlineForm" onSubmit={(e) => submitRenameBaugruppe(e, baugruppe)}>
+                <input
+                  autoFocus
+                  value={renameBaugruppeValue}
+                  onChange={(e) => setRenameBaugruppeValue(e.target.value)}
+                />
+                <button>Speichern</button>
+                <button type="button" className="ghost" onClick={() => setRenamingBaugruppe(null)}>
+                  Abbrechen
+                </button>
+              </form>
+            ) : (
+              <h3>
+                {baugruppe} <span className="statusPill" title={status.label}>{status.emoji} {status.label}</span>
+                <button
+                  type="button"
+                  className="ghost renameBtn"
+                  onClick={() => startRenameBaugruppe(baugruppe)}
+                >
+                  Umbenennen
+                </button>
+              </h3>
+            )}
             <div className="chipRow">
               {bauteile.length === 0 && <p className="hint">Noch keine Bauteile angelegt.</p>}
-              {bauteile.map((bauteil) => (
-                <button key={bauteil} className="chip" onClick={() => openBauteil(baugruppe, bauteil)}>
-                  {bauteil}
-                </button>
-              ))}
+              {bauteile.map((bauteil) => {
+                const isRenaming =
+                  renamingBauteil &&
+                  renamingBauteil.baugruppe === baugruppe &&
+                  renamingBauteil.bauteil === bauteil;
+                if (isRenaming) {
+                  return (
+                    <form
+                      key={bauteil}
+                      className="inlineForm chipInlineForm"
+                      onSubmit={(e) => submitRenameBauteil(e, baugruppe, bauteil)}
+                    >
+                      <input
+                        autoFocus
+                        value={renameBauteilValue}
+                        onChange={(e) => setRenameBauteilValue(e.target.value)}
+                      />
+                      <button>Speichern</button>
+                      <button type="button" className="ghost" onClick={() => setRenamingBauteil(null)}>
+                        Abbrechen
+                      </button>
+                    </form>
+                  );
+                }
+                return (
+                  <span className="chipWithEdit" key={bauteil}>
+                    <button className="chip" onClick={() => openBauteil(baugruppe, bauteil)}>
+                      {bauteil}
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost chipEdit"
+                      title="Bauteil umbenennen"
+                      onClick={() => startRenameBauteil(baugruppe, bauteil)}
+                    >
+                      ✎
+                    </button>
+                  </span>
+                );
+              })}
             </div>
             {addingBauteilTo === baugruppe ? (
               <form className="inlineForm" onSubmit={(e) => handleAddBauteil(baugruppe, e)}>
@@ -78,12 +193,26 @@ export default function ProjectDetail({
             ) : (
               <button className="ghost" onClick={() => setAddingBauteilTo(baugruppe)}>+ Bauteil</button>
             )}
+
+            {/* Am Ende der jeweiligen Baugruppenansicht, deutlich als
+                gefährliche Aktion abgesetzt - funktioniert auch, wenn die
+                Baugruppe bereits Material enthält. */}
+            <div className="baugruppeDangerZone">
+              <button className="danger" onClick={() => handleDeleteBaugruppe(baugruppe)}>
+                Baugruppe löschen
+              </button>
+            </div>
           </div>
         );
       })}
 
       <form className="card inlineForm" onSubmit={handleAddBaugruppe}>
-        <input placeholder="Neue Baugruppe (z. B. Pergola)" value={newBaugruppe} onChange={(e) => setNewBaugruppe(e.target.value)} />
+        <input
+          ref={newBaugruppeInputRef}
+          placeholder="Neue Baugruppe (z. B. Pergola)"
+          value={newBaugruppe}
+          onChange={(e) => setNewBaugruppe(e.target.value)}
+        />
         <button>+ Baugruppe</button>
       </form>
 

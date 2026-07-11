@@ -75,8 +75,62 @@ export function addBauteilToRegistry(projectId, baugruppe, bauteil) {
   writeRegistry(all);
 }
 
+// Entfernt eine Baugruppe (inkl. ihrer leer angelegten Bauteile) wieder aus
+// der Registry. Wird beim Löschen einer Baugruppe aufgerufen (Sprint 6) -
+// betrifft ausschließlich das UI-Gerüst für leere Baugruppen/Bauteile,
+// keine Materialpositionen (die werden separat in App.jsx gelöscht).
+export function removeBaugruppeFromRegistry(projectId, baugruppe) {
+  const all = readRegistry();
+  const cur = all[projectId];
+  if (!cur) return;
+  cur.baugruppen = (cur.baugruppen || []).filter((bg) => bg !== baugruppe);
+  if (cur.bauteile) {
+    const { [baugruppe]: _removed, ...restBauteile } = cur.bauteile;
+    cur.bauteile = restBauteile;
+  }
+  all[projectId] = cur;
+  writeRegistry(all);
+}
+
+// Benennt eine Baugruppe in der Registry um (Sprint 6 Ergänzung #11) - die
+// zugehörigen leer angelegten Bauteile bleiben dabei erhalten, es wird keine
+// Kopie erzeugt. Die eigentlichen Materialpositionen werden separat in
+// App.jsx umbenannt (Feld `einbauort`).
+export function renameBaugruppeInRegistry(projectId, oldName, newName) {
+  const all = readRegistry();
+  const cur = all[projectId];
+  if (!cur) return;
+  cur.baugruppen = (cur.baugruppen || []).map((bg) => (bg === oldName ? newName : bg));
+  if (cur.bauteile && oldName in cur.bauteile) {
+    const { [oldName]: bauteile, ...restBauteile } = cur.bauteile;
+    restBauteile[newName] = bauteile;
+    cur.bauteile = restBauteile;
+  }
+  all[projectId] = cur;
+  writeRegistry(all);
+}
+
+// Benennt ein Bauteil innerhalb einer Baugruppe in der Registry um (Sprint 6
+// Ergänzung #11). Die zugehörigen Materialpositionen werden separat in
+// App.jsx umbenannt.
+export function renameBauteilInRegistry(projectId, baugruppe, oldName, newName) {
+  const all = readRegistry();
+  const cur = all[projectId];
+  if (!cur || !cur.bauteile) return;
+  const list = cur.bauteile[baugruppe] || [];
+  cur.bauteile[baugruppe] = list.map((bt) => (bt === oldName ? newName : bt));
+  all[projectId] = cur;
+  writeRegistry(all);
+}
+
 // Baut die Baugruppen/Bauteil-Übersicht aus vorhandenen Materialpositionen
 // plus eventuell leer angelegten Baugruppen/Bauteilen aus der Registry.
+//
+// Sprint 6 Ergänzung #12: Ein neues, noch leeres Projekt (keine Registry-
+// Einträge, keine Materialpositionen) liefert bewusst ein leeres Ergebnis
+// zurück - es wird KEINE Baugruppe "Allgemein" (oder ähnlich) erfunden. Erst
+// wenn der Nutzer selbst eine Baugruppe anlegt oder eine Materialposition
+// erfasst, taucht hier etwas auf.
 export function buildProjectStructure(project, items) {
   const registry = readRegistry()[project?.id] || { baugruppen: [], bauteile: {} };
   const map = new Map();
@@ -90,10 +144,6 @@ export function buildProjectStructure(project, items) {
     if (!map.has(baugruppe)) map.set(baugruppe, new Set());
     map.get(baugruppe).add(bauteil);
   });
-
-  if (map.size === 0) {
-    map.set(project?.baugruppe || DEFAULT_BAUGRUPPE, new Set());
-  }
 
   return Array.from(map.entries()).map(([baugruppe, bauteile]) => ({
     baugruppe,

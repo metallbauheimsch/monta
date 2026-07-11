@@ -8,9 +8,17 @@ import ProjectDetail from "./features/projects/ProjectDetail";
 import ProjectView from "./features/projects/ProjectView";
 import { supabase } from "./services/supabaseClient";
 import { isMobileLike } from "./utils/helpers";
-import { parseEinbauort } from "./utils/structure";
+import {
+  parseEinbauort,
+  formatEinbauort,
+  removeBaugruppeFromRegistry,
+  renameBaugruppeInRegistry,
+  renameBauteilInRegistry,
+} from "./utils/structure";
 import { defaultTabFor } from "./utils/tabs";
 import { demoProjects, demoItems } from "./utils/demoData";
+import { clearOrderStatusForBaugruppe, renameBaugruppeInOrderStatus } from "./features/fastening/orderStatus";
+import { renameBaugruppeInManualValues } from "./features/fastening/LagerView";
 
 function App() {
   const [projects, setProjects] = useState([]);
@@ -170,6 +178,77 @@ function App() {
     if (projectId === id) setProjectId(null);
   }
 
+  // Löscht eine komplette Baugruppe inkl. aller enthaltenen Bauteile,
+  // Materialpositionen und zugehöriger lokaler Statusinformationen
+  // (Registry-Eintrag für leer angelegte Bauteile, "Bestellung erfolgt"-
+  // Häkchen, Bestellung/Lieferung-Status). Wird erst nach expliziter
+  // Sicherheitsabfrage in der UI aufgerufen. Andere Baugruppen und andere
+  // Projekte bleiben davon unberührt.
+  async function deleteBaugruppe(pid, baugruppeName) {
+    const ids = projectItems
+      .filter((i) => parseEinbauort(i.einbauort, project?.baugruppe).baugruppe === baugruppeName)
+      .map((i) => i.id);
+    if (supabase) {
+      if (ids.length) await supabase.from("material_items").delete().in("id", ids);
+    } else {
+      setItems((prev) => prev.filter((i) => !ids.includes(i.id)));
+    }
+    removeBaugruppeFromRegistry(pid, baugruppeName);
+    clearOrderStatusForBaugruppe(pid, baugruppeName);
+    setOrderedBaugruppen((prev) => {
+      const next = { ...prev };
+      delete next[baugruppeFlagKey(pid, baugruppeName)];
+      return next;
+    });
+  }
+
+  // Baugruppe umbenennen (Sprint 6 Ergänzung #11): bestehende
+  // Materialpositionen bleiben erhalten (nur das Feld `einbauort` wird
+  // angepasst), es entsteht keine Kopie. Zusätzlich werden Registry,
+  // "Bestellung erfolgt"-Häkchen, Bestell-/Lieferstatus und gemerkte
+  // Lager-Werte auf den neuen Namen umgezogen, damit der bisherige
+  // Bearbeitungsstand nicht verloren geht.
+  async function renameBaugruppe(pid, oldName, newName) {
+    const clean = String(newName || "").trim();
+    if (!clean || clean === oldName) return;
+    const affected = projectItems.filter(
+      (i) => parseEinbauort(i.einbauort, project?.baugruppe).baugruppe === oldName
+    );
+    for (const item of affected) {
+      const { bauteil } = parseEinbauort(item.einbauort, project?.baugruppe);
+      await updateItem(item.id, { einbauort: formatEinbauort(clean, bauteil) });
+    }
+    renameBaugruppeInRegistry(pid, oldName, clean);
+    renameBaugruppeInOrderStatus(pid, oldName, clean);
+    renameBaugruppeInManualValues(pid, oldName, clean);
+    setOrderedBaugruppen((prev) => {
+      const oldKey = baugruppeFlagKey(pid, oldName);
+      if (!(oldKey in prev)) return prev;
+      const next = { ...prev };
+      next[baugruppeFlagKey(pid, clean)] = next[oldKey];
+      delete next[oldKey];
+      return next;
+    });
+  }
+
+  // Bauteil umbenennen (Sprint 6 Ergänzung #11): bestehende
+  // Materialpositionen bleiben dem Bauteil zugeordnet, es geht nichts
+  // verloren und es entsteht keine Kopie. Bestell-/Lieferstatus und
+  // Lager-Merkwerte sind je Baugruppe (nicht je Bauteil) gespeichert und
+  // sind daher von einer Bauteil-Umbenennung nicht betroffen.
+  async function renameBauteil(pid, baugruppeName, oldName, newName) {
+    const clean = String(newName || "").trim();
+    if (!clean || clean === oldName) return;
+    const affected = projectItems.filter((i) => {
+      const parsed = parseEinbauort(i.einbauort, project?.baugruppe);
+      return parsed.baugruppe === baugruppeName && parsed.bauteil === oldName;
+    });
+    for (const item of affected) {
+      await updateItem(item.id, { einbauort: formatEinbauort(baugruppeName, clean) });
+    }
+    renameBauteilInRegistry(pid, baugruppeName, oldName, clean);
+  }
+
   function openBauteil(baugruppeName, bauteilName) {
     setSelectedBaugruppe(baugruppeName);
     setSelectedBauteil(bauteilName);
@@ -239,6 +318,9 @@ function App() {
           openBauteil={openBauteil}
           setProjectArchived={setProjectArchived}
           deleteProject={deleteProject}
+          deleteBaugruppe={deleteBaugruppe}
+          renameBaugruppe={renameBaugruppe}
+          renameBauteil={renameBauteil}
           isBaugruppeBestellt={isBaugruppeBestellt}
         />
       )}

@@ -17,31 +17,32 @@ Diese Punkte müssen vor dem produktiven Einsatz abgeschlossen sein.
 
 ## Baugruppen
 
-- Baugruppen vollständig integrieren
-- Baugruppen komfortabel anlegen
-- Druck nach Baugruppen
-- Lager nach Baugruppen
+(„Baugruppen vollständig integrieren" inkl. Löschfunktion, Druck/Lager nach
+Baugruppen und Umbenennen von Baugruppe/Bauteil sind mit Sprint 6 erledigt,
+siehe Changelog. Neues Projekt legt außerdem keine Baugruppe mehr
+automatisch an.)
 
 ---
 
 ## Lager
 
-- Checkbox "Vollständig vorhanden"
-- Bereits gelegt
-- Restmenge automatisch berechnen
-- Baugleiche Positionen je Baugruppe zusammenfassen
-- Herkunft (Bauteil – Menge) anzeigen
-- Keine ausklappbaren Bereiche
+(Checkbox „Vollständig vorhanden", „Bereits gelegt", automatische
+Restmenge, Zusammenfassung baugleicher Positionen je Baugruppe, Herkunft-
+Anzeige und Sortierung nach echtem Regalfach sind erledigt, siehe
+Changelog.)
 
 ---
 
-## Bestellliste
+## Warenkorb (bisher Bestellliste)
 
 - Restmengen automatisch übernehmen
 - Nach Baugruppen sortieren
 - Aufbau wie Druckansicht
 - Herkunft anzeigen
 - Checkbox "Bestellung erfolgt"
+
+(Umbenennung, "Warenkorb kopieren" und Bestell-/Lieferstatus je Position
+sind mit Sprint 6 erledigt, siehe Changelog.)
 
 ---
 
@@ -71,11 +72,18 @@ Status in:
 
 ---
 
-## Prüfung
+(„Prüfung ähnlicher Verbindungsmittel" ist mit Sprint 6 erledigt - feste
+20-mm-Regel statt 20 %, direkte Paare statt verketteter Gruppen,
+Positionsnummer zur eindeutigen Unterscheidung. Siehe Changelog.)
 
-- Ähnliche Schrauben zuverlässig erkennen
-- Längenabweichung maximal 20 %
-- Automatisch ergänzte Positionen ignorieren
+---
+
+## Regal
+
+- Fachzuordnung für U-Scheibe, Sechskantmutter, Stoppmutter, Hutmutter,
+  Karosseriescheibe, Ankerstange, Blindniete klären (aktuell bewusst „Ohne
+  Fachzuordnung", da keine eindeutige Regel dokumentiert ist). Betrifft
+  jetzt sowohl Druckansicht als auch Lager.
 
 ---
 

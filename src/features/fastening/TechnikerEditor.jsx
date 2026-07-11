@@ -109,9 +109,15 @@ export default function TechnikerEditor({ items, allProjectItems, addItem, updat
         <div className="tableWrap">
           <table className="editTable">
             <tbody>
-              <tr><th>Menge</th><th>Bezeichnung</th><th>Größe</th><th>Länge</th><th>Ausführung</th><th>Hinweis</th><th></th></tr>
+              <tr><th>Pos.</th><th>Menge</th><th>Bezeichnung</th><th>Größe</th><th>Länge</th><th>Ausführung</th><th>Hinweis</th><th></th></tr>
               {items.map((i) => (
                 <tr key={i.id}>
+                  {/* Positionsnummer nur zur Anzeige - wird automatisch vergeben
+                      (siehe technikerUtils.allocatePositions) und ist hier bewusst
+                      nicht editierbar, um doppelte/widersprüchliche Nummern zu
+                      vermeiden. Sprint 6: macht Positionen in der Prüfungsansicht
+                      eindeutig unterscheidbar. */}
+                  <td className="posCell">{i.pos}</td>
                   <td><input type="number" value={i.menge || 0} onChange={(e) => updateItem(i.id, { menge: Number(e.target.value) })} /></td>
                   <td className="suggestionCell">
                     <SuggestionAutocomplete

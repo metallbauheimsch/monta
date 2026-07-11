@@ -1,31 +1,78 @@
-// Paternoster-/Regal-Reihenfolge für die Druck-Sortierung "Regal" (Sprint 5).
+// Feste Paternoster-/Regal-Zuordnung (Sprint 6), fachlich vom Betrieb
+// vorgegeben. Bewusst ohne Einstellungs-/Pflegeoberfläche - die Zuordnung
+// ändert sich nicht über die Bedienung, sondern nur durch Anpassung dieser
+// Datei, falls sich die tatsächliche Regalbelegung ändert.
 //
-// Bewusst ohne neue Datenstruktur/DB-Feld gelöst: als Regal-Reihenfolge wird
-// die Reihenfolge der Bezeichnungs-Startliste (constants.js) verwendet -
-// diese Liste ist bereits vorhanden ("hinterlegt") und kann bei Bedarf dort
-// direkt umsortiert werden, sobald die tatsächliche Regal-/Paternoster-
-// Belegung feststeht. Keine Migration, rein clientseitige Konfiguration.
+// Bekannte Zuordnung (Stand Sprint 6):
+// - Edelstahl (Ausführung, unabhängig vom Artikeltyp): Fach 4–7
+// - Chemische Dübel (Hilti HIT, Verbundmörtel): Fach 2–3
+// - Verzinkte Dübel (Bolzenanker/Rahmendübel/Kunststoffdübel/Betonschraube,
+//   Ausführung feuerverzinkt oder galvanisch): Fach 25
+// - Feuerverzinkte Schrauben: Fach 9
+// - HV (Ausführung, unabhängig vom Artikeltyp): Fach 26
+// - Galvanische Schrauben: Fach 1, 26, 27 (mehrere Fächer gleichzeitig -
+//   anhand der vorhandenen Materialdaten lässt sich nicht auf eines der drei
+//   Fächer eingrenzen, deshalb wird ehrlich der ganze Bereich angezeigt statt
+//   ein einzelnes Fach zu erfinden)
 //
-// Artikel, deren Bezeichnung nicht in der Liste vorkommt (z. B. freie
-// Eingaben), gelten als "ohne Regalzuordnung" und werden beim Sortieren
-// ans Ende gestellt.
-import { descriptions } from "./constants";
+// Alles, was sich anhand von Bezeichnung + Ausführung nicht eindeutig einer
+// dieser Regeln zuordnen lässt (z. B. U-Scheibe, Sechskantmutter,
+// Stoppmutter, Hutmutter, Karosseriescheibe, Ankerstange, Blindniete, oder
+// unbekannte/freie Ausführungstexte), bekommt bewusst KEIN erfundenes Fach,
+// sondern gilt als "Ohne Fachzuordnung" und landet beim Sortieren ans Ende.
+// Offene Fälle: siehe Abschlussbericht Sprint 6.
 
-function normalize(bezeichnung) {
-  return String(bezeichnung || "").trim().toLowerCase();
+const SCHRAUBEN = [
+  "sechskantschraube",
+  "senkschraube",
+  "linsenkopfschraube",
+  "zylinderkopfschraube",
+  "bohrschraube",
+  "holzschraube",
+  "blechschraube",
+];
+
+const DUEBEL_MECHANISCH = ["bolzenanker", "rahmendübel", "kunststoffdübel", "betonschraube"];
+
+const DUEBEL_CHEMISCH = ["hilti hit", "verbundmörtel"];
+
+function normalize(value) {
+  return String(value || "").trim().toLowerCase();
 }
 
-// Index in der Regal-Reihenfolge (kleiner = weiter vorne im Paternoster).
-// Unbekannte Bezeichnungen erhalten Infinity, damit sie beim Sortieren
-// immer ans Ende rutschen.
-export function regalOrderIndex(bezeichnung) {
-  const idx = descriptions.findIndex((d) => d.toLowerCase() === normalize(bezeichnung));
-  return idx === -1 ? Infinity : idx;
+function isBezeichnungIn(list, bezeichnung) {
+  return list.includes(normalize(bezeichnung));
 }
 
-// Menschlich lesbarer Regalplatz (aktuell einfach die Position in der
-// Reihenfolge). Leerstring, wenn keine Zuordnung bekannt ist.
-export function getRegalPlatz(bezeichnung) {
-  const idx = regalOrderIndex(bezeichnung);
-  return Number.isFinite(idx) ? String(idx + 1) : "";
+// Ermittelt Fach + Sortier-Index für eine Position (Bezeichnung +
+// Ausführung). Gibt null zurück, wenn keine der bekannten Regeln eindeutig
+// zutrifft - dann gibt es bewusst kein erfundenes Fach.
+function resolveFach(bezeichnung, oberflaeche) {
+  const ausf = normalize(oberflaeche);
+  const bez = normalize(bezeichnung);
+
+  if (ausf === "hv") return { fach: "26", sortIndex: 4 };
+  if (ausf === "edelstahl") return { fach: "4–7", sortIndex: 0 };
+  if (isBezeichnungIn(DUEBEL_CHEMISCH, bez)) return { fach: "2–3", sortIndex: 1 };
+  if (ausf === "feuerverzinkt" && isBezeichnungIn(SCHRAUBEN, bez)) return { fach: "9", sortIndex: 3 };
+  if ((ausf === "feuerverzinkt" || ausf === "galvanisch") && isBezeichnungIn(DUEBEL_MECHANISCH, bez)) {
+    return { fach: "25", sortIndex: 5 };
+  }
+  if (ausf === "galvanisch" && isBezeichnungIn(SCHRAUBEN, bez)) return { fach: "1, 26, 27", sortIndex: 2 };
+  return null;
+}
+
+// Sortier-Reihenfolge im Paternoster (kleiner = weiter vorne). Positionen
+// ohne eindeutige Zuordnung landen beim Sortieren immer am Ende.
+export function regalOrderIndex(item) {
+  const resolved = resolveFach(item?.bezeichnung, item?.oberflaeche);
+  return resolved ? resolved.sortIndex : Infinity;
+}
+
+// Menschlich lesbarer Regalfach-Text für Druck/Anzeige, oder
+// "Ohne Fachzuordnung", wenn nicht eindeutig bestimmbar (siehe oben - kein
+// erfundener Wert).
+export function getRegalPlatz(item) {
+  const resolved = resolveFach(item?.bezeichnung, item?.oberflaeche);
+  return resolved ? `Fach ${resolved.fach}` : "Ohne Fachzuordnung";
 }

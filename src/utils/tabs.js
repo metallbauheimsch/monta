@@ -8,13 +8,17 @@
 // Sprint 5: Anzeige-Bezeichnung "Material" wieder zu "Lager" geändert (nur
 // Beschriftung - der interne Schlüssel "material" bleibt unverändert, um
 // keine Datenstruktur anzufassen).
+//
+// Sprint 6: Anzeige-Bezeichnung "Bestellliste" zu "Warenkorb" geändert (nur
+// Beschriftung - der interne Schlüssel "bestellliste" bleibt unverändert,
+// Komponente/Datei heißt weiterhin EinkaufView).
 export const TAB_ORDER = ["tb", "pruefung", "material", "bestellliste", "druck"];
 
 export const TAB_LABELS = {
   tb: "TB",
   pruefung: "Prüfung",
   material: "Lager",
-  bestellliste: "Bestellliste",
+  bestellliste: "Warenkorb",
   druck: "Druck",
 };
 

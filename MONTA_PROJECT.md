@@ -1,428 +1,147 @@
-# MONTA
+# MONTA – Projektdokumentation
 
-> Digitaler Montageassistent für Metallbau Heimsch
+Interne Web-App für Metallbau Heimsch zur Verwaltung von Befestigungsmaterial
+je Projekt. Optimiert ausschließlich für diesen Betrieb, kein Standardprodukt.
 
----
+Statistiken sind grundsätzlich kein Bestandteil von MONTA.
 
-# 1. Vision
+## Datenmodell
 
-MONTA ist keine Standardsoftware.
+Projekt → Baugruppe → Bauteil → Materialposition
 
-MONTA wird ausschließlich für Metallbau Heimsch entwickelt.
+- `projects` und `material_items` sind eigene Datenbanktabellen (Supabase).
+- Baugruppe/Bauteil sind **keine** eigenen Tabellen, sondern werden im Feld
+  `einbauort` als Text `"Baugruppe / Bauteil"` abgebildet
+  (`src/utils/structure.js`). So war bisher keine Datenbank-Migration nötig.
+- Leer angelegte Baugruppen/Bauteile (noch ohne Materialposition) werden nur
+  lokal im Browser gemerkt (siehe „Speicherorte" unten).
 
-Das Ziel ist nicht eine möglichst umfangreiche Software, sondern das einfachste Werkzeug für den täglichen Arbeitsablauf.
+## Funktionen (Ist-Stand nach Sprint 6)
 
-Jede Funktion muss Zeit sparen.
+- **Projektverwaltung**: Anlegen, Archivieren/Zurückholen, endgültiges Löschen.
+  Ein neu angelegtes Projekt ist zunächst leer - es wird **keine** Baugruppe
+  automatisch angelegt oder angezeigt. Statt einer Baugruppenliste erscheint
+  ein deutlicher Button „Baugruppe anlegen", solange keine Baugruppe
+  existiert.
+- **TB-Erfassung** (PC): Schnelle Tabellenerfassung, Positionsnummer sichtbar,
+  Vorschlagsliste für Bezeichnungen, automatische Ergänzung von
+  U-Scheibe(n)/Mutter bei Sechskantschraube/Senkschraube.
+- **Prüfung ähnlicher Verbindungsmittel**: siehe eigener Abschnitt unten.
+- **Baugruppe/Bauteil umbenennen**: Einfache Inline-Funktion direkt bei der
+  Baugruppe bzw. beim Bauteil (Button „Umbenennen" bzw. „✎"), kein Dialog.
+  Vorhandene Materialpositionen bleiben der umbenannten Baugruppe/dem
+  umbenannten Bauteil zugeordnet (nur das Feld `einbauort` wird angepasst,
+  es entsteht keine Kopie und die alte Bezeichnung bleibt nicht zusätzlich
+  bestehen). Leere Namen sind nicht möglich, führende/nachfolgende
+  Leerzeichen werden automatisch entfernt. Beim Umbenennen einer Baugruppe
+  ziehen zusätzlich „Bestellung erfolgt"-Häkchen, Bestell-/Lieferstatus und
+  gemerkte Lager-Werte auf den neuen Namen um.
+- **Baugruppe löschen**: Am Ende jeder Baugruppenansicht, mit
+  Sicherheitsabfrage. Löscht die Baugruppe inkl. aller Bauteile, aller
+  zugeordneten Materialpositionen und zugehöriger lokaler
+  Statusinformationen (leere Bauteile, „Bestellung erfolgt", Bestell-/
+  Lieferstatus). Andere Baugruppen/Projekte bleiben unberührt.
+- **Lager**: Arbeitet je Baugruppe. Fasst gleiche Artikel (Bezeichnung,
+  Größe, Länge, Ausführung) zusammen. Sortiert innerhalb jeder Baugruppe
+  zuerst nach echtem Regalfach (siehe „Regal/Paternoster-Zuordnung" unten,
+  niedrigste Fachnummer zuerst, Artikel ohne Zuordnung zuletzt), danach nach
+  Bezeichnung/Größe/Länge. Zeigt je Position das Regalfach an. Erfassung
+  „bereits gelegt" oder Checkbox „vollständig vorhanden". Zeigt direkt an,
+  wie viel Stück in den Warenkorb gelegt wird (= Restmenge). Wird die
+  Checkbox wieder deaktiviert, wird keine Menge erfunden - der vorherige
+  manuelle Wert wird nach Möglichkeit wiederhergestellt.
+- **Warenkorb** (bis Sprint 5 „Bestellliste" genannt, Datei/Komponente
+  weiterhin `EinkaufView`): Enthält ausschließlich die Fehlmengen aus dem
+  Lager (Bestellmenge = Gesamtmenge − bereits gelegt), komplettes Projekt,
+  gruppiert nach Baugruppe und Artikel. Häkchen „Bestellung erfolgt" je
+  Baugruppe (steuert die Statusampel). Zusätzlich je Position ein einfacher
+  Bestell-/Lieferstatus (Checkbox „Bestellt" + Feld „Gelieferte Menge",
+  Status „Noch nicht bestellt" / „Bestellt" / „Teilweise geliefert" /
+  „Vollständig geliefert" wird automatisch berechnet). Button „Warenkorb
+  kopieren" kopiert eine einfache Textliste (kein HTML, keine Tabelle, keine
+  technischen IDs) in die Zwischenablage, geeignet zum direkten Einfügen in
+  eine E-Mail an den Schraubenhändler.
+- **Druckansicht / Montage**: Kein eigener Montage-Reiter. Die Liste
+  „Befestigungsmaterial" fasst gleiche Verbindungsmittel (gleiche
+  Bezeichnung/Größe/Länge/Ausführung) innerhalb desselben Bauteils zu einer
+  Zeile zusammen, Mengen werden addiert; Positionen aus unterschiedlichen
+  Bauteilen werden dabei nie vermischt. Bei Sortierung „Baugruppe (Montage)"
+  gliedert die Druckansicht zusätzlich Projekt → Baugruppe → Bauteil →
+  Material, die Zuordnung zum Bauteil bleibt so beim Ausdruck klar
+  erkennbar. Weitere Sortierungen: Position, Regal.
+- **Regal/Paternoster**: Feste, vom Betrieb vorgegebene Fachzuordnung (siehe
+  eigener Abschnitt unten). Keine Einstellungs- oder Pflegeoberfläche. Wird
+  sowohl in der Druckansicht als auch im Lager verwendet.
+- **Statusampel** (🔴 Offen / 🟡 Bestellt / 🟢 Bereit / ⚪ ohne Positionen):
+  zentral in `src/utils/helpers.js` definiert, überall gleich verwendet.
 
-Jeder Bildschirm muss verständlich sein.
+## Prüfregel „Ähnliche Verbindungsmittel" (Stand Sprint 6)
 
-Neue Funktionen entstehen ausschließlich aus dem Praxisfeedback.
+Ähnliche Verbindungsmittel werden bei einer absoluten Längendifferenz von
+maximal 20 mm angezeigt.
 
----
-
-# 2. Projektphilosophie
-
-MONTA bildet den tatsächlichen Arbeitsablauf im Betrieb ab.
-
-Nicht umgekehrt.
-
-Jeder Mitarbeiter sieht ausschließlich die Informationen, die er für seine Aufgabe benötigt.
-
-Komplexität wird grundsätzlich vermieden.
-
-Es gilt immer:
-
-> Ist das wirklich die einfachste Lösung für einen Metallbaubetrieb?
-
-Wenn nein, wird sie nicht umgesetzt.
-
----
-
-# 3. Ziel
-
-Entwicklung einer stabilen 95%-Pilotversion.
-
-Erst danach beginnt die eigentliche Weiterentwicklung anhand des täglichen Einsatzes.
-
----
-
-# 4. Architektur
-
-Die Struktur ist verbindlich.
-
-Projekt
-
-↓
-
-Baugruppe
-
-↓
-
-Bauteil
-
-↓
-
-Material
-
-Keine Funktion darf diese Struktur umgehen.
-
----
-
-# 5. Arbeitsablauf
-
-## TB
-
-Arbeitet auf Bauteilebene.
-
-Aufgaben:
-
-- Material erfassen
-- Material prüfen
-
-TB sieht keine Lagerinformationen.
-
----
-
-## Prüfung
-
-Prüft:
-
-- doppelte Materialien
-- ähnliche Schrauben
-- Plausibilität
-
-Ähnliche Schrauben:
-
-Treffer wenn
+Ein Prüfhinweis erscheint, wenn zwei Positionen **alle** folgenden Punkte
+erfüllen:
 
 - gleiche Bezeichnung
 - gleiche Größe
-- Länge maximal 20 % unterschiedlich
-
-Berechnung erfolgt immer anhand der größeren Länge.
-
-Automatisch ergänzte Positionen werden ignoriert.
-
----
-
-## Lager
-
-Lager arbeitet auf Baugruppenebene.
-
-Es ist KEINE Materialverwaltung.
-
-Es dient ausschließlich zum Kommissionieren.
-
-Pro Position werden angezeigt:
-
-- Artikel
-- Größe
-- Länge
-- Ausführung
-- Gesamtmenge
-- bereits gelegt
-- Restmenge
-- vollständig vorhanden
-
-Innerhalb einer Baugruppe werden gleiche Positionen automatisch zusammengefasst.
-
-Darunter erscheint:
-
-Bauteil – Menge
-
-Keine ausklappbaren Bereiche.
-
----
-
-## Bestellliste
-
-Arbeitet projektweit.
-
-Zeigt ausschließlich Restmengen.
-
-Sortierung:
-
-Projekt
-
-↓
-
-Baugruppe
-
-↓
-
-Artikel
-
-Anzeige:
-
-- Artikel
-- Größe
-- Länge
-- Ausführung
-- Bestellmenge
-
-Darunter:
-
-Bauteil – Menge
-
-Keine ausklappbaren Bereiche.
-
----
-
-## Druck
-
-Druck dient gleichzeitig als Montageunterlage.
-
-Sortierungen:
-
-- Position
-- Baugruppe
-- Regal
-
-Jede Baugruppe besitzt eine Statusampel.
-
----
-
-# 6. Statusmodell
-
-🔴 Offen
-
-Material fehlt.
-
----
-
-🟡 Bestellt
-
-Material bestellt.
-
-Noch nicht vollständig vorhanden.
-
----
-
-🟢 Bereit
-
-Material vollständig vorhanden.
-
-Montage kann beginnen.
-
-Status erscheint:
-
-- Projektübersicht
-- Druckansicht
-
----
-
-# 7. Materialmodell
-
-Material besteht ausschließlich aus:
-
-- Bezeichnung
-- Größe
-- Länge
-- Ausführung
-- Menge
-- Hinweis
-
-Festigkeit wird bewusst NICHT verwendet.
-
-Ausführungen:
-
-- galvanisch
-- feuerverzinkt
-- HV
-- Edelstahl
-
----
-
-# 8. Materialarten
-
-## Schrauben
-
-- Sechskantschraube
-- Senkschraube
-- Linsenkopfschraube
-- Zylinderkopfschraube
-- Bohrschraube
-- Holzschraube
-- Blechschraube
-
-## Muttern
-
-- Sechskantmutter
-- Stoppmutter
-- Hutmutter
-
-## Scheiben
-
-- U-Scheibe
-- Karosseriescheibe
-
-## Dübel
-
-- Bolzenanker
-- Betonschraube
-- Rahmendübel
-- Kunststoffdübel
-- Hilti HIT
-- Verbundmörtel
-- Ankerstange
-
-## Nieten
-
-- Blindniete
-
-Neue Bezeichnungen werden automatisch gelernt.
-
-Es gibt keine Materialverwaltung.
-
----
-
-# 9. Automatische Ergänzungen
-
-Sechskantschraube
-
-→ 2 × U-Scheibe
-
-→ 1 × Sechskantmutter
-
-Senkschraube
-
-→ 1 × U-Scheibe
-
-→ 1 × Sechskantmutter
-
-Die Hauptposition bleibt immer unverändert.
-
-Ergänzungen können pro Position deaktiviert werden.
-
----
-
-# 10. Paternoster
-
-Das Paternoster ist fest hinterlegt.
-
-Keine Bearbeitung.
-
-Keine Einstellungen.
-
-MONTA kennt intern die Regalplätze.
-
-Sortierung nach Regal erfolgt automatisch.
-
----
-
-# 11. Projektverwaltung
-
-Ein Projekt kann:
-
-- erstellt werden
-- archiviert werden
-- gelöscht werden
-
-Archivierte Projekte bleiben vollständig erhalten.
-
-Löschen erfolgt ausschließlich nach Sicherheitsabfrage.
-
----
-
-# 12. Bedienprinzipien
-
-Priorität:
-
-1. möglichst wenige Klicks
-
-2. möglichst wenig Tipparbeit
-
-3. maximale Übersicht
-
-4. robuste Bedienung
-
-5. mobile Nutzbarkeit
-
-Erst danach Komfortfunktionen.
-
----
-
-# 13. Entwicklungsregeln
-
-Vor jeder Änderung:
-
-1. bestehenden Code analysieren
-
-2. vorhandene Funktionen testen
-
-3. einfachste Lösung auswählen
-
-4. implementieren
-
-5. testen
-
-6. Änderungen dokumentieren
-
-Keine Annahmen treffen.
-
-Keine halbfertigen Funktionen.
-
-Keine unnötigen Abstraktionen.
-
-Keine Funktionen "für später".
-
----
-
-# 14. Technische Basis
-
-Frontend
-
-- React
-
-Backend
-
-- Supabase
-
-Versionsverwaltung
-
-- GitHub
-
-Deployment
-
-- Vercel
-
-Entwicklung
-
-- Cursor
-
----
-
-# 15. Entscheidungsprotokoll
-
-Hier werden dauerhaft alle wichtigen Projektentscheidungen dokumentiert.
-
-Beispiel:
-
-## Sprint 5
-
-- Material wurde wieder in Lager umbenannt.
-- Montage-Reiter entfällt.
-- Bestellliste verwendet ausschließlich Restmengen.
-- Lager arbeitet auf Baugruppenebene.
-- Statusampel eingeführt.
-
-Jede zukünftige Entscheidung wird hier ergänzt.
-
----
-
-# 16. Regeln für Cursor
-
-Vor jeder Aufgabe:
-
-1. Diese Datei vollständig lesen.
-2. Den aktuellen Code analysieren.
-3. Prüfen, ob die gewünschte Änderung zum Arbeitsablauf von Metallbau Heimsch passt.
-4. Die einfachste technisch saubere Lösung wählen.
-5. Bestehende Funktionen dürfen nicht verschlechtert werden.
-6. Nach Abschluss immer berichten:
-   - geänderte Dateien
-   - umgesetzte Änderungen
-   - offene Punkte
-   - Ergebnis von `npm run dev`
-
-Wenn Dokumentation und Code voneinander abweichen, hat zunächst der aktuelle Code Vorrang. Der Widerspruch ist zu dokumentieren und gemeinsam zu entscheiden.
+- beide besitzen eine hinterlegte Länge
+- absolute Längendifferenz maximal **20 mm**
+- die Längen sind nicht identisch
+
+Es gibt **keine** Prozentrechnung mehr – nur die feste 20-mm-Grenze.
+
+Es werden ausschließlich **direkte Paare** verglichen, keine über
+Zwischenwerte verketteten Gruppen: Bei den Längen 20/40/41 erscheinen
+20↔40 und 40↔41 je als eigener Hinweis, 20↔41 dagegen nicht (Differenz
+21 mm). Jede Position wird dabei mit Positionsnummer, Bezeichnung, Größe,
+Länge, Menge und Bauteil angezeigt (z. B. „Pos. 12 · 12 × Sechskantschraube
+M12×20 · Steg"), damit auch Positionen mit identischen Materialangaben
+eindeutig unterscheidbar bleiben.
+
+Automatisch ergänzte Positionen (U-Scheibe, Mutter usw.) werden dabei nie
+berücksichtigt.
+
+Umsetzung: `src/features/fastening/Checks.jsx`.
+
+## Regal/Paternoster-Zuordnung (Stand Sprint 6)
+
+Feste, vom Betrieb dokumentierte Zuordnung (`src/features/fastening/regalOrder.js`):
+
+- Edelstahl (Ausführung, unabhängig vom Artikeltyp): Fach 4–7
+- Chemische Dübel (Hilti HIT, Verbundmörtel): Fach 2–3
+- Verzinkte Dübel (Bolzenanker, Rahmendübel, Kunststoffdübel, Betonschraube;
+  Ausführung feuerverzinkt oder galvanisch): Fach 25
+- Feuerverzinkte Schrauben: Fach 9
+- HV (Ausführung, unabhängig vom Artikeltyp): Fach 26
+- Galvanische Schrauben: Fach 1, 26, 27 (Bereich, keine eindeutige
+  Zuordnung auf ein einzelnes Fach anhand der Daten möglich)
+
+Artikel, die sich anhand von Bezeichnung + Ausführung keiner dieser Regeln
+eindeutig zuordnen lassen (z. B. U-Scheibe, Sechskantmutter, Stoppmutter,
+Hutmutter, Karosseriescheibe, Ankerstange, Blindniete), bekommen bewusst
+**kein erfundenes Fach** und werden als „Ohne Fachzuordnung" angezeigt.
+
+## Speicherorte
+
+**In Supabase** (sofern Zugangsdaten konfiguriert sind): Projekte, alle
+Materialpositionen.
+
+**Nur lokal im Browser** (gerätegebunden, nicht zwischen PC und iPhone
+geteilt):
+- Leer angelegte Baugruppen/Bauteile ohne Material
+- „Bestellung erfolgt"-Häkchen je Baugruppe
+- Bestell-/Lieferstatus je Warenkorb-Position (Sprint 6)
+- Zuletzt manuell erfasster „bereits gelegt"-Wert im Lager (Sprint 6)
+- Gelernte, neue Bezeichnungsvorschläge
+- Falls Supabase gar nicht konfiguriert ist: sämtliche Projekt-/Materialdaten
+
+## Bekannte Einschränkungen
+
+- Kein Login/Benutzerverwaltung (interner Prototyp).
+- `supabase_schema.sql` kennt (noch) keine Spalte `archived` – Archivieren
+  funktioniert dann nur lokal, bis die Spalte in der Datenbank ergänzt wird.
+- Offene Fachzuordnungen (Regal): Bezeichnungen wie U-Scheibe,
+  Sechskantmutter, Stoppmutter, Hutmutter, Karosseriescheibe, Ankerstange,
+  Blindniete haben aktuell in keiner Ausführung eine dokumentierte
+  Fachzuordnung und erscheinen als „Ohne Fachzuordnung".

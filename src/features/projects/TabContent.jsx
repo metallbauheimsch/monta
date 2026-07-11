@@ -7,7 +7,7 @@ import PrintView from "../fastening/PrintView";
 // Reihenfolge/Bezeichnung der Reiter: siehe utils/tabs.js
 // - tb: aktuelles Bauteil (schnelle PC-Erfassung)
 // - pruefung: aktuelle Baugruppe
-// - material (Anzeige "Lager") / bestellliste / druck: gesamtes Projekt
+// - material (Anzeige "Lager") / bestellliste (Anzeige "Warenkorb") / druck: gesamtes Projekt
 //
 // Sprint 3: Reiter "Montage" entfernt (siehe utils/tabs.js). Die Druckansicht
 // ist bereits unabhängig von der Montageansicht (eigene Props, kein Import).
