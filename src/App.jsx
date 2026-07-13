@@ -169,8 +169,24 @@ function App() {
       // falsy/undefined behandelt und damit wie false interpretiert).
       archived: false,
     };
-    if (supabase) await supabase.from("projects").insert(newProject);
-    else setProjects((prev) => [newProject, ...prev]);
+    if (supabase) {
+      const { error } = await supabase.from("projects").insert(newProject);
+      if (error) {
+        // Fehler sichtbar machen statt zu verschlucken - Ansicht bleibt auf
+        // dem Anlegen-Formular, kein Wechsel zu einem nicht existierenden
+        // Projekt.
+        console.error("MONTA: Projekt anlegen fehlgeschlagen.", error);
+        alert(`Projekt konnte nicht angelegt werden: ${error.message || "unbekannter Fehler"}`);
+        return;
+      }
+    }
+    // Lokalen State immer sofort aktualisieren (auch bei aktivem Supabase),
+    // nicht erst auf die Realtime-Aktualisierung warten. Sonst zeigt die
+    // direkt anschließend geöffnete Projektansicht kurzzeitig (oder bei
+    // gestörter Realtime-Verbindung dauerhaft) eine leere Seite, weil
+    // `project` (aus `projects.find(...)`) noch nicht existiert
+    // (Produktionsfehler: "leerer Inhaltsbereich nach Projektanlage").
+    setProjects((prev) => (prev.some((p) => p.id === newProject.id) ? prev : [newProject, ...prev]));
     setProjectId(newProject.id);
     setSelectedBaugruppe(null);
     setSelectedBauteil(null);

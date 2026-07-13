@@ -112,10 +112,12 @@ Positionsnummer zur eindeutigen Unterscheidung. Siehe Changelog.)
 
 Diese Punkte werden erst nach erfolgreichem Pilotbetrieb bewertet.
 
-- Statistiken
 - Suchfunktionen erweitern
 - Exportfunktionen
 - Weitere Druckoptionen
+
+(„Statistiken" wurde entfernt: `MONTA_DECISIONS.md` legt eindeutig fest,
+dass Statistiken grundsätzlich kein Bestandteil von MONTA sind.)
 
 ---
 
