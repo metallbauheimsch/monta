@@ -9,7 +9,6 @@ export default function NewProjectForm({ setView, createProject }) {
     <FormCard title="Neues Projekt" back={() => setView("projects")} onSubmit={createProject}>
       <input name="nr" placeholder="Projektnummer" autoComplete="off" required />
       <input name="name" placeholder="Kurzbezeichnung" autoComplete="off" required />
-      <input name="zeichnung" placeholder="Zeichnungsnummer" autoComplete="off" />
       <button>Projekt anlegen</button>
     </FormCard>
   );

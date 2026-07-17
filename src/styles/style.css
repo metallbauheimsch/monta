@@ -99,6 +99,11 @@ th{background:#eee;font-weight:700}
 .autocompleteItem{padding:10px 12px;cursor:pointer}
 .autocompleteItem:hover,.autocompleteItem.active{background:#f2f2f2}
 .autocompleteListFixed{position:fixed;z-index:1000}
+/* TB am PC: Vorschlagslisten hoch genug, dass Standardgrößen M4–M20
+   ohne Scrollen sichtbar sind (Hotfix vor Pilot). Mobil bleibt begrenzt. */
+@media (min-width:761px){
+  .autocompleteList{max-height:min(70vh, 480px)}
+}
 .editTable .suggestionCell,.editTable .bezeichnungCell{max-width:180px}
 .editTable .suggestionEllipsis,.editTable .bezeichnungEllipsis{text-overflow:ellipsis;overflow:hidden;white-space:nowrap;min-width:0}
 @media print{

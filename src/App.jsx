@@ -130,7 +130,9 @@ function App() {
       nr: f.get("nr"),
       name: f.get("name"),
       baugruppe: f.get("baugruppe") || "",
-      zeichnung: f.get("zeichnung"),
+      // Zeichnungsnummer wird beim Anlegen nicht mehr abgefragt (Hotfix vor
+      // Pilot) - Feld bleibt in Daten/DB erhalten und wird leer gespeichert.
+      zeichnung: "",
       // Feld "archived" standardmäßig auf false (keine DB-Migration nötig,
       // fehlt die Spalte serverseitig, wird sie beim Lesen ohnehin als
       // falsy/undefined behandelt und damit wie false interpretiert).
@@ -253,6 +255,12 @@ function App() {
     setView("project");
   }
 
+  // Materialposition anlegen. Analog zur Projektanlage (Hotfix vor Pilot):
+  // Supabase-Fehler werden sichtbar behandelt, der lokale State wird danach
+  // sofort aktualisiert - kein Warten auf Realtime. Sonst erscheint die
+  // Position in der TB-Erfassung nicht (oder "verschwindet" nach dem
+  // Formular-Reset), wenn die Realtime-Subscription ausbleibt oder der
+  // Insert fehlschlägt.
   async function addItem(item) {
     const newItem = {
       id: crypto.randomUUID(),
@@ -269,19 +277,40 @@ function App() {
       bestellt: false,
       geliefert: false,
     };
-    if (supabase) await supabase.from("material_items").insert(newItem);
-    else setItems((prev) => [...prev, newItem]);
+    if (supabase) {
+      const { error } = await supabase.from("material_items").insert(newItem);
+      if (error) {
+        console.error("MONTA: Materialposition anlegen fehlgeschlagen.", error);
+        alert(`Position konnte nicht gespeichert werden: ${error.message || "unbekannter Fehler"}`);
+        throw error;
+      }
+    }
+    setItems((prev) => (prev.some((i) => i.id === newItem.id) ? prev : [...prev, newItem]));
   }
 
   async function updateItem(id, patch) {
-    if (supabase) await supabase.from("material_items").update(patch).eq("id", id);
-    else setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+    if (supabase) {
+      const { error } = await supabase.from("material_items").update(patch).eq("id", id);
+      if (error) {
+        console.error("MONTA: Materialposition aktualisieren fehlgeschlagen.", error);
+        alert(`Position konnte nicht aktualisiert werden: ${error.message || "unbekannter Fehler"}`);
+        return;
+      }
+    }
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
   }
 
   async function deleteItem(id) {
     if (!confirm("Position wirklich löschen?")) return;
-    if (supabase) await supabase.from("material_items").delete().eq("id", id);
-    else setItems((prev) => prev.filter((i) => i.id !== id));
+    if (supabase) {
+      const { error } = await supabase.from("material_items").delete().eq("id", id);
+      if (error) {
+        console.error("MONTA: Materialposition löschen fehlgeschlagen.", error);
+        alert(`Position konnte nicht gelöscht werden: ${error.message || "unbekannter Fehler"}`);
+        return;
+      }
+    }
+    setItems((prev) => prev.filter((i) => i.id !== id));
   }
 
   if (loading) return <Shell deviceMode={deviceMode} setDeviceMode={setDeviceMode}><p>Lade MONTA…</p></Shell>;

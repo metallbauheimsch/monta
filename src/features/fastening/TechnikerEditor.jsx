@@ -48,29 +48,34 @@ export default function TechnikerEditor({ items, allProjectItems, addItem, updat
 
     rememberDescriptionIfNew(draft.bezeichnung);
 
-    await addItem({
-      pos: mainPos,
-      einbauort,
-      menge,
-      bezeichnung: draft.bezeichnung,
-      groesse: draft.groesse,
-      laenge: draft.laenge,
-      oberflaeche: draft.oberflaeche,
-      hinweis: draft.hinweis,
-    });
-
-    for (let idx = 0; idx < companions.length; idx += 1) {
-      const c = companions[idx];
+    try {
       await addItem({
-        pos: companionPos[idx],
+        pos: mainPos,
         einbauort,
-        menge: menge * c.faktor,
-        bezeichnung: c.bezeichnung,
+        menge,
+        bezeichnung: draft.bezeichnung,
         groesse: draft.groesse,
-        laenge: "",
+        laenge: draft.laenge,
         oberflaeche: draft.oberflaeche,
-        hinweis: "Automatisch ergänzt",
+        hinweis: draft.hinweis,
       });
+
+      for (let idx = 0; idx < companions.length; idx += 1) {
+        const c = companions[idx];
+        await addItem({
+          pos: companionPos[idx],
+          einbauort,
+          menge: menge * c.faktor,
+          bezeichnung: c.bezeichnung,
+          groesse: draft.groesse,
+          laenge: "",
+          oberflaeche: draft.oberflaeche,
+          hinweis: "Automatisch ergänzt",
+        });
+      }
+    } catch {
+      // Eingaben behalten - addItem hat den Fehler bereits angezeigt.
+      return;
     }
 
     setDraft({ ...emptyFields, oberflaeche: draft.oberflaeche, autoMitlauf: draft.autoMitlauf });
