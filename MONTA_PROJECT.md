@@ -10,167 +10,77 @@ Statistiken sind grundsätzlich kein Bestandteil von MONTA.
 Projekt → Baugruppe → Bauteil → Materialposition
 
 - `projects` und `material_items` sind eigene Datenbanktabellen (Supabase).
-- Baugruppe/Bauteil sind **keine** eigenen Tabellen, sondern werden im Feld
-  `einbauort` als Text `"Baugruppe / Bauteil"` abgebildet
-  (`src/utils/structure.js`). So war bisher keine Datenbank-Migration nötig.
-- Leer angelegte Baugruppen/Bauteile (noch ohne Materialposition) werden nur
-  lokal im Browser gemerkt (siehe „Speicherorte" unten).
+- Baugruppen und Bauteile liegen in `project_structure` (Supabase):
+  - Zeile mit leerem `bauteil` → Baugruppe
+  - Zeile mit Baugruppe + Bauteil → Bauteil
+- Materialpositionen tragen weiterhin `einbauort` im Format
+  `"Baugruppe / Bauteil"` (`src/utils/structure.js`).
+- Beim ersten Laden werden lokale Registry-Einträge und vorhandene
+  Materialpositionen einmalig nach `project_structure` migriert.
 
-## Funktionen (Ist-Stand nach Stabilitäts-Sprint vor PWA)
+## Funktionen (Ist-Stand nach Pilot Sprint: Mehrgeräte-Sync)
 
 - **Projektverwaltung**: Anlegen, Archivieren/Zurückholen, endgültiges Löschen
   (auch das letzte verbleibende Projekt). Nach dem Löschen erscheint die
   leere Projektübersicht („Noch kein Projekt vorhanden." / „Neues Projekt").
-  Ein neu angelegtes Projekt ist zunächst leer - es wird **keine** Baugruppe
-  automatisch angelegt oder angezeigt. Solange keine Baugruppe existiert,
-  steht nur das Eingabefeld „Neue Baugruppe" mit Button „Anlegen" da (kein
-  zusätzlicher großer Button, identische Bedienung wie beim Anlegen eines
-  Bauteils).
-- **Mehrgeräte-Sync**: Supabase ist die zentrale Datenquelle. Die Oberfläche
-  aktualisiert sich nach Schreibvorgängen sofort lokal. Zusätzlich sichern
-  Realtime sowie Reload bei Fokus/Sichtbarkeit (und ein sparsamer Fallback
-  alle 20 Sekunden bei sichtbarer Seite) die Aktualität auf anderen Geräten.
-- **Darstellung**: Kein manueller PC/Mobil-Umschalter. Desktop und Smartphone
-  werden automatisch über die Bildschirmbreite gesteuert. Der Reiter TB ist
-  auf schmalen Bildschirmen ausgeblendet (Erfassung am PC).
+  Ein neu angelegtes Projekt startet ohne automatisch angelegte Baugruppe.
+- **Baugruppen/Bauteile**: Anlegen, Umbenennen, Löschen – gespeichert in
+  Supabase (`project_structure`), sofort lokal sichtbar und auf anderen
+  Geräten über Realtime/Fokus/Fallback synchron.
+- **Mehrgeräte-Sync**: Supabase ist die zentrale Datenquelle für Projekte,
+  Projektstruktur und Materialpositionen. Sofortige lokale Updates nach
+  Schreiben; Realtime; Reload bei Sichtbarkeit/Fokus; sparsamer Fallback
+  alle 20 Sekunden bei sichtbarer Seite. Pull-to-Refresh am Smartphone/
+  Tablet = normaler Browser-Reload (lädt alle Daten neu).
+- **Darstellung**: Kein manueller PC/Mobil-Umschalter. Auf schmalen
+  Bildschirmen sichtbar: Lager, Warenkorb, Druck. Ausgeblendet: TB und
+  Prüfung (Erfassung/Prüfung am PC).
 - **TB-Erfassung** (PC): Schnelle Tabellenerfassung, Positionsnummer sichtbar,
-  Vorschlagsliste für Bezeichnungen, automatische Ergänzung von
-  U-Scheibe(n)/Mutter bei Sechskantschraube/Senkschraube. Statt einer großen
-  Projektkarte steht darüber nur eine kleine Kontextzeile (Status-Ampel ·
-  „Baugruppe: … · Bauteil: …", Projektname klein daneben). Die Spalten Pos.,
-  Menge, Bezeichnung, Größe, Länge, Ausführung sind anklickbar sortierbar
-  (Pfeil ↑/↓, numerisch korrekt, z. B. M4 vor M12).
-- **Prüfung ähnlicher Verbindungsmittel**: siehe eigener Abschnitt unten.
-  Zeigt dieselbe Status-Ampel wie TB/Lager/Warenkorb/Druck.
-- **Baugruppe/Bauteil umbenennen**: Einfache Inline-Funktion (Button
-  „Umbenennen" bzw. „✎"), kein Dialog. Vorhandene Materialpositionen bleiben
-  zugeordnet. Beim Umbenennen einer Baugruppe ziehen gemerkte Lager-Werte
-  auf den neuen Namen um.
-- **Baugruppe löschen**: Kleiner Button neben „Umbenennen", mit
-  Sicherheitsabfrage. Löscht Baugruppe inkl. Bauteile, Materialpositionen und
-  zugehöriger lokaler Registry-Einträge.
-- **Lager**: Durchgehende Tabelle je Baugruppe mit Spalten Regalfach,
-  Bezeichnung, Größe, Länge, Ausführung, Gesamtmenge, Vorhanden (Zahlenfeld +
-  Checkbox „Vollständig", Spalte ebenfalls sortierbar), Restmenge, Herkunft.
-  Fasst gleiche Artikel je Baugruppe zusammen. Standard-Sortierung:
-  tatsächlicher Paternoster-Laufweg (siehe unten). Herkunft zeigt
-  Baugruppe · Bauteil + TB-Positionsnummern.
-- **Warenkorb**: Fehlmengen aus dem Lager, komplettes Projekt, gruppiert nach
-  Baugruppe. **Kein Regalfach** (bleibt in Lager und Druck). Spalten:
-  Bezeichnung, Größe, Länge, Ausführung, Fehlmenge, Herkunft, Bestellt,
-  Geliefert - alle sortierbar.
-  - Oberhalb der Tabellen: Checkbox „Alle Positionen bestellt".
-  - Je Position: Checkbox „Bestellt" + Zahlenfeld „Geliefert" + Checkbox
-    „Vollständig geliefert". Vollständig gelieferte Positionen bleiben
-    sichtbar (dezent grün hinterlegt, am Tabellenende), damit ein
-    versehentlicher Klick rückgängig gemacht werden kann - keine
-    automatische Ausblendung.
-  - Button „Anfrage per Mail" (nur offene Fehlmengen in der Mail).
-- **Druckansicht / Montage**: Nur die aktuell geöffnete Baugruppe, immer
-  nach Bauteil gegliedert. Gleiche Artikel nur innerhalb desselben Bauteils
-  zusammengefasst. Sortierung über anklickbare Spaltenüberschriften
-  (Position, Menge, Bezeichnung, Größe, Länge, Ausführung, Regalfach) -
-  keine separaten Sortierbuttons. Sortiersteuerung wird beim Drucken nicht
-  mitgedruckt.
-- **Regal/Paternoster**: Feste, vom Betrieb vorgegebene Fachzuordnung in
-  genau einer zentralen Datei (`regalOrder.js`). Keine Pflegeoberfläche,
-  keine Einstellungen, keine Datenbanktabelle.
-- **Statusampel** (🔴 Offen / 🟡 Bestellt / 🟢 Bereit / ⚪ ohne Positionen):
-  zentral in `helpers.js`, überall gleich. Berechnet ausschließlich aus den
-  Materialpositionen (`bestellt` / `bereit`):
-  - 🟢 Bereit: keine Restmenge mehr
-  - 🟡 Bestellt: Restmenge vorhanden, alle fehlenden Positionen bestellt
-  - 🔴 Offen: Restmenge vorhanden, mindestens eine fehlende Position nicht
-    bestellt
-  - Es gibt kein manuelles Baugruppen-Häkchen „Bestellung erfolgt" mehr.
+  Vorschlagsliste, automatische Ergänzung U-Scheibe(n)/Mutter. Sortierbare
+  Spalten. Kompakte Kontextzeile statt großer Projektkarte.
+- **Prüfung ähnlicher Verbindungsmittel**: siehe eigener Abschnitt (nur PC).
+- **Lager**: Tabelle je Baugruppe mit Regalfach, Vorhanden, Restmenge,
+  Herkunft (Baugruppe · Bauteil + TB-Pos.). Paternoster-Laufweg.
+- **Warenkorb**: Fehlmengen, Bestellt/Geliefert, vollständig gelieferte
+  bleiben sichtbar (grün). „Anfrage per Mail": HTML-Tabelle in die
+  Zwischenablage (für Outlook), Klartext-Fallback, mailto an
+  vertrieb@schrauben-jaeger.de, Betreff „Anfrage BV <Projektname>".
+- **Druckansicht**: Aktuelle Baugruppe, nach Bauteil gegliedert, sortierbar.
+- **Regal/Paternoster**: Feste Zuordnung in `regalOrder.js`.
+- **Statusampel** (🔴/🟡/🟢/⚪): aus Materialpositionen (`bestellt` / `bereit`).
 
 ## Prüfregel „Ähnliche Verbindungsmittel" (Stand Sprint 7)
 
-Ähnliche Verbindungsmittel werden bei einer absoluten Längendifferenz von
-maximal 20 mm angezeigt.
-
-Ein Prüfhinweis erscheint, wenn zwei Positionen **alle** folgenden Punkte
-erfüllen:
-
-- gleiche Bezeichnung
-- gleiche Größe
-- gleiche Ausführung (galvanisch, feuerverzinkt, HV und Edelstahl werden nie
-  miteinander vermischt)
-- beide besitzen eine hinterlegte Länge
-- absolute Längendifferenz maximal **20 mm**
-- die Längen sind nicht identisch
-
-Es werden ausschließlich **direkte Paare** verglichen. Automatisch
-ergänzte Positionen werden ignoriert.
-
+Ähnliche Verbindungsmittel bei absoluter Längendifferenz maximal 20 mm,
+gleicher Bezeichnung/Größe/Ausführung, unterschiedliche Längen.
+Automatisch ergänzte Positionen werden ignoriert.
 Umsetzung: `src/features/fastening/Checks.jsx`.
 
-## Regal/Paternoster-Zuordnung (Stand Sprint 7 – Korrekturen)
+## Regal/Paternoster-Zuordnung
 
 Zentrale Datei: `src/features/fastening/regalOrder.js`.
-
-| Fach | Inhalt |
-|------|--------|
-| 1 | galvanisch verzinkte Schrauben M3–M6, Wurmschrauben, Blechmuttern |
-| 2 | Ankerstangen, chemische Dübel, RECA Verbundmörtel |
-| 3 | Hilti HIT, Siebhülsen |
-| 4 | Edelstahl/VA Bolzenanker, Rahmendübel, Betonschrauben |
-| 5 | Edelstahl/VA Schrauben M8–M16 |
-| 6 | Edelstahl/VA Schrauben M4–M6, Schlossschrauben, Ringmuttern, Gewindehülsen, Senkscheiben |
-| 7 | Edelstahl/VA Nieten, Einnietmuttern, Holzschrauben, Bohrschrauben, Trespa-Befestigungen |
-| 9 | alle feuerverzinkten Schrauben (alle Größen) |
-| 24 | galvanisch verzinkte Bohrschrauben, Nägel, SPAX verzinkt, Seilklemmen, Ringösen, Rohrschellen |
-| 25 | verzinkte Bolzenanker/Betonschrauben/Dübel/Rahmendübel (galvanisch **und** feuerverzinkt, alle Größen) |
-| 26 | galvanisch verzinkte Schrauben M12–M20, alle HV-Schrauben |
-| 27 | galvanisch verzinkte Schrauben M8–M10 |
-
-Fach 8 und Fach 10–23 sind für MONTA nicht relevant (keine Zuordnung).
-
-Grundregeln:
-
-- „verzinkt" bedeutet galvanisch verzinkt, außer bei Fach 25.
-- „VA" bedeutet Edelstahl.
-- Fehlt eine Größenangabe, gelten alle Größen dieser Artikelgruppe.
-- Keine Größen oder Werkstoffe erraten → sonst „Ohne Fachzuordnung".
-
-U-Scheiben und Sechskantmuttern (auch automatisch ergänzte Mitlaufartikel)
-liegen bei den Schrauben gleicher Größe und Ausführung und erhalten dasselbe
-Regalfach. Ob die Position manuell oder automatisch angelegt wurde, spielt
-keine Rolle.
-
-**Paternoster-Standard-Laufweg:** 27 → 26 → 25 → 24 → 9 → 7 → 6 → 5 → 4 → 3 → 2 → 1 → wieder 27.
+Laufweg: 27 → 26 → 25 → 24 → 9 → 7 → 6 → 5 → 4 → 3 → 2 → 1.
+U-Scheiben/Sechskantmuttern: gleiches Fach wie passende Schraube.
 
 ## Speicherorte
 
-**In Supabase** (sofern Zugangsdaten konfiguriert sind): zentrale Datenquelle
-für Projekte und alle Materialpositionen (inkl. `bestellt` und `bereit`).
-Schreibvorgänge aktualisieren zuerst Supabase, danach sofort den lokalen
-React-State. Realtime und Fokus-/Sichtbarkeits-Reload halten andere Geräte
-aktuell.
+**In Supabase** (wenn konfiguriert):
 
-**Nur lokal im Browser** (gerätegebunden, nicht zwischen PC und iPhone
-geteilt):
+- Projekte
+- Projektstruktur (Baugruppen/Bauteile)
+- Materialpositionen inkl. `bestellt` / `bereit`
 
-- Leer angelegte Baugruppen/Bauteile ohne Material
-- Zuletzt manuell erfasster „bereits gelegt"/„geliefert"-Wert (gemeinsam für
-  Lager und Warenkorb)
-- Gelernte, neue Bezeichnungsvorschläge
-- Falls Supabase gar nicht konfiguriert ist: sämtliche Projekt-/Materialdaten
+**Nur lokal im Browser** (gerätegebunden):
+
+- Zuletzt manuell erfasster „bereits gelegt"/„geliefert"-Wert
+- Gelernte Bezeichnungsvorschläge
+- Ohne Supabase: sämtliche Daten inkl. lokaler Struktur-Kopie
 
 ## Bekannte Einschränkungen
 
 - Kein Login/Benutzerverwaltung (interner Prototyp).
-- `supabase_schema.sql` kennt (noch) keine Spalte `archived` – Archivieren
-  funktioniert dann nur lokal, bis die Spalte in der Datenbank ergänzt wird.
-- Projekt-Löschen erfordert die RLS-Policy `public delete projects` (siehe
-  `supabase_schema.sql`). Fehlt sie in der Live-Datenbank, schlägt Löschen
-  fehl und wird verständlich gemeldet.
-- Realtime muss für `projects` und `material_items` in der Supabase-
-  Publication aktiv sein; sonst greifen Fokus-/Sichtbarkeits-Reload und der
-  20-Sekunden-Fallback.
-- Artikel ohne eindeutige Zuordnung (z. B. U-Scheibe, Sechskantmutter ohne
-  passende Fachregel, oder Ausführungstexte wie „A2-70" statt „Edelstahl"/
-  „VA") erscheinen bewusst als „Ohne Fachzuordnung".
-- Sehr große Warenkörbe können die technische Längengrenze einer mailto-URL
-  überschreiten - dann erscheint eine verständliche Fehlermeldung statt
-  still abgeschnittener Positionen.
+- Spalte `archived` ggf. noch nicht in der Live-DB.
+- Live-Supabase braucht den SQL-Patch `supabase_patch_project_structure.sql`
+  (Tabelle + RLS + Realtime) und die Delete-Policy für Projekte.
+- Sehr große Warenkörbe können die mailto-Längengrenze überschreiten –
+  dann verständliche Fehlermeldung; HTML-Tabelle bleibt in der Zwischenablage.

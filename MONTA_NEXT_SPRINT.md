@@ -1,38 +1,34 @@
 # MONTA – Nächster Sprint
 
-## Stabilitäts-Sprint vor PWA – erledigt
+## Pilot Sprint: Mehrgeräte-Sync / Struktur / Mail – erledigt (Code)
 
-- Letztes Projekt löschbar; leere Übersicht danach.
-- Mehrgeräte-Sync: sofortige lokale Updates, Realtime, Fokus-/Sichtbarkeits-
-  Reload, sparsamer 20-Sekunden-Fallback bei sichtbarer Seite.
-- PC/Mobil-Umschalter entfernt; TB auf schmalen Bildschirmen ausgeblendet.
-- Einheitliche Fehlerbehandlung bei create/update/delete.
+- `project_structure` für Baugruppen/Bauteile
+- Migration aus lokaler Registry + Materialpositionen
+- Realtime + Fokus/Sichtbarkeit + Fallback
+- Mobile: TB und Prüfung ausgeblendet
+- Mail: HTML-Tabelle in Zwischenablage
 
-Details siehe `MONTA_PROJECT.md`, `MONTA_DECISIONS.md` und
-`MONTA_CHANGELOG.md`.
+Details siehe `MONTA_PROJECT.md`, `MONTA_DECISIONS.md`, `MONTA_CHANGELOG.md`.
 
-## Vor dem nächsten Pilot-Test in Supabase prüfen / anwenden
+## Vor dem nächsten Pilot-Test in Supabase ausführen
 
-Falls in der Live-Datenbank noch nicht vorhanden:
+1. Falls noch nicht geschehen (Stabilität):
 
 ```sql
 create policy "public delete projects" on projects for delete using (true);
-
 alter publication supabase_realtime add table projects;
 alter publication supabase_realtime add table material_items;
 ```
 
-(Realtime-Publication-Befehle schlagen fehl, wenn die Tabelle bereits
-enthalten ist – dann ist Realtime schon aktiv.)
+2. Neu in diesem Sprint – Datei `supabase_patch_project_structure.sql`
+   vollständig im SQL Editor ausführen (Tabelle, RLS, Realtime).
+
+Ohne diesen Patch schlägt das Laden mit Hinweis auf Projektstruktur fehl.
 
 ## Nächster sinnvoller Fokus
 
-- PWA / App-Icon / Installierbarkeit für die mobile Pilotnutzung
-  (separater Auftrag, nicht Teil dieses Stabilitäts-Sprints).
+- PWA / Installierbarkeit für die mobile Pilotnutzung
 
-## Weiterhin offen (nicht blockierend für Stabilität)
+## Weiterhin offen
 
-- `supabase_schema.sql` um die Spalte `archived` ergänzen, sobald eine
-  echte Migration gewünscht ist.
-- Geräteübergreifende Teilung rein lokaler Hilfsdaten (leere
-  Baugruppen-Registry, gelernte Bezeichnungen) – nur bei Bedarf.
+- Spalte `archived` in der Live-DB ergänzen, sobald gewünscht

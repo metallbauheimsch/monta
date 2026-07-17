@@ -124,9 +124,12 @@ Der Warenkorb ist eine Tabelle in derselben Optik wie Lager und TB, mit sortierb
 
 Im Warenkorb wird kein Regalfach angezeigt (Regalfächer bleiben in Lager und Druck).
 
-Angebotsanfragen an den Schraubenhändler erfolgen über „Anfrage per Mail" (Standard-Mailprogramm).
+Angebotsanfragen an den Schraubenhändler erfolgen über „Anfrage per Mail"
+(Standard-Mailprogramm, Empfänger Schrauben-Jäger AG).
 
-Kein Tabellen-Kopieren und kein CSV-Export im Warenkorb.
+Dabei wird eine HTML-Tabelle (Bezeichnung, Größe, Länge, Ausführung, Menge)
+in die Zwischenablage gelegt, damit sie in Outlook sauber eingefügt werden
+kann. Klartext bleibt Fallback. Kein separater CSV-Export.
 
 Der Warenkorb ist keine allgemeine Bestellverwaltung.
 
@@ -178,9 +181,11 @@ Die Druckansicht wird über anklickbare Spaltenüberschriften sortiert (wie TB, 
 
 Ein neues Projekt startet ohne automatisch angelegte Baugruppe.
 
-Baugruppen und Bauteile können umbenannt werden.
+Baugruppen und Bauteile werden in Supabase (`project_structure`) gespeichert
+und geräteübergreifend synchronisiert.
 
-Baugruppen können nach Sicherheitsabfrage vollständig gelöscht werden.
+Baugruppen und Bauteile können umbenannt und nach Sicherheitsabfrage
+gelöscht werden.
 
 ---
 
@@ -198,20 +203,26 @@ Die Darstellung erfolgt automatisch responsiv über die Bildschirmbreite.
 
 Es gibt keinen manuellen PC/Mobil-Umschalter.
 
-Der Reiter TB ist auf schmalen Bildschirmen ausgeblendet; die Erfassung
-erfolgt am PC.
+Auf schmalen Bildschirmen sind TB und Prüfung ausgeblendet; sichtbar bleiben
+Lager, Warenkorb und Druck. Die Erfassung erfolgt am PC.
+
+Pull-to-Refresh am Smartphone/Tablet ist der normale Browser-Reload.
 
 ---
 
 ## Daten und Synchronisation
 
-Supabase ist die zentrale Datenquelle für Projekte und Materialpositionen.
+Supabase ist die zentrale Datenquelle für Projekte, Projektstruktur
+(Baugruppen/Bauteile) und Materialpositionen.
 
 Lokale Oberflächen-Updates erfolgen sofort nach erfolgreichem Schreiben.
 
 Mehrgeräte-Nutzung wird über Realtime sowie Reload bei Fokus und
 Sichtbarkeit abgesichert (mit sparsamen Fallback, solange die Seite sichtbar
 ist).
+
+Die frühere rein lokale Baugruppen-/Bauteil-Registry ist nicht mehr die
+zentrale Datenquelle.
 
 Demo-Daten werden nicht erneut eingesetzt, wenn bereits echte Projektdaten
 vorhanden waren oder die Projektliste bewusst leer ist.

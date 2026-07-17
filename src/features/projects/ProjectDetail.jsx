@@ -1,32 +1,22 @@
 import { useRef, useState } from "react";
 import ProjectHeader from "../../components/ProjectHeader";
 import { projectStatus, baugruppeStatus } from "../../utils/helpers";
-import { buildProjectStructure, addBaugruppeToRegistry, addBauteilToRegistry, parseEinbauort } from "../../utils/structure";
+import { buildProjectStructure, parseEinbauort } from "../../utils/structure";
 
-// Projektseite: Baugruppen sind reine Ordnungsblöcke, direkt darunter die
-// Bauteile. Klick auf ein Bauteil öffnet die Arbeitsansicht (Reiter).
-//
-// Sprint 5 Erweiterung #4/#5: jede Baugruppe zeigt zusätzlich ihre
-// Materialstatus-Ampel (🔴 Offen / 🟡 Bestellt / 🟢 Bereit).
-//
-// Sprint 6 Ergänzung #11: Baugruppen und Bauteile können umbenannt werden
-// (einfaches Inline-Formular statt Dialog, siehe unten).
-// Sprint 6 Ergänzung #12: Ein neues Projekt legt keine Baugruppe automatisch
-// an - ist die Liste leer, bleibt einfach nur das Anlegen-Formular übrig
-// (Sprint 7: der zusätzliche große Button darüber wurde entfernt, da er
-// gegenüber Eingabefeld + "Anlegen" überflüssig war).
-// Sprint 7: "Baugruppe löschen" ist jetzt ein kleiner Button direkt neben
-// "Umbenennen" statt einer großen Gefahrenzone am Kartenende.
-// Sprint 7 Abschluss: Button-Beschriftung "+ Baugruppe" -> "Anlegen", damit
-// die Bedienung identisch zur Bauteil-Anlage ist (gleicher Button-Text).
+// Projektseite: Baugruppen/Bauteile aus project_structure (Supabase),
+// ergänzt um Materialpositionen. Anlegen/Umbenennen/Löschen synchronisiert.
 export default function ProjectDetail({
   project,
   items,
+  structureRows,
   setView,
   openBauteil,
   setProjectArchived,
   deleteProject,
+  addBaugruppe,
+  addBauteil,
   deleteBaugruppe,
+  deleteBauteil,
   renameBaugruppe,
   renameBauteil,
 }) {
@@ -35,42 +25,44 @@ export default function ProjectDetail({
   const [newBauteil, setNewBauteil] = useState("");
   const [renamingBaugruppe, setRenamingBaugruppe] = useState(null);
   const [renameBaugruppeValue, setRenameBaugruppeValue] = useState("");
-  const [renamingBauteil, setRenamingBauteil] = useState(null); // { baugruppe, bauteil }
+  const [renamingBauteil, setRenamingBauteil] = useState(null);
   const [renameBauteilValue, setRenameBauteilValue] = useState("");
   const newBaugruppeInputRef = useRef(null);
 
-  const structure = buildProjectStructure(project, items);
+  const structure = buildProjectStructure(project, items, structureRows);
 
-  function handleAddBaugruppe(e) {
+  async function handleAddBaugruppe(e) {
     e.preventDefault();
     if (!newBaugruppe.trim()) return;
-    addBaugruppeToRegistry(project.id, newBaugruppe.trim());
-    setNewBaugruppe(""); // triggert Re-Render, buildProjectStructure liest Registry neu
+    try {
+      await addBaugruppe?.(project.id, newBaugruppe.trim());
+      setNewBaugruppe("");
+    } catch {
+      // Fehler bereits gemeldet
+    }
   }
 
-  function handleAddBauteil(baugruppeName, e) {
+  async function handleAddBauteil(baugruppeName, e) {
     e.preventDefault();
     if (!newBauteil.trim()) return;
-    addBauteilToRegistry(project.id, baugruppeName, newBauteil.trim());
-    setNewBauteil("");
-    setAddingBauteilTo(null);
+    try {
+      await addBauteil?.(project.id, baugruppeName, newBauteil.trim());
+      setNewBauteil("");
+      setAddingBauteilTo(null);
+    } catch {
+      // Fehler bereits gemeldet
+    }
   }
 
   async function handleDeleteProject() {
     if (!confirm("Projekt wirklich dauerhaft löschen?")) return;
     try {
-      // Bei Erfolg setzt App.jsx projectId/Baugruppe/Bauteil zurück und
-      // zeigt die Projektübersicht (auch wenn es das letzte Projekt war).
       await deleteProject(project.id);
     } catch {
-      // Fehler bereits in deleteProject gemeldet; Ansicht bleibt geöffnet.
+      // Fehler bereits gemeldet
     }
   }
 
-  // Baugruppe löschen ist bewusst nur nach ausdrücklicher Bestätigung
-  // möglich und funktioniert auch, wenn die Baugruppe bereits Material
-  // enthält. Andere Baugruppen/Projekte bleiben unberührt (siehe
-  // App.jsx deleteBaugruppe).
   async function handleDeleteBaugruppe(baugruppeName) {
     const ok = confirm(
       "Baugruppe wirklich löschen? Alle enthaltenen Bauteile und Materialpositionen werden dauerhaft gelöscht."
@@ -79,7 +71,19 @@ export default function ProjectDetail({
     try {
       await deleteBaugruppe?.(project.id, baugruppeName);
     } catch {
-      // Fehler bereits in deleteBaugruppe gemeldet.
+      // Fehler bereits gemeldet
+    }
+  }
+
+  async function handleDeleteBauteil(baugruppeName, bauteilName) {
+    const ok = confirm(
+      "Bauteil wirklich löschen? Zugehörige Materialpositionen werden dauerhaft gelöscht."
+    );
+    if (!ok) return;
+    try {
+      await deleteBauteil?.(project.id, baugruppeName, bauteilName);
+    } catch {
+      // Fehler bereits gemeldet
     }
   }
 
@@ -88,12 +92,16 @@ export default function ProjectDetail({
     setRenameBaugruppeValue(name);
   }
 
-  function submitRenameBaugruppe(e, oldName) {
+  async function submitRenameBaugruppe(e, oldName) {
     e.preventDefault();
     const clean = renameBaugruppeValue.trim();
     if (!clean) return;
-    renameBaugruppe?.(project.id, oldName, clean);
-    setRenamingBaugruppe(null);
+    try {
+      await renameBaugruppe?.(project.id, oldName, clean);
+      setRenamingBaugruppe(null);
+    } catch {
+      // Fehler bereits gemeldet
+    }
   }
 
   function startRenameBauteil(baugruppeName, bauteilName) {
@@ -101,12 +109,16 @@ export default function ProjectDetail({
     setRenameBauteilValue(bauteilName);
   }
 
-  function submitRenameBauteil(e, baugruppeName, oldName) {
+  async function submitRenameBauteil(e, baugruppeName, oldName) {
     e.preventDefault();
     const clean = renameBauteilValue.trim();
     if (!clean) return;
-    renameBauteil?.(project.id, baugruppeName, oldName, clean);
-    setRenamingBauteil(null);
+    try {
+      await renameBauteil?.(project.id, baugruppeName, oldName, clean);
+      setRenamingBauteil(null);
+    } catch {
+      // Fehler bereits gemeldet
+    }
   }
 
   return (
@@ -193,6 +205,14 @@ export default function ProjectDetail({
                     >
                       ✎
                     </button>
+                    <button
+                      type="button"
+                      className="ghost chipEdit dangerBtnSmall"
+                      title="Bauteil löschen"
+                      onClick={() => handleDeleteBauteil(baugruppe, bauteil)}
+                    >
+                      ×
+                    </button>
                   </span>
                 );
               })}
@@ -220,9 +240,6 @@ export default function ProjectDetail({
         <button>Anlegen</button>
       </form>
 
-      {/* Bewusst unauffällig und am Seitenende: Archivieren ist eine normale,
-          reversible Aktion, Löschen ist unwiderruflich - beide daher klar
-          getrennt und nicht prominent oben platziert. */}
       <div className="card manageZone">
         <h3>Projekt verwalten</h3>
         {project.archived ? (

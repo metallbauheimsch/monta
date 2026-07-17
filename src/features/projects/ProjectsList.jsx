@@ -6,8 +6,8 @@ import { buildProjectStructure, parseEinbauort } from "../../utils/structure";
 // Baugruppen-Ampeln (🔴/🟡/🟢) je Projekt. Sprint 7 - Korrekturen aus
 // Praxistest: baugruppeStatus wird direkt aus den Materialpositionen
 // berechnet (kein manuelles Häkchen mehr, siehe helpers.js).
-function baugruppenSummary(project, items) {
-  const structure = buildProjectStructure(project, items);
+function baugruppenSummary(project, items, structureRows) {
+  const structure = buildProjectStructure(project, items, structureRows);
   const counts = { offen: 0, bestellt: 0, bereit: 0 };
   structure.forEach(({ baugruppe }) => {
     const bgItems = items.filter(
@@ -19,7 +19,7 @@ function baugruppenSummary(project, items) {
   return counts;
 }
 
-export default function ProjectsList({ projects, items, setView, setProjectId }) {
+export default function ProjectsList({ projects, items, structureRows, setView, setProjectId }) {
   if (projects.length === 0) {
     return (
       <>
@@ -44,7 +44,7 @@ export default function ProjectsList({ projects, items, setView, setProjectId })
       {projects.map((p) => {
         const s = projectStatus(p, items);
         const projectItems = items.filter((i) => i.project_id === p.id);
-        const bg = baugruppenSummary(p, projectItems);
+        const bg = baugruppenSummary(p, projectItems, structureRows);
         return (
           <div className="card clickable" key={p.id} onClick={() => { setProjectId(p.id); setView("projectDetail"); }}>
             <div className="row">

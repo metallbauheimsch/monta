@@ -461,6 +461,41 @@ Löschen zwingend).
 
 ---
 
+# Pilot Sprint: Mehrgeräte-Synchronisation, Projektstruktur und Mail
+
+## Ursache
+
+Baugruppen und Bauteile lagen nur in der lokalen Browser-Registry und waren
+daher nicht geräteübergreifend sichtbar – auch nicht nach Pull-to-Refresh.
+
+## Projektstruktur
+
+- Neue Tabelle `project_structure` in Supabase (Baugruppe / Bauteil).
+- Einmalige Migration aus lokaler Registry und vorhandenen Materialpositionen.
+- Danach ist Supabase die gemeinsame Quelle für die Projektstruktur.
+
+## Synchronisation
+
+- Anlegen/Umbenennen/Löschen von Baugruppen und Bauteilen synchron.
+- Realtime für `project_structure` zusätzlich zu Projekten und Material.
+- Fokus, Sichtbarkeit und 20-Sekunden-Fallback bleiben bestehen.
+- Pull-to-Refresh = normaler Browser-Reload (lädt alle Daten neu).
+
+## Mobile Navigation
+
+- Auf schmalen Bildschirmen: TB und Prüfung ausgeblendet.
+- Sichtbar: Lager, Warenkorb, Druck.
+
+## Mail
+
+- „Anfrage per Mail" kopiert eine formatierte HTML-Tabelle in die
+  Zwischenablage (für Outlook) und öffnet die Mail mit Klartext-Fallback.
+
+Bestehende Projektdaten bleiben erhalten. SQL-Patch manuell ausführen:
+`supabase_patch_project_structure.sql`.
+
+---
+
 # Regeln
 
 Nach jedem abgeschlossenen Sprint werden hier ergänzt:

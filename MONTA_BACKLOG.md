@@ -13,24 +13,21 @@ Regeln:
 
 # Priorität A – Pilotversion
 
-Diese Punkte müssen vor dem produktiven Einsatz abgeschlossen sein.
+## Mehrgeräte-Sync / Projektstruktur / Mail
 
-## Stabilität / Sync
+(Erledigt im Code mit Pilot Sprint. Siehe Changelog.)
 
-(Erledigt mit Stabilitäts-Sprint vor PWA: letztes Projekt löschen,
-Mehrgeräte-Sync mit Realtime + Fokus/Sichtbarkeit + Fallback,
-PC/Mobil-Umschalter entfernt. Siehe Changelog.)
+In der Live-Supabase einmalig ausführen:
 
-In der Live-Supabase einmalig prüfen: Delete-Policy für `projects` und
-Realtime-Publication für `projects` / `material_items`
-(siehe `MONTA_NEXT_SPRINT.md`).
+- `supabase_patch_project_structure.sql`
+- Delete-Policy und Realtime für projects / material_items
+  (siehe `MONTA_NEXT_SPRINT.md`)
 
 ---
 
-## Baugruppen / Lager / Warenkorb / Druck / Status / Regal / Tabellen
+## Stabilität / Lager / Warenkorb / Druck / Status / Regal
 
-(Erledigt mit Sprint 6/7 inkl. Korrekturen und Abschlusskorrekturen vor
-Pilot. Siehe Changelog.)
+(Erledigt mit Sprint 6/7 und Stabilitäts-Sprint. Siehe Changelog.)
 
 ---
 
@@ -89,12 +86,6 @@ Wenn nein, wird die Idee verworfen.
 
 # Aktueller Fokus
 
-Bis zur Pilotversion gilt:
-
-1. Stabilität
-2. Wenige Klicks
-3. Übersicht
-4. Fehlerfreiheit
-5. Geschwindigkeit
-
-Neue Funktionen haben derzeit keine Priorität.
+1. SQL-Patch in Live-Supabase anwenden
+2. Pilot-Test Mehrgeräte (PC + Smartphone)
+3. Danach PWA

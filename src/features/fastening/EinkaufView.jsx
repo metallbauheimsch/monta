@@ -4,7 +4,7 @@ import { parseEinbauort } from "../../utils/structure";
 import { naturalCompare, useSortableColumns } from "../../utils/sorting";
 import { distribute, readManualValues, writeManualValues } from "./stock";
 import { buildHerkunft } from "./herkunft";
-import { buildMailtoRequest, openMailClient } from "../../utils/mailRequest";
+import { prepareAndOpenMailRequest } from "../../utils/mailRequest";
 
 // Warenkorb: komplettes Projekt, gruppiert nach Baugruppe und Artikel.
 // Zeigt Fehlmengen und - bewusst - auch vollständig gelieferte Positionen
@@ -139,21 +139,18 @@ export default function EinkaufView({ items, project, updateItem }) {
     }
   }
 
-  function handleMailRequest() {
+  async function handleMailRequest() {
     setMailError(null);
     const mailRows = buildMailRows(allRows);
     if (!mailRows.length) {
       setMailError("Der Warenkorb enthält keine offenen Positionen.");
       return;
     }
-    const { url, tooLong } = buildMailtoRequest({ projectName: project.name, rows: mailRows });
-    if (tooLong) {
-      setMailError(
-        "Die Anfrage enthält zu viele Positionen für eine E-Mail. Bitte die Anfrage aufteilen oder weniger Positionen auswählen."
-      );
-      return;
-    }
-    openMailClient(url);
+    const result = await prepareAndOpenMailRequest({
+      projectName: project.name,
+      rows: mailRows,
+    });
+    if (!result.ok) setMailError(result.error);
   }
 
   return (

@@ -11,7 +11,16 @@ import { isMobileLike, useIsNarrow } from "./utils/helpers";
 import {
   parseEinbauort,
   formatEinbauort,
+  collectStructureCandidates,
+  hasStructureRow,
+  structureRowKey,
+  markStructureMigrated,
+  readLocalStructureRows,
+  writeLocalStructureRows,
+  addBaugruppeToRegistry,
+  addBauteilToRegistry,
   removeBaugruppeFromRegistry,
+  removeBauteilFromRegistry,
   renameBaugruppeInRegistry,
   renameBauteilInRegistry,
 } from "./utils/structure";
@@ -19,30 +28,29 @@ import { defaultTabFor } from "./utils/tabs";
 import { demoProjects, demoItems } from "./utils/demoData";
 import { renameBaugruppeInManualValues } from "./features/fastening/stock";
 
-// Sparsamer Fallback, wenn Realtime aussetzt (Mobil-Standby, Tab im
-// Hintergrund). Nur bei sichtbarer Seite; kein Sekundentakt.
 const SYNC_POLL_MS = 20000;
 
 function App() {
   const [projects, setProjects] = useState([]);
   const [items, setItems] = useState([]);
+  const [structureRows, setStructureRows] = useState([]);
   const [view, setView] = useState("projects");
   const [projectId, setProjectId] = useState(null);
-
-  // Aktuell geöffnete Baugruppe/Bauteil (Arbeitsansicht bezieht sich darauf)
   const [selectedBaugruppe, setSelectedBaugruppe] = useState(null);
   const [selectedBauteil, setSelectedBauteil] = useState(null);
 
   const isNarrow = useIsNarrow();
   const [tab, setTab] = useState(() => defaultTabFor(isMobileLike()));
   const [loading, setLoading] = useState(true);
-  // Fehlermeldung, falls das Laden der Daten fehlschlägt (siehe load() unten).
-  // Verhindert, dass die App bei einem Supabase-Fehler dauerhaft im
-  // Ladezustand hängen bleibt (Produktionsfehler, siehe MONTA_CHANGELOG.md).
   const [loadError, setLoadError] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
 
-  const loadInFlight = useRef(null);
+  // Verhindert, dass ein älterer (noch laufender) load() neuere lokale
+  // Inserts oder frischere Serverdaten überschreibt.
+  const loadGeneration = useRef(0);
+  const migratingRef = useRef(false);
+  const structureRowsRef = useRef(structureRows);
+  structureRowsRef.current = structureRows;
 
   const project = projects.find((p) => p.id === projectId);
   const projectItems = items.filter((i) => i.project_id === projectId);
@@ -54,59 +62,119 @@ function App() {
     (i) => parseEinbauort(i.einbauort, project?.baugruppe).bauteil === selectedBauteil
   );
 
-  // Standardmäßig nur aktive Projekte anzeigen; "archived" fehlt in alten
-  // Daten -> wird als false behandelt (Filter greift nur bei archived === true).
   const visibleProjects = showArchived ? projects : projects.filter((p) => !p.archived);
 
-  // Lädt Projekte + Materialpositionen.
-  // silent=true: Hintergrund-Sync (Realtime/Fokus/Polling) ohne Vollbild-Lader.
+  // Fehlende Baugruppen/Bauteile aus lokaler Registry + Materialpositionen
+  // nach Supabase nachziehen. Kein Abbruch über Migrations-Flag: sonst bleiben
+  // Einträge aus älteren Clients dauerhaft nur lokal.
+  async function migrateStructureToSupabase(nextProjects, nextItems, existingRows) {
+    if (!supabase || migratingRef.current) return existingRows;
+    migratingRef.current = true;
+    try {
+      const candidates = collectStructureCandidates(nextProjects, nextItems);
+      const missing = candidates.filter(
+        (c) => !hasStructureRow(existingRows, c.project_id, c.baugruppe, c.bauteil)
+      );
+      if (!missing.length) {
+        markStructureMigrated();
+        return existingRows;
+      }
+      const payload = missing.map((c) => ({
+        id: crypto.randomUUID(),
+        project_id: c.project_id,
+        baugruppe: c.baugruppe,
+        bauteil: c.bauteil,
+        sort_order: null,
+      }));
+      const { data, error } = await supabase.from("project_structure").insert(payload).select("*");
+      if (error) {
+        console.error("MONTA: Struktur-Migration fehlgeschlagen.", error);
+        return existingRows;
+      }
+      markStructureMigrated();
+      const inserted = data || payload;
+      console.info("MONTA: Struktur-Migration –", inserted.length, "Einträge nach Supabase.");
+      const byKey = new Map(
+        [...existingRows, ...inserted].map((r) => [
+          structureRowKey(r.project_id, r.baugruppe, r.bauteil),
+          r,
+        ])
+      );
+      return Array.from(byKey.values());
+    } finally {
+      migratingRef.current = false;
+    }
+  }
+
   const load = useCallback(async ({ silent = false } = {}) => {
-    if (loadInFlight.current) return loadInFlight.current;
-
-    const run = (async () => {
-      if (!silent) {
-        setLoading(true);
-        setLoadError(null);
+    const myGen = ++loadGeneration.current;
+    if (!silent) {
+      setLoading(true);
+      setLoadError(null);
+    }
+    try {
+      if (!supabase) {
+        const rawP = localStorage.getItem("monta_projects_v04");
+        const rawI = localStorage.getItem("monta_items_v04");
+        const parsedP = rawP ? JSON.parse(rawP) : null;
+        const parsedI = rawI ? JSON.parse(rawI) : null;
+        const p = parsedP !== null ? parsedP : demoProjects;
+        const i = parsedI !== null ? parsedI : demoItems;
+        let rows = readLocalStructureRows();
+        if (!rows) {
+          const candidates = collectStructureCandidates(p, i);
+          rows = candidates.map((c) => ({
+            id: crypto.randomUUID(),
+            project_id: c.project_id,
+            baugruppe: c.baugruppe,
+            bauteil: c.bauteil,
+            sort_order: null,
+          }));
+          writeLocalStructureRows(rows);
+        }
+        if (myGen !== loadGeneration.current) return;
+        setProjects(p);
+        setItems(i);
+        setStructureRows(rows);
+        return;
       }
-      try {
-        if (!supabase) {
-          const rawP = localStorage.getItem("monta_projects_v04");
-          const rawI = localStorage.getItem("monta_items_v04");
-          const parsedP = rawP ? JSON.parse(rawP) : null;
-          const parsedI = rawI ? JSON.parse(rawI) : null;
-          // Demo nur, wenn noch nie lokale Daten existierten. Leeres Array
-          // nach Löschen des letzten Projekts bleibt leer (kein Auto-Demo).
-          const p = parsedP !== null ? parsedP : demoProjects;
-          const i = parsedI !== null ? parsedI : demoItems;
-          setProjects(p);
-          setItems(i);
-          return;
-        }
-        const [projectsRes, itemsRes] = await Promise.all([
-          supabase.from("projects").select("*").order("created_at", { ascending: false }),
-          supabase.from("material_items").select("*").order("created_at", { ascending: true }),
-        ]);
-        if (projectsRes.error) {
-          throw new Error(`Projekte: ${projectsRes.error.message || "unbekannter Fehler"}`);
-        }
-        if (itemsRes.error) {
-          throw new Error(`Materialpositionen: ${itemsRes.error.message || "unbekannter Fehler"}`);
-        }
-        setProjects(projectsRes.data || []);
-        setItems(itemsRes.data || []);
-      } catch (err) {
-        console.error("MONTA: Laden der Daten fehlgeschlagen.", err);
-        if (!silent) {
-          setLoadError(err?.message || "Unbekannter Fehler beim Laden der Daten.");
-        }
-      } finally {
-        if (!silent) setLoading(false);
-        loadInFlight.current = null;
-      }
-    })();
 
-    loadInFlight.current = run;
-    return run;
+      const [projectsRes, itemsRes, structureRes] = await Promise.all([
+        supabase.from("projects").select("*").order("created_at", { ascending: false }),
+        supabase.from("material_items").select("*").order("created_at", { ascending: true }),
+        supabase.from("project_structure").select("*").order("created_at", { ascending: true }),
+      ]);
+      if (projectsRes.error) {
+        throw new Error(`Projekte: ${projectsRes.error.message || "unbekannter Fehler"}`);
+      }
+      if (itemsRes.error) {
+        throw new Error(`Materialpositionen: ${itemsRes.error.message || "unbekannter Fehler"}`);
+      }
+      if (structureRes.error) {
+        throw new Error(
+          `Projektstruktur: ${structureRes.error.message || "unbekannter Fehler"} (SQL-Patch project_structure ausführen?)`
+        );
+      }
+
+      let nextProjects = projectsRes.data || [];
+      let nextItems = itemsRes.data || [];
+      let nextStructure = structureRes.data || [];
+      nextStructure = await migrateStructureToSupabase(nextProjects, nextItems, nextStructure);
+
+      // Veraltete Antwort verwerfen (neuerer load oder Insert inzwischen).
+      if (myGen !== loadGeneration.current) return;
+
+      setProjects(nextProjects);
+      setItems(nextItems);
+      setStructureRows(nextStructure);
+    } catch (err) {
+      console.error("MONTA: Laden der Daten fehlgeschlagen.", err);
+      if (!silent && myGen === loadGeneration.current) {
+        setLoadError(err?.message || "Unbekannter Fehler beim Laden der Daten.");
+      }
+    } finally {
+      if (!silent && myGen === loadGeneration.current) setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -121,8 +189,10 @@ function App() {
       .on("postgres_changes", { event: "*", schema: "public", table: "material_items" }, () => {
         load({ silent: true });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "project_structure" }, () => {
+        load({ silent: true });
+      })
       .subscribe((status, err) => {
-        // Channel-Zustand nur in der Konsole – kein dauerhafter UI-Hinweis.
         if (err) console.warn("MONTA Realtime:", status, err);
         else console.info("MONTA Realtime:", status);
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
@@ -138,8 +208,14 @@ function App() {
     function refreshOnFocus() {
       load({ silent: true });
     }
+    // Pull-to-Refresh = normaler Browser-Reload (kein eigener Overlay).
+    // pageshow deckt bfcache/Zurück-Navigation ab → stiller Reload.
+    function refreshOnPageShow(e) {
+      if (e.persisted) load({ silent: true });
+    }
     document.addEventListener("visibilitychange", refreshWhenVisible);
     window.addEventListener("focus", refreshOnFocus);
+    window.addEventListener("pageshow", refreshOnPageShow);
 
     const pollId = setInterval(() => {
       if (document.visibilityState === "visible") load({ silent: true });
@@ -149,22 +225,18 @@ function App() {
       supabase.removeChannel(channel);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
       window.removeEventListener("focus", refreshOnFocus);
+      window.removeEventListener("pageshow", refreshOnPageShow);
       clearInterval(pollId);
     };
   }, [load]);
 
-  function persistLocal(nextProjects, nextItems) {
-    if (!supabase) {
-      localStorage.setItem("monta_projects_v04", JSON.stringify(nextProjects));
-      localStorage.setItem("monta_items_v04", JSON.stringify(nextItems));
-    }
-  }
-
-  // Persistiert lokal automatisch bei jeder Zustandsänderung (funktionale
-  // setState-Updates unten sind dadurch immer die Quelle der Wahrheit).
   useEffect(() => {
-    if (!loading) persistLocal(projects, items);
-  }, [projects, items, loading]);
+    if (!loading && !supabase) {
+      localStorage.setItem("monta_projects_v04", JSON.stringify(projects));
+      localStorage.setItem("monta_items_v04", JSON.stringify(items));
+      writeLocalStructureRows(structureRows);
+    }
+  }, [projects, items, structureRows, loading]);
 
   function resetSelectionToOverview() {
     setProjectId(null);
@@ -173,14 +245,66 @@ function App() {
     setView("projects");
   }
 
-  // Wenn das geöffnete Projekt auf einem anderen Gerät gelöscht wurde
-  // (Realtime/Polling), nicht auf einer leeren Detailansicht bleiben.
   useEffect(() => {
     if (loading || loadError) return;
     if (projectId && !projects.some((p) => p.id === projectId)) {
       resetSelectionToOverview();
     }
   }, [projects, projectId, loading, loadError]);
+
+  async function insertStructureRow({ project_id, baugruppe, bauteil }) {
+    const bg = String(baugruppe || "").trim();
+    const bt =
+      bauteil == null || String(bauteil).trim() === "" ? null : String(bauteil).trim();
+    if (!bg) return null;
+    if (hasStructureRow(structureRowsRef.current, project_id, bg, bt)) return null;
+
+    const row = {
+      id: crypto.randomUUID(),
+      project_id: String(project_id),
+      baugruppe: bg,
+      bauteil: bt,
+      sort_order: null,
+    };
+
+    if (supabase) {
+      const { data, error } = await supabase
+        .from("project_structure")
+        .insert(row)
+        .select("*")
+        .single();
+      if (error) {
+        // Unique-Verletzung: parallel angelegt – vom Server nachladen.
+        if (error.code === "23505") {
+          console.warn("MONTA: Struktureintrag existiert bereits, lade neu.", bg, bt);
+          await load({ silent: true });
+          return null;
+        }
+        console.error("MONTA: Struktureintrag anlegen fehlgeschlagen.", error, row);
+        alert(`Struktur konnte nicht gespeichert werden: ${error.message || "unbekannter Fehler"}`);
+        throw error;
+      }
+      const saved = data || row;
+      console.info("MONTA: project_structure Insert OK", saved);
+      // Generation erhöhen, damit parallel laufende ältere loads diesen
+      // Stand nicht mit einer Antwort ohne den neuen Eintrag überschreiben.
+      loadGeneration.current += 1;
+      setStructureRows((prev) =>
+        hasStructureRow(prev, saved.project_id, saved.baugruppe, saved.bauteil)
+          ? prev
+          : [...prev, saved]
+      );
+      return saved;
+    }
+
+    if (bt) addBauteilToRegistry(project_id, bg, bt);
+    else addBaugruppeToRegistry(project_id, bg);
+
+    setStructureRows((prev) =>
+      hasStructureRow(prev, project_id, bg, bt) ? prev : [...prev, row]
+    );
+    return row;
+  }
 
   async function createProject(e) {
     e.preventDefault();
@@ -190,12 +314,7 @@ function App() {
       nr: f.get("nr"),
       name: f.get("name"),
       baugruppe: f.get("baugruppe") || "",
-      // Zeichnungsnummer wird beim Anlegen nicht mehr abgefragt (Hotfix vor
-      // Pilot) - Feld bleibt in Daten/DB erhalten und wird leer gespeichert.
       zeichnung: "",
-      // Feld "archived" standardmäßig auf false (keine DB-Migration nötig,
-      // fehlt die Spalte serverseitig, wird sie beim Lesen ohnehin als
-      // falsy/undefined behandelt und damit wie false interpretiert).
       archived: false,
     };
     if (supabase) {
@@ -217,7 +336,6 @@ function App() {
     if (supabase) {
       const { error } = await supabase.from("projects").update({ archived }).eq("id", id);
       if (error) {
-        // Spalte "archived" fehlt ggf. serverseitig noch – verständlich melden.
         console.error("MONTA: Projekt archivieren fehlgeschlagen.", error);
         alert(`Projektstatus konnte nicht gespeichert werden: ${error.message || "unbekannter Fehler"}`);
         return;
@@ -226,13 +344,8 @@ function App() {
     setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, archived } : p)));
   }
 
-  // Löscht ein Projekt inkl. seiner Materialpositionen unwiderruflich.
-  // Wird erst nach expliziter Sicherheitsabfrage in der UI aufgerufen.
-  // Auch das letzte Projekt darf gelöscht werden → leere Projektübersicht.
   async function deleteProject(id) {
     if (supabase) {
-      // "on delete cascade" entfernt zugehörige material_items serverseitig.
-      // Erfordert RLS-Policy "public delete projects" (siehe supabase_schema.sql).
       const { error } = await supabase.from("projects").delete().eq("id", id);
       if (error) {
         console.error("MONTA: Projekt löschen fehlgeschlagen.", error);
@@ -242,28 +355,107 @@ function App() {
     }
     setProjects((prev) => prev.filter((p) => p.id !== id));
     setItems((prev) => prev.filter((i) => i.project_id !== id));
+    setStructureRows((prev) => prev.filter((r) => r.project_id !== id));
     if (projectId === id) resetSelectionToOverview();
   }
 
-  // Löscht eine komplette Baugruppe inkl. aller enthaltenen Bauteile und
-  // Materialpositionen. Bestellt/Geliefert hängt an material_items und wird
-  // mitgelöscht. Wird erst nach expliziter Sicherheitsabfrage aufgerufen.
+  async function addBaugruppe(pid, name) {
+    const clean = String(name || "").trim();
+    if (!clean) return;
+    await insertStructureRow({ project_id: pid, baugruppe: clean, bauteil: null });
+  }
+
+  async function addBauteil(pid, baugruppeName, bauteilName) {
+    const bg = String(baugruppeName || "").trim();
+    const bt = String(bauteilName || "").trim();
+    if (!bg || !bt) return;
+    await insertStructureRow({ project_id: pid, baugruppe: bg, bauteil: null });
+    await insertStructureRow({ project_id: pid, baugruppe: bg, bauteil: bt });
+  }
+
   async function deleteBaugruppe(pid, baugruppeName) {
     const ids = projectItems
       .filter((i) => parseEinbauort(i.einbauort, project?.baugruppe).baugruppe === baugruppeName)
       .map((i) => i.id);
-    if (supabase && ids.length) {
-      const { error } = await supabase.from("material_items").delete().in("id", ids);
+
+    if (supabase) {
+      if (ids.length) {
+        const { error } = await supabase.from("material_items").delete().in("id", ids);
+        if (error) {
+          console.error("MONTA: Baugruppe löschen (Material) fehlgeschlagen.", error);
+          alert(`Baugruppe konnte nicht gelöscht werden: ${error.message || "unbekannter Fehler"}`);
+          throw error;
+        }
+      }
+      const { error } = await supabase
+        .from("project_structure")
+        .delete()
+        .eq("project_id", pid)
+        .eq("baugruppe", baugruppeName);
       if (error) {
-        console.error("MONTA: Baugruppe löschen fehlgeschlagen.", error);
+        console.error("MONTA: Baugruppe löschen (Struktur) fehlgeschlagen.", error);
         alert(`Baugruppe konnte nicht gelöscht werden: ${error.message || "unbekannter Fehler"}`);
         throw error;
       }
+    } else {
+      removeBaugruppeFromRegistry(pid, baugruppeName);
     }
+
     if (ids.length) setItems((prev) => prev.filter((i) => !ids.includes(i.id)));
-    removeBaugruppeFromRegistry(pid, baugruppeName);
+    setStructureRows((prev) =>
+      prev.filter((r) => !(r.project_id === pid && r.baugruppe === baugruppeName))
+    );
     if (selectedBaugruppe === baugruppeName) {
       setSelectedBaugruppe(null);
+      setSelectedBauteil(null);
+      setView("projectDetail");
+    }
+  }
+
+  async function deleteBauteil(pid, baugruppeName, bauteilName) {
+    const ids = projectItems
+      .filter((i) => {
+        const p = parseEinbauort(i.einbauort, project?.baugruppe);
+        return p.baugruppe === baugruppeName && p.bauteil === bauteilName;
+      })
+      .map((i) => i.id);
+
+    if (supabase) {
+      if (ids.length) {
+        const { error } = await supabase.from("material_items").delete().in("id", ids);
+        if (error) {
+          console.error("MONTA: Bauteil löschen (Material) fehlgeschlagen.", error);
+          alert(`Bauteil konnte nicht gelöscht werden: ${error.message || "unbekannter Fehler"}`);
+          throw error;
+        }
+      }
+      const { error } = await supabase
+        .from("project_structure")
+        .delete()
+        .eq("project_id", pid)
+        .eq("baugruppe", baugruppeName)
+        .eq("bauteil", bauteilName);
+      if (error) {
+        console.error("MONTA: Bauteil löschen (Struktur) fehlgeschlagen.", error);
+        alert(`Bauteil konnte nicht gelöscht werden: ${error.message || "unbekannter Fehler"}`);
+        throw error;
+      }
+    } else {
+      removeBauteilFromRegistry(pid, baugruppeName, bauteilName);
+    }
+
+    if (ids.length) setItems((prev) => prev.filter((i) => !ids.includes(i.id)));
+    setStructureRows((prev) =>
+      prev.filter(
+        (r) =>
+          !(
+            r.project_id === pid &&
+            r.baugruppe === baugruppeName &&
+            String(r.bauteil || "") === bauteilName
+          )
+      )
+    );
+    if (selectedBaugruppe === baugruppeName && selectedBauteil === bauteilName) {
       setSelectedBauteil(null);
       setView("projectDetail");
     }
@@ -279,7 +471,27 @@ function App() {
       const { bauteil } = parseEinbauort(item.einbauort, project?.baugruppe);
       await updateItem(item.id, { einbauort: formatEinbauort(clean, bauteil) });
     }
-    renameBaugruppeInRegistry(pid, oldName, clean);
+
+    if (supabase) {
+      const { error } = await supabase
+        .from("project_structure")
+        .update({ baugruppe: clean })
+        .eq("project_id", pid)
+        .eq("baugruppe", oldName);
+      if (error) {
+        console.error("MONTA: Baugruppe umbenennen fehlgeschlagen.", error);
+        alert(`Baugruppe konnte nicht umbenannt werden: ${error.message || "unbekannter Fehler"}`);
+        throw error;
+      }
+    } else {
+      renameBaugruppeInRegistry(pid, oldName, clean);
+    }
+
+    setStructureRows((prev) =>
+      prev.map((r) =>
+        r.project_id === pid && r.baugruppe === oldName ? { ...r, baugruppe: clean } : r
+      )
+    );
     renameBaugruppeInManualValues(pid, oldName, clean);
     if (selectedBaugruppe === oldName) setSelectedBaugruppe(clean);
   }
@@ -294,7 +506,32 @@ function App() {
     for (const item of affected) {
       await updateItem(item.id, { einbauort: formatEinbauort(baugruppeName, clean) });
     }
-    renameBauteilInRegistry(pid, baugruppeName, oldName, clean);
+
+    if (supabase) {
+      const { error } = await supabase
+        .from("project_structure")
+        .update({ bauteil: clean })
+        .eq("project_id", pid)
+        .eq("baugruppe", baugruppeName)
+        .eq("bauteil", oldName);
+      if (error) {
+        console.error("MONTA: Bauteil umbenennen fehlgeschlagen.", error);
+        alert(`Bauteil konnte nicht umbenannt werden: ${error.message || "unbekannter Fehler"}`);
+        throw error;
+      }
+    } else {
+      renameBauteilInRegistry(pid, baugruppeName, oldName, clean);
+    }
+
+    setStructureRows((prev) =>
+      prev.map((r) =>
+        r.project_id === pid &&
+        r.baugruppe === baugruppeName &&
+        String(r.bauteil || "") === oldName
+          ? { ...r, bauteil: clean }
+          : r
+      )
+    );
     if (selectedBaugruppe === baugruppeName && selectedBauteil === oldName) {
       setSelectedBauteil(clean);
     }
@@ -332,6 +569,22 @@ function App() {
       }
     }
     setItems((prev) => (prev.some((i) => i.id === newItem.id) ? prev : [...prev, newItem]));
+
+    const parsed = parseEinbauort(newItem.einbauort, project?.baugruppe);
+    try {
+      await insertStructureRow({
+        project_id: projectId,
+        baugruppe: parsed.baugruppe,
+        bauteil: null,
+      });
+      await insertStructureRow({
+        project_id: projectId,
+        baugruppe: parsed.baugruppe,
+        bauteil: parsed.bauteil,
+      });
+    } catch {
+      // Material ist gespeichert; Struktur-Fehler separat gemeldet
+    }
   }
 
   async function updateItem(id, patch) {
@@ -380,6 +633,7 @@ function App() {
           <ProjectsList
             projects={visibleProjects}
             items={items}
+            structureRows={structureRows}
             setView={setView}
             setProjectId={setProjectId}
           />
@@ -399,11 +653,15 @@ function App() {
         <ProjectDetail
           project={project}
           items={projectItems}
+          structureRows={structureRows}
           setView={setView}
           openBauteil={openBauteil}
           setProjectArchived={setProjectArchived}
           deleteProject={deleteProject}
+          addBaugruppe={addBaugruppe}
+          addBauteil={addBauteil}
           deleteBaugruppe={deleteBaugruppe}
+          deleteBauteil={deleteBauteil}
           renameBaugruppe={renameBaugruppe}
           renameBauteil={renameBauteil}
         />

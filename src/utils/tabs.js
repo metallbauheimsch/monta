@@ -22,10 +22,9 @@ export const TAB_LABELS = {
   druck: "Druck",
 };
 
-// TB ist auf schnelle PC-Erfassung ausgelegt und wird auf schmalen
-// Bildschirmen (≤760px) ausgeblendet – früher über den manuellen
-// PC/Mobil-Umschalter, jetzt automatisch über die Viewport-Breite.
-export const NARROW_HIDDEN_TABS = ["tb"];
+// Auf Smartphone/Tablet (≤760px): TB und Prüfung ausblenden.
+// Sichtbar bleiben Lager, Warenkorb, Druck. Desktop unverändert.
+export const NARROW_HIDDEN_TABS = ["tb", "pruefung"];
 
 export function defaultTabFor(isNarrow) {
   return isNarrow ? "material" : "tb";
