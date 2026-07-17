@@ -15,8 +15,15 @@ button{background:#111;color:white;border:0;font-weight:800;cursor:pointer}.ghos
 .line{border-top:1px solid #eee;padding:10px 0}.tableWrap{overflow:auto}.editTable input{border:0;border-radius:8px;padding:8px;min-width:80px}
 .editTable .posCell{padding:8px;text-align:center;color:#666;font-weight:700}
 .entryGrid{display:grid;grid-template-columns:90px 1.5fr 90px 90px 1fr 1.5fr 120px;gap:8px;align-items:center}
-.workflowCard{border-top:1px solid #eee;padding:14px 0}.stats{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.stats span{background:#f2f2f2;border-radius:999px;padding:6px 9px;font-size:14px}
-table{width:100%;border-collapse:collapse;background:white;font-size:14px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#eee}
+.stats{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.stats span{background:#f2f2f2;border-radius:999px;padding:6px 9px;font-size:14px}
+table{width:100%;border-collapse:collapse;background:white;font-size:14px}
+th,td{border:1px solid #d0d0d0;padding:8px;text-align:left}
+th{background:#eee;font-weight:700}
+/* Einheitliches Tabellenraster (TB/Lager/Warenkorb/Druck): hellgraue
+   horizontale und vertikale Linien, Kopf klar erkennbar, dezent. */
+.editTable th,.editTable td{border:1px solid #d0d0d0}
+/* Erledigte Zeilen in Lager/Warenkorb: dezent grün, gleiche Farbe in beiden Ansichten. */
+.rowDone{background:#eef8ee}
 .breadcrumb{color:#666;font-size:14px;margin:0 0 6px}.breadcrumb .sep{margin:0 4px}
 .checkboxLine{display:flex;align-items:center;gap:8px;font-size:14px;color:#444;margin-top:6px}.checkboxLine input{width:auto}
 .chipRow{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
@@ -24,35 +31,24 @@ table{width:100%;border-collapse:collapse;background:white;font-size:14px}th,td{
 .chip:hover{background:#e6e6e6}
 .inlineForm{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
 .inlineForm input{width:auto;flex:1;min-width:180px}.inlineForm button{width:auto}
-/* Bestellliste (Sprint 3): einfache, flache Herkunftsliste ohne Aufklappen. */
-.simpleList{list-style:none;margin:8px 0 0;padding:0;font-size:14px;color:#444}
-.simpleList li{padding:6px 0;border-top:1px solid #eee}
-.simpleList li:first-child{border-top:0}
 /* Verwaltung/Gefahrenbereich (Sprint 4): bewusst unauffällig am Seitenende. */
 .manageZone,.dangerZone{margin-top:24px;background:#fafafa}
 .manageZone h3,.dangerZone h3{font-size:15px;color:#555}
 .dangerZone{border-color:#f0d5d5}
 .dangerZone .danger{width:auto;padding:10px 16px}
-/* Baugruppe löschen (Sprint 6): am Ende der jeweiligen Baugruppen-Karte,
-   unauffälliger als die Projekt-Gefahrenzone, aber klar abgesetzt. */
-.baugruppeDangerZone{margin-top:14px;padding-top:10px;border-top:1px solid #f0d5d5}
-.baugruppeDangerZone .danger{width:auto;padding:8px 14px}
 /* Baugruppe/Bauteil umbenennen (Sprint 6 Ergänzung #11): kompakte Buttons
    direkt neben Überschrift bzw. Chip, kein eigener Dialog. */
 .renameBtn{width:auto;padding:5px 10px;font-size:13px;margin-left:8px;vertical-align:middle}
 .chipWithEdit{display:inline-flex;align-items:center;gap:4px}
 .chipEdit{width:auto;padding:8px 10px;font-size:14px}
 .chipInlineForm{width:100%}
-/* Leeres Projekt ohne Baugruppe (Sprint 6 Ergänzung #12): deutlicher Hinweis
-   statt automatisch erfundener Baugruppe. */
-.emptyState{text-align:center}
-.emptyState button{width:auto;padding:12px 20px}
+/* Baugruppe löschen (Sprint 7): kleiner, zurückhaltender Button direkt
+   neben "Umbenennen" statt einer großen Gefahrenzone am Kartenende. */
+.dangerBtnSmall{color:#9b111e;border-color:#e3b8b8}
 /* Fehler beim Laden der Daten (Produktionsfehler-Fix): statt leerer Seite
    oder dauerhaftem Ladezustand. */
 .loadErrorCard{text-align:center}
 .loadErrorCard button{width:auto;padding:12px 20px}
-.sortSwitch{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.sortSwitch button{width:auto;padding:8px 12px;background:white;color:#111;border:1px solid #ccc}.sortSwitch .active{background:#111;color:white}
 /* Baugruppen-Abschnitte in Lager/Bestellliste (Sprint 5 Erweiterung):
    klar getrennte, aber flache Blöcke - keine Aufklapplogik. */
 .baugruppeSection{margin-top:20px;padding-top:12px;border-top:2px solid #eee}
@@ -60,28 +56,43 @@ table{width:100%;border-collapse:collapse;background:white;font-size:14px}th,td{
 .baugruppeSection h3{display:flex;align-items:center;gap:8px}
 .statusPill{font-size:13px;font-weight:700;color:#444}
 .baugruppenAmpelRow{display:flex;gap:10px;margin-top:8px;font-size:14px}
-/* Lager: Checkbox "Vollständig vorhanden" + Eingabe "bereits gelegt" (Sprint 5 Erweiterung #1). */
-.lagerControls{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin:8px 0}
-.inlineField{display:flex;align-items:center;gap:8px;font-size:14px;color:#444}
-.inlineField input{width:90px}
-/* Warenkorb: Bestell-/Lieferstatus je Position (Sprint 6). */
-.orderTracking{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:10px;padding-top:10px;border-top:1px dashed #eee}
-.copyFeedback{color:#1a7a1a;font-weight:700}
-.printBaugruppeSection{margin-top:18px}
-.printBaugruppeSection h3{display:flex;align-items:center;gap:8px;margin-top:0}
-/* Montageunterlage (Sprint 6): Bauteil-Untergliederung innerhalb der
-   Baugruppe, damit Projekt -> Baugruppe -> Bauteil -> Material beim Drucken
-   klar erkennbar bleibt. */
-.printBauteilSection{margin:10px 0 16px 14px}
-.printBauteilSection h4{margin:0 0 6px;font-size:14px;color:#444}
+.dangerText{color:#9b111e;font-weight:700}
+/* Montageunterlage (Sprint 6/7): Bauteil-Untergliederung innerhalb der
+   aktuellen Baugruppe, damit Projekt -> Baugruppe -> Bauteil -> Material
+   beim Drucken klar erkennbar bleibt. Sprint 7 Abschluss: engere, an
+   TB/Lager angeglichene Abstände, kein Einzug mehr. */
+.printBauteilSection{margin:6px 0 12px}
+.printBauteilSection h4{margin:0 0 4px;font-size:14px;color:#444}
+/* Sortierbare Tabellenüberschriften (Sprint 7): TB-Erfassung + Lager. */
+.sortableTh{cursor:pointer;user-select:none}
+.sortableTh:hover{background:#e2e2e2}
+/* TB-Kopfbereich (Sprint 7): kompakte Kontextzeile statt großer
+   Projektkarte, damit die Materialerfassung im Vordergrund steht. */
+.tbContext{font-size:15px;color:#333;margin:8px 0 14px}
+.tbContext b{color:#111}
+.tbContextProject{color:#999;font-size:12px;margin-left:2px}
+/* Lager: Spalte "Vorhanden" kombiniert Zahlenfeld + Checkbox (Sprint 7). */
+.lagerVorhanden{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.lagerVorhanden input[type="number"]{width:80px}
+/* Herkunft in Lager/Warenkorb (Sprint 7 Abschluss): je Bauteil eine Zeile
+   mit Baugruppe/Bauteil + Positionsnummern. */
+.herkunftLine{margin-bottom:6px}
+.herkunftLine:last-child{margin-bottom:0}
+.herkunftLine .hint{margin:0}
+/* Warenkorb: Aktions-Buttons oberhalb der Tabelle (Sprint 7 Abschluss:
+   "Tabelle kopieren"/"CSV exportieren"; Sprint 7 - Korrekturen aus
+   Praxistest: ersetzt durch "Anfrage per Mail"). */
+.toolbarButtons{display:flex;gap:8px;flex-wrap:wrap}
+.toolbarButtons button{width:auto}
+/* Warenkorb: Sammel-Checkbox über allen Tabellen (Sprint 7 - Korrekturen). */
+.allBestelltLine{margin:10px 0 4px;font-weight:700}
 @media (max-width:760px){
   main{padding:10px}.row{align-items:flex-start}.entryGrid{grid-template-columns:1fr}.pcOnly{display:none}.badge{font-size:12px}
   .card{border-radius:14px}.workflowCard b{font-size:17px}
   .tabs button{padding:14px 16px;font-size:15px}
   .chip{padding:12px 18px;font-size:15px}
   .inlineForm input,.inlineForm button{width:100%;flex:none}
-  .sortSwitch{width:100%}.sortSwitch button{flex:1}
-  .lagerControls{width:100%}.inlineField input{width:70px}
+  .toolbarButtons{width:100%}.toolbarButtons button{flex:1}
 }
 .autocompleteWrap{position:relative;width:100%}
 .autocompleteList{position:absolute;top:100%;left:0;right:0;z-index:20;list-style:none;margin:4px 0 0;padding:0;background:white;border:1px solid #ccc;border-radius:12px;max-height:200px;overflow:auto;box-shadow:0 4px 12px #0002}
@@ -90,4 +101,15 @@ table{width:100%;border-collapse:collapse;background:white;font-size:14px}th,td{
 .autocompleteListFixed{position:fixed;z-index:1000}
 .editTable .suggestionCell,.editTable .bezeichnungCell{max-width:180px}
 .editTable .suggestionEllipsis,.editTable .bezeichnungEllipsis{text-overflow:ellipsis;overflow:hidden;white-space:nowrap;min-width:0}
-@media print{header,button,.tabs,.hint,.ghost,.noPrint{display:none!important}main{max-width:none;padding:0}.card{border:0;box-shadow:none}.printArea{display:block}}
+@media print{
+  header,button,.tabs,.hint,.ghost,.noPrint{display:none!important}
+  main{max-width:none;padding:0}
+  .card{border:0;box-shadow:none;padding:0;margin:0}
+  .printArea{display:block}
+  h2,h3{margin:0 0 4px}
+  .printArea p{margin:2px 0 8px}
+  table{font-size:12px;border-collapse:collapse}
+  th,td{padding:4px 6px;border:1px solid #ccc}
+  th{background:#eee}
+  .rowDone{background:#eef8ee}
+}

@@ -3,21 +3,23 @@ import { buildProjectStructure, parseEinbauort } from "../../utils/structure";
 
 // Sprint 5 Erweiterung #4: zeigt in der Projektübersicht zusätzlich zum
 // bestehenden Gesamtfortschritt eine kompakte Zusammenfassung der
-// Baugruppen-Ampeln (🔴/🟡/🟢) je Projekt.
-function baugruppenSummary(project, items, isBaugruppeBestellt) {
+// Baugruppen-Ampeln (🔴/🟡/🟢) je Projekt. Sprint 7 - Korrekturen aus
+// Praxistest: baugruppeStatus wird direkt aus den Materialpositionen
+// berechnet (kein manuelles Häkchen mehr, siehe helpers.js).
+function baugruppenSummary(project, items) {
   const structure = buildProjectStructure(project, items);
   const counts = { offen: 0, bestellt: 0, bereit: 0 };
   structure.forEach(({ baugruppe }) => {
     const bgItems = items.filter(
       (i) => parseEinbauort(i.einbauort, project?.baugruppe).baugruppe === baugruppe
     );
-    const status = baugruppeStatus(bgItems, isBaugruppeBestellt?.(project.id, baugruppe));
+    const status = baugruppeStatus(bgItems);
     if (status.key in counts) counts[status.key] += 1;
   });
   return counts;
 }
 
-export default function ProjectsList({ projects, items, setView, setProjectId, isBaugruppeBestellt }) {
+export default function ProjectsList({ projects, items, setView, setProjectId }) {
   return (
     <>
       <div className="top">
@@ -29,7 +31,7 @@ export default function ProjectsList({ projects, items, setView, setProjectId, i
       {projects.map((p) => {
         const s = projectStatus(p, items);
         const projectItems = items.filter((i) => i.project_id === p.id);
-        const bg = baugruppenSummary(p, projectItems, isBaugruppeBestellt);
+        const bg = baugruppenSummary(p, projectItems);
         return (
           <div className="card clickable" key={p.id} onClick={() => { setProjectId(p.id); setView("projectDetail"); }}>
             <div className="row">

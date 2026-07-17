@@ -41,6 +41,26 @@ export function getMitlaufartikel(bezeichnung) {
   return MITLAUFARTIKEL_REGELN[key] || [];
 }
 
+// Ursprüngliche TB-Positionsnummern mehrerer zusammengefasster Positionen
+// als lesbare Liste: numerisch sortiert, ohne Duplikate, keine technischen
+// IDs (Sprint 7 Abschluss, u. a. für Lager-Herkunft, Warenkorb-Herkunft und
+// Druckansicht-Position genutzt).
+export function uniqueSortedPositions(items) {
+  const values = Array.from(
+    new Set(items.map((i) => String(i.pos ?? "").trim()).filter(Boolean))
+  );
+  return values.sort((a, b) => {
+    const na = parseInt(a, 10);
+    const nb = parseInt(b, 10);
+    const aNum = !Number.isNaN(na);
+    const bNum = !Number.isNaN(nb);
+    if (aNum && bNum) return na - nb;
+    if (aNum) return -1;
+    if (bNum) return 1;
+    return a.localeCompare(b, undefined, { numeric: true });
+  });
+}
+
 export function sortByPosNumber(items) {
   return [...items].sort((a, b) => {
     const na = parseInt(String(a.pos ?? "").trim(), 10);

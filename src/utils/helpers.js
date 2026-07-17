@@ -9,16 +9,28 @@ export function remainingQty(item) {
   return Math.max(0, Number(item.menge || 0) - Number(item.bereit || 0));
 }
 
-// Materialstatus einer Baugruppe (Sprint 5 Erweiterung):
-// 🟢 Bereit  - alle Positionen vollständig vorhanden (Restmenge = 0)
-// 🟡 Bestellt - noch Restmenge offen, aber als "bestellt" markiert
-// 🔴 Offen   - noch Restmenge offen, noch nicht bestellt
+// Materialstatus einer Baugruppe (Sprint 5 Erweiterung, Logik neu gefasst in
+// Sprint 7 - Korrekturen aus Praxistest):
+// 🟢 Bereit   - alle benötigten Mengen sind vollständig vorhanden/geliefert
+//               (keine Restmenge mehr offen)
+// 🟡 Bestellt - es gibt noch Restmenge, aber alle Positionen mit Restmenge
+//               sind bereits als "bestellt" markiert
+// 🔴 Offen    - es gibt Restmenge, und mindestens eine dieser Positionen ist
+//               noch nicht bestellt
 // ⚪ ohne Positionen - Baugruppe hat (noch) keine Materialpositionen
-export function baugruppeStatus(items, bestellt) {
+//
+// Es gibt bewusst nur diese eine Statusquelle: "bestellt" wird direkt am
+// Feld material_items.bestellt der jeweiligen Position abgelesen, nicht an
+// einem separaten, manuell gesetzten Baugruppen-Häkchen (das frühere
+// lokale "Bestellung erfolgt"-Häkchen aus Sprint 5/6 wurde deshalb
+// entfernt, siehe MONTA_DECISIONS.md, Abschnitt "Bestellung und
+// Lieferung").
+export function baugruppeStatus(items) {
   if (!items.length) return { key: "leer", emoji: "⚪", label: "Keine Positionen" };
-  const hasRest = items.some((i) => remainingQty(i) > 0);
-  if (!hasRest) return { key: "bereit", emoji: "🟢", label: "Bereit" };
-  if (bestellt) return { key: "bestellt", emoji: "🟡", label: "Bestellt" };
+  const missing = items.filter((i) => remainingQty(i) > 0);
+  if (!missing.length) return { key: "bereit", emoji: "🟢", label: "Bereit" };
+  const allBestellt = missing.every((i) => i.bestellt);
+  if (allBestellt) return { key: "bestellt", emoji: "🟡", label: "Bestellt" };
   return { key: "offen", emoji: "🔴", label: "Offen" };
 }
 

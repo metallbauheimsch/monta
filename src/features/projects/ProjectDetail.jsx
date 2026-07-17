@@ -12,8 +12,13 @@ import { buildProjectStructure, addBaugruppeToRegistry, addBauteilToRegistry, pa
 // Sprint 6 Ergänzung #11: Baugruppen und Bauteile können umbenannt werden
 // (einfaches Inline-Formular statt Dialog, siehe unten).
 // Sprint 6 Ergänzung #12: Ein neues Projekt legt keine Baugruppe automatisch
-// an - ist die Liste leer, erscheint stattdessen ein deutlicher Button
-// "Baugruppe anlegen", der zum vorhandenen Anlegen-Formular springt.
+// an - ist die Liste leer, bleibt einfach nur das Anlegen-Formular übrig
+// (Sprint 7: der zusätzliche große Button darüber wurde entfernt, da er
+// gegenüber Eingabefeld + "Anlegen" überflüssig war).
+// Sprint 7: "Baugruppe löschen" ist jetzt ein kleiner Button direkt neben
+// "Umbenennen" statt einer großen Gefahrenzone am Kartenende.
+// Sprint 7 Abschluss: Button-Beschriftung "+ Baugruppe" -> "Anlegen", damit
+// die Bedienung identisch zur Bauteil-Anlage ist (gleicher Button-Text).
 export default function ProjectDetail({
   project,
   items,
@@ -24,7 +29,6 @@ export default function ProjectDetail({
   deleteBaugruppe,
   renameBaugruppe,
   renameBauteil,
-  isBaugruppeBestellt,
 }) {
   const [newBaugruppe, setNewBaugruppe] = useState("");
   const [addingBauteilTo, setAddingBauteilTo] = useState(null);
@@ -103,18 +107,11 @@ export default function ProjectDetail({
 
       <h3>Baugruppen &amp; Bauteile</h3>
 
-      {structure.length === 0 && (
-        <div className="card emptyState">
-          <p>Noch keine Baugruppe angelegt.</p>
-          <button onClick={() => newBaugruppeInputRef.current?.focus()}>Baugruppe anlegen</button>
-        </div>
-      )}
-
       {structure.map(({ baugruppe, bauteile }) => {
         const baugruppeItems = items.filter(
           (i) => parseEinbauort(i.einbauort, project?.baugruppe).baugruppe === baugruppe
         );
-        const status = baugruppeStatus(baugruppeItems, isBaugruppeBestellt?.(project.id, baugruppe));
+        const status = baugruppeStatus(baugruppeItems);
         return (
           <div className="card" key={baugruppe}>
             {renamingBaugruppe === baugruppe ? (
@@ -138,6 +135,13 @@ export default function ProjectDetail({
                   onClick={() => startRenameBaugruppe(baugruppe)}
                 >
                   Umbenennen
+                </button>
+                <button
+                  type="button"
+                  className="ghost renameBtn dangerBtnSmall"
+                  onClick={() => handleDeleteBaugruppe(baugruppe)}
+                >
+                  Löschen
                 </button>
               </h3>
             )}
@@ -193,15 +197,6 @@ export default function ProjectDetail({
             ) : (
               <button className="ghost" onClick={() => setAddingBauteilTo(baugruppe)}>+ Bauteil</button>
             )}
-
-            {/* Am Ende der jeweiligen Baugruppenansicht, deutlich als
-                gefährliche Aktion abgesetzt - funktioniert auch, wenn die
-                Baugruppe bereits Material enthält. */}
-            <div className="baugruppeDangerZone">
-              <button className="danger" onClick={() => handleDeleteBaugruppe(baugruppe)}>
-                Baugruppe löschen
-              </button>
-            </div>
           </div>
         );
       })}
@@ -213,7 +208,7 @@ export default function ProjectDetail({
           value={newBaugruppe}
           onChange={(e) => setNewBaugruppe(e.target.value)}
         />
-        <button>+ Baugruppe</button>
+        <button>Anlegen</button>
       </form>
 
       {/* Bewusst unauffällig und am Seitenende: Archivieren ist eine normale,

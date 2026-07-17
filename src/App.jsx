@@ -17,8 +17,7 @@ import {
 } from "./utils/structure";
 import { defaultTabFor } from "./utils/tabs";
 import { demoProjects, demoItems } from "./utils/demoData";
-import { clearOrderStatusForBaugruppe, renameBaugruppeInOrderStatus } from "./features/fastening/orderStatus";
-import { renameBaugruppeInManualValues } from "./features/fastening/LagerView";
+import { renameBaugruppeInManualValues } from "./features/fastening/stock";
 
 function App() {
   const [projects, setProjects] = useState([]);
@@ -39,38 +38,6 @@ function App() {
   const [deviceMode, setDeviceMode] = useState(isMobileLike() ? "mobil" : "pc");
 
   const [showArchived, setShowArchived] = useState(false);
-
-  // "Bestellung erfolgt"-Markierung je Baugruppe (Sprint 5 Erweiterung #4-6).
-  // Bewusst immer nur lokal in localStorage gehalten - auch wenn Supabase
-  // aktiv ist -, da hierfür ausdrücklich keine Datenbankänderung/Migration
-  // gewünscht ist. Key-Format: "<projectId>|<baugruppe>" -> boolean.
-  const [orderedBaugruppen, setOrderedBaugruppen] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("monta_baugruppe_bestellt_v04") || "{}");
-    } catch {
-      return {};
-    }
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("monta_baugruppe_bestellt_v04", JSON.stringify(orderedBaugruppen));
-    } catch {
-      // localStorage evtl. nicht verfügbar - Markierung bleibt nur für die Sitzung erhalten
-    }
-  }, [orderedBaugruppen]);
-
-  function baugruppeFlagKey(pid, baugruppe) {
-    return `${pid}|${baugruppe}`;
-  }
-
-  function isBaugruppeBestellt(pid, baugruppe) {
-    return Boolean(orderedBaugruppen[baugruppeFlagKey(pid, baugruppe)]);
-  }
-
-  function setBaugruppeBestellt(pid, baugruppe, bestellt) {
-    setOrderedBaugruppen((prev) => ({ ...prev, [baugruppeFlagKey(pid, baugruppe)]: bestellt }));
-  }
 
   const project = projects.find((p) => p.id === projectId);
   const projectItems = items.filter((i) => i.project_id === projectId);
@@ -221,10 +188,12 @@ function App() {
 
   // Löscht eine komplette Baugruppe inkl. aller enthaltenen Bauteile,
   // Materialpositionen und zugehöriger lokaler Statusinformationen
-  // (Registry-Eintrag für leer angelegte Bauteile, "Bestellung erfolgt"-
-  // Häkchen, Bestellung/Lieferung-Status). Wird erst nach expliziter
-  // Sicherheitsabfrage in der UI aufgerufen. Andere Baugruppen und andere
-  // Projekte bleiben davon unberührt.
+  // (Registry-Eintrag für leer angelegte Bauteile). Bestellt/Geliefert je
+  // Position hängt seit Sprint 7 Abschluss direkt an der Materialposition
+  // selbst (material_items.bestellt/bereit) und wird daher automatisch
+  // mitgelöscht - kein separater Aufräumschritt mehr nötig. Wird erst nach
+  // expliziter Sicherheitsabfrage in der UI aufgerufen. Andere Baugruppen
+  // und andere Projekte bleiben davon unberührt.
   async function deleteBaugruppe(pid, baugruppeName) {
     const ids = projectItems
       .filter((i) => parseEinbauort(i.einbauort, project?.baugruppe).baugruppe === baugruppeName)
@@ -235,20 +204,15 @@ function App() {
       setItems((prev) => prev.filter((i) => !ids.includes(i.id)));
     }
     removeBaugruppeFromRegistry(pid, baugruppeName);
-    clearOrderStatusForBaugruppe(pid, baugruppeName);
-    setOrderedBaugruppen((prev) => {
-      const next = { ...prev };
-      delete next[baugruppeFlagKey(pid, baugruppeName)];
-      return next;
-    });
   }
 
   // Baugruppe umbenennen (Sprint 6 Ergänzung #11): bestehende
   // Materialpositionen bleiben erhalten (nur das Feld `einbauort` wird
-  // angepasst), es entsteht keine Kopie. Zusätzlich werden Registry,
-  // "Bestellung erfolgt"-Häkchen, Bestell-/Lieferstatus und gemerkte
-  // Lager-Werte auf den neuen Namen umgezogen, damit der bisherige
-  // Bearbeitungsstand nicht verloren geht.
+  // angepasst), es entsteht keine Kopie. Zusätzlich werden Registry und
+  // gemerkte Lager-/Warenkorb-Werte auf den neuen Namen umgezogen, damit der
+  // bisherige Bearbeitungsstand nicht verloren geht. Bestellt/Geliefert je
+  // Position hängt seit Sprint 7 Abschluss an der Materialposition selbst
+  // und ist daher von der Umbenennung nicht betroffen.
   async function renameBaugruppe(pid, oldName, newName) {
     const clean = String(newName || "").trim();
     if (!clean || clean === oldName) return;
@@ -260,23 +224,15 @@ function App() {
       await updateItem(item.id, { einbauort: formatEinbauort(clean, bauteil) });
     }
     renameBaugruppeInRegistry(pid, oldName, clean);
-    renameBaugruppeInOrderStatus(pid, oldName, clean);
     renameBaugruppeInManualValues(pid, oldName, clean);
-    setOrderedBaugruppen((prev) => {
-      const oldKey = baugruppeFlagKey(pid, oldName);
-      if (!(oldKey in prev)) return prev;
-      const next = { ...prev };
-      next[baugruppeFlagKey(pid, clean)] = next[oldKey];
-      delete next[oldKey];
-      return next;
-    });
   }
 
   // Bauteil umbenennen (Sprint 6 Ergänzung #11): bestehende
   // Materialpositionen bleiben dem Bauteil zugeordnet, es geht nichts
-  // verloren und es entsteht keine Kopie. Bestell-/Lieferstatus und
-  // Lager-Merkwerte sind je Baugruppe (nicht je Bauteil) gespeichert und
-  // sind daher von einer Bauteil-Umbenennung nicht betroffen.
+  // verloren und es entsteht keine Kopie. Lager-Merkwerte sind je Baugruppe
+  // (nicht je Bauteil) gespeichert, Bestellt/Geliefert hängt direkt an der
+  // Position - beides ist daher von einer Bauteil-Umbenennung nicht
+  // betroffen.
   async function renameBauteil(pid, baugruppeName, oldName, newName) {
     const clean = String(newName || "").trim();
     if (!clean || clean === oldName) return;
@@ -354,7 +310,6 @@ function App() {
             items={items}
             setView={setView}
             setProjectId={setProjectId}
-            isBaugruppeBestellt={isBaugruppeBestellt}
           />
           <button style={{ marginTop: 12 }} onClick={() => setShowArchived((s) => !s)}>
             {showArchived ? "Archiv ausblenden" : "Archiv anzeigen"}
@@ -377,7 +332,6 @@ function App() {
           deleteBaugruppe={deleteBaugruppe}
           renameBaugruppe={renameBaugruppe}
           renameBauteil={renameBauteil}
-          isBaugruppeBestellt={isBaugruppeBestellt}
         />
       )}
 
@@ -397,8 +351,6 @@ function App() {
           addItem={addItem}
           updateItem={updateItem}
           deleteItem={deleteItem}
-          isBaugruppeBestellt={isBaugruppeBestellt}
-          setBaugruppeBestellt={setBaugruppeBestellt}
         />
       )}
     </Shell>

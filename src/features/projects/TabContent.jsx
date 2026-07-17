@@ -15,6 +15,11 @@ import PrintView from "../fastening/PrintView";
 // Sprint 5: Lager zeigt jetzt projektweit alle Positionen (inkl. Baugruppe
 // je Zeile) statt nur die aktuelle Baugruppe - entspricht dem tatsächlichen
 // Arbeitsablauf im Lager.
+//
+// Sprint 7: Die Druckansicht (Montageunterlage) zeigt bewusst nur noch die
+// aktuell geöffnete Baugruppe (baugruppeItems) statt des ganzen Projekts -
+// sie wird immer aus dem Arbeitskontext einer Baugruppe heraus aufgerufen
+// und soll genau diese Montage abbilden.
 export default function TabContent({
   tab,
   deviceMode,
@@ -27,8 +32,6 @@ export default function TabContent({
   addItem,
   updateItem,
   deleteItem,
-  isBaugruppeBestellt,
-  setBaugruppeBestellt,
 }) {
   if (tab === "tb") {
     return (
@@ -43,18 +46,37 @@ export default function TabContent({
       />
     );
   }
-  if (tab === "pruefung") return <Checks items={baugruppeItems} baugruppe={baugruppe} project={project} />;
-  if (tab === "material") return <LagerView items={projectItems} updateItem={updateItem} project={project} />;
+  if (tab === "pruefung")
+    return (
+      <Checks
+        items={baugruppeItems}
+        baugruppe={baugruppe}
+        project={project}
+      />
+    );
+  if (tab === "material")
+    return (
+      <LagerView
+        items={projectItems}
+        updateItem={updateItem}
+        project={project}
+      />
+    );
   if (tab === "bestellliste")
     return (
       <EinkaufView
         items={projectItems}
         project={project}
-        isBaugruppeBestellt={isBaugruppeBestellt}
-        setBaugruppeBestellt={setBaugruppeBestellt}
+        updateItem={updateItem}
       />
     );
   if (tab === "druck")
-    return <PrintView project={project} items={projectItems} isBaugruppeBestellt={isBaugruppeBestellt} />;
+    return (
+      <PrintView
+        project={project}
+        baugruppe={baugruppe}
+        items={baugruppeItems}
+      />
+    );
   return null;
 }

@@ -17,73 +17,56 @@ Diese Punkte müssen vor dem produktiven Einsatz abgeschlossen sein.
 
 ## Baugruppen
 
-(„Baugruppen vollständig integrieren" inkl. Löschfunktion, Druck/Lager nach
-Baugruppen und Umbenennen von Baugruppe/Bauteil sind mit Sprint 6 erledigt,
-siehe Changelog. Neues Projekt legt außerdem keine Baugruppe mehr
-automatisch an.)
+(Erledigt mit Sprint 6/7: Löschen, Umbenennen, kein Auto-Anlegen, vereinfachte
+Bedienung. Siehe Changelog.)
 
 ---
 
 ## Lager
 
-(Checkbox „Vollständig vorhanden", „Bereits gelegt", automatische
-Restmenge, Zusammenfassung baugleicher Positionen je Baugruppe, Herkunft-
-Anzeige und Sortierung nach echtem Regalfach sind erledigt, siehe
-Changelog.)
+(Erledigt mit Sprint 6/7 inkl. Korrekturen: Tabelle, Herkunft mit
+Positionsnummern, echte Paternoster-Zuordnung und verbindlicher Laufweg.
+Siehe Changelog.)
 
 ---
 
 ## Warenkorb (bisher Bestellliste)
 
-- Restmengen automatisch übernehmen
-- Nach Baugruppen sortieren
-- Aufbau wie Druckansicht
-- Herkunft anzeigen
-- Checkbox "Bestellung erfolgt"
-
-(Umbenennung, "Warenkorb kopieren" und Bestell-/Lieferstatus je Position
-sind mit Sprint 6 erledigt, siehe Changelog.)
+(Erledigt inkl. Abschlusskorrekturen vor Pilot: Fehlmengen, Bestellt/
+Geliefert, vollständig gelieferte bleiben sichtbar/grün, Anfrage per Mail,
+kein Regalfach. Siehe Changelog.)
 
 ---
 
 ## Druck
 
-- Sortierung nach Position
-- Sortierung nach Baugruppe
-- Sortierung nach Regal
-- Statusampel je Baugruppe
+(Erledigt inkl. einheitlichem Tabellenraster und Sortierung über
+Spaltenüberschriften. Siehe Changelog.)
+
+---
+
+## Tabellen sortierbar
+
+(Erledigt inkl. Lager-Spalte „Vorhanden". Siehe Changelog.)
 
 ---
 
 ## Status
 
-Automatische Statusberechnung
-
-🔴 Offen
-
-🟡 Bestellt
-
-🟢 Bereit
-
-Status in:
-
-- Projektübersicht
-- Druckansicht
+(Erledigt: Ampel aus Materialpositionen, unabhängig von Warenkorb-
+Sichtbarkeit. Siehe Changelog.)
 
 ---
 
-(„Prüfung ähnlicher Verbindungsmittel" ist mit Sprint 6 erledigt - feste
-20-mm-Regel statt 20 %, direkte Paare statt verketteter Gruppen,
-Positionsnummer zur eindeutigen Unterscheidung. Siehe Changelog.)
+(„Prüfung ähnlicher Verbindungsmittel" ist erledigt. Siehe Changelog.)
 
 ---
 
 ## Regal
 
-- Fachzuordnung für U-Scheibe, Sechskantmutter, Stoppmutter, Hutmutter,
-  Karosseriescheibe, Ankerstange, Blindniete klären (aktuell bewusst „Ohne
-  Fachzuordnung", da keine eindeutige Regel dokumentiert ist). Betrifft
-  jetzt sowohl Druckansicht als auch Lager.
+(Erledigt inkl. U-Scheiben/Sechskantmuttern bei passenden Schrauben.
+Artikel ohne eindeutige Regel bleiben „Ohne Fachzuordnung". Siehe
+Changelog.)
 
 ---
 
@@ -91,7 +74,6 @@ Positionsnummer zur eindeutigen Unterscheidung. Siehe Changelog.)
 
 ## Lager
 
-- Sortierung nach Regal optimieren
 - Schnellfilter
 
 ---
@@ -113,7 +95,6 @@ Positionsnummer zur eindeutigen Unterscheidung. Siehe Changelog.)
 Diese Punkte werden erst nach erfolgreichem Pilotbetrieb bewertet.
 
 - Suchfunktionen erweitern
-- Exportfunktionen
 - Weitere Druckoptionen
 
 („Statistiken" wurde entfernt: `MONTA_DECISIONS.md` legt eindeutig fest,

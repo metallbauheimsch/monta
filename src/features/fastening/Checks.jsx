@@ -1,4 +1,4 @@
-import { groupBy } from "../../utils/helpers";
+import { groupBy, baugruppeStatus } from "../../utils/helpers";
 import { parseEinbauort } from "../../utils/structure";
 
 const LENGTH_TOLERANCE_MM = 20; // absolute Differenz in mm
@@ -27,8 +27,11 @@ function isCheckable(item) {
   return Boolean(item.bezeichnung) && Boolean(item.groesse) && item._laenge !== null && item.hinweis !== AUTO_HINWEIS;
 }
 
+// Sprint 7: Gruppierung zusätzlich nach Ausführung - galvanisch,
+// feuerverzinkt, HV und Edelstahl dürfen nicht miteinander vermischt werden.
 function groupKey(item) {
-  return `${item.bezeichnung.trim().toLowerCase()}|${item.groesse.trim().toLowerCase()}`;
+  const ausfuehrung = String(item.oberflaeche || "").trim().toLowerCase();
+  return `${item.bezeichnung.trim().toLowerCase()}|${item.groesse.trim().toLowerCase()}|${ausfuehrung}`;
 }
 
 // Innerhalb einer Gruppe (gleiche Bezeichnung + Größe) werden ausschließlich
@@ -55,22 +58,32 @@ function findSimilarPairs(items) {
 }
 
 // Prüfung erkennt ähnliche Befestigungsmittel: gleiche Bezeichnung, gleiche
-// Größe, beide mit hinterlegter Länge, absolute Längenabweichung maximal
-// 20 mm (und die Längen sind nicht identisch). Es werden ausschließlich
-// direkte Paare angezeigt, keine über Zwischenwerte verbundenen Gruppen.
-// Automatisch ergänzte Mitlaufartikel werden ignoriert.
+// Größe, gleiche Ausführung, beide mit hinterlegter Länge, absolute
+// Längenabweichung maximal 20 mm (und die Längen sind nicht identisch).
+// Es werden ausschließlich direkte Paare angezeigt, keine über Zwischenwerte
+// verbundenen Gruppen. Automatisch ergänzte Mitlaufartikel werden ignoriert.
+//
+// Sprint 7 Abschluss: zeigt zusätzlich dieselbe Status-Ampel wie TB, Lager,
+// Warenkorb und Druck, damit der Materialstatus überall gleich sichtbar ist.
+// Sprint 7 - Korrekturen aus Praxistest: die Ampel wird jetzt ausschließlich
+// aus den Materialpositionen selbst berechnet (kein manuelles Häkchen mehr,
+// siehe helpers.js).
 export default function Checks({ items, baugruppe, project }) {
   const candidates = items
     .map((i) => ({ ...i, _laenge: parseLength(i.laenge) }))
     .filter(isCheckable);
 
   const warnings = findSimilarPairs(candidates);
+  const status = baugruppeStatus(items);
 
   return (
     <div className="card">
-      <h2>Prüfung{baugruppe ? ` · ${baugruppe}` : ""}</h2>
+      <h2>
+        Prüfung{baugruppe ? ` · ${baugruppe}` : ""}
+        {baugruppe && <span className="statusPill" title={status.label}> {status.emoji} {status.label}</span>}
+      </h2>
       <p className="hint">
-        Findet Befestigungsmittel mit gleicher Bezeichnung und Größe, deren Länge um maximal 20 mm abweicht.
+        Findet Befestigungsmittel mit gleicher Bezeichnung, Größe und Ausführung, deren Länge um maximal 20 mm abweicht.
         Automatisch ergänzte Positionen werden nicht berücksichtigt.
       </p>
       {warnings.length === 0 ? (

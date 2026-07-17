@@ -232,6 +232,202 @@ Baugruppen-Löschfunktion. Keine Supabase-Migration.
 
 ---
 
+# Sprint 7
+
+## Baugruppenansicht vereinfacht
+
+- Großer Button „Baugruppe anlegen" oberhalb des Anlegen-Formulars entfernt
+  (war überflüssig neben Eingabefeld + „+ Baugruppe").
+- „Baugruppe löschen" ist jetzt ein kleiner, zurückhaltender Button direkt
+  neben „Umbenennen" in der Überschrift statt eines großen roten Buttons am
+  Kartenende. Sicherheitsabfrage bleibt unverändert.
+
+## TB-Erfassung
+
+- Kopfbereich zurückgenommen: statt der großen Projektkarte steht über der
+  Erfassung nur noch eine kleine Kontextzeile („Baugruppe: … · Bauteil: …",
+  Projektname/-nummer klein daneben).
+- Spaltenüberschriften der erfassten Positionen (Pos., Menge, Bezeichnung,
+  Größe, Länge, Ausführung) sind anklickbar und sortieren die Tabelle;
+  erneuter Klick kehrt die Richtung um (Pfeil ↑/↓). Sortierung ist numerisch
+  korrekt (z. B. M4 vor M12, Länge 20 vor 100).
+
+## Prüfung
+
+- Ähnliche Verbindungsmittel werden nur noch verglichen, wenn zusätzlich die
+  Ausführung identisch ist. Galvanisch, feuerverzinkt, HV und Edelstahl
+  werden nie miteinander vermischt.
+
+## Lager
+
+- Wieder eine durchgehende Tabelle je Baugruppe statt Karten je Artikel
+  (keine ausklappbaren Bereiche). Spalten: Regalfach, Bezeichnung, Größe,
+  Länge, Ausführung, Gesamtmenge, Vorhanden (Zahlenfeld + Checkbox
+  „Vollständig" kombiniert), Restmenge, Herkunft/Bauteil.
+- Spaltenüberschriften sind anklickbar sortierbar. Ohne aktive Sortierung
+  gilt weiterhin die tatsächliche Paternoster-Reihenfolge als Standard.
+- Für galvanisch verzinkte Schrauben ist die Sortier-Reihenfolge Fach 27 →
+  Fach 26 → Fach 1 jetzt verbindlich hinterlegt (vorher eine willkürliche
+  Kategorie-Reihenfolge). Die übrigen Fächer werden entsprechend absteigend
+  eingeordnet (27 → 26 → 25 → 9 → 7 → 3).
+
+## Druckansicht
+
+- Zeigt jetzt ausschließlich die aktuell geöffnete Baugruppe statt des
+  ganzen Projekts (vorher wurden implizit alle Baugruppen gleichzeitig
+  angezeigt). Die Gliederung nach Bauteil ist dadurch immer aktiv, unabhängig
+  von der gewählten Sortierung; die Bauteil-Abschnitte stehen dabei immer in
+  alphabetischer Reihenfolge.
+- Sortierung „Baugruppe (Montage)" entfernt (war nur nötig, solange mehrere
+  Baugruppen gleichzeitig sichtbar waren). Neu: Sortierung nach Bezeichnung,
+  Größe und Länge (zusätzlich zu Position und Regal).
+- Gruppierung gleicher Verbindungsmittel innerhalb desselben Bauteils
+  (gleiche Bezeichnung/Größe/Länge/Ausführung, Mengen addiert) bleibt
+  unverändert erhalten.
+
+Keine Daten gelöscht, keine Supabase-Migration.
+
+---
+
+# Sprint 7 Abschluss
+
+## Baugruppe anlegen
+
+- Button-Beschriftung von „+ Baugruppe" auf „Anlegen" geändert - identische
+  Bedienung wie beim Anlegen eines Bauteils.
+
+## Lager – Herkunft
+
+- Spalte „Herkunft / Bauteil" in „Herkunft" umbenannt. Zeigt je Bauteil
+  zusätzlich die ursprünglichen TB-Positionsnummern (numerisch sortiert,
+  ohne Duplikate, keine technischen IDs) statt der Menge, z. B.
+  „Pergola · Stütze 1" / „Pos. 2, 11".
+- Zusätzlich Status-Ampel je Baugruppe (wie in Warenkorb/Druck).
+
+## Warenkorb vereinheitlicht
+
+- Gleiche Tabellenoptik wie Lager/TB: Spalten Regalfach, Bezeichnung,
+  Größe, Länge, Ausführung, Fehlmenge, Herkunft, Bestellt, Geliefert - alle
+  anklickbar sortierbar.
+- „Bestellt" ist jetzt eine Checkbox direkt am Feld `material_items.bestellt`
+  der Position (vorher lokal je Artikel gespeichert).
+- „Geliefert" ist ein Zahlenfeld und schreibt direkt in `bereit` - dasselbe
+  Feld, das auch das Lager pflegt. Teillieferungen bleiben möglich; sinkt
+  die Fehlmenge auf 0, verschwindet die Zeile automatisch.
+- Damit entfällt die frühere, separate lokale Bestell-/Lieferliste je
+  Warenkorb-Position (Sprint 6) vollständig - es gibt jetzt nur noch eine
+  Datenhaltung für den Materialstatus.
+- Neue Buttons „Tabelle kopieren" (tabulatorgetrennter Text mit
+  Projektname, direkt in Outlook/Excel einfügbar) und „CSV exportieren"
+  (Datei `MONTA_<Projektnummer>_Warenkorb.csv`) ersetzen den früheren
+  Button „Warenkorb kopieren" (einfache Textliste).
+
+## Materialstatus vereinheitlicht
+
+- Bestellt/Geliefert hängen jetzt ausschließlich an der Materialposition
+  selbst. Eine Änderung im Warenkorb wirkt sich dadurch automatisch auf TB,
+  Prüfung, Lager, Warenkorb und Druck aus - alle zeigen immer denselben
+  Stand.
+- Status-Ampel (🔴/🟡/🟢) ist jetzt in allen fünf Baugruppen-Reitern
+  sichtbar (vorher nur in Warenkorb und Druck).
+
+## Druckansicht
+
+- Spalte/Sortierung „Regal" in „Regalfach" umbenannt (wie in Lager/
+  Warenkorb).
+- Positionsnummern beim Zusammenfassen gleicher Verbindungsmittel jetzt
+  numerisch sortiert und ohne Duplikate (vorher unsortierte Aneinanderreihung).
+- Engere Abstände je Bauteil-Abschnitt und beim Drucken (kleinere
+  Schrift/Zellenabstände), damit weniger Papier/Platz benötigt wird.
+
+## Abgrenzung
+
+- MONTA bleibt ausschließlich für Befestigungsmaterial. Keine
+  projektübergreifende Bestellverwaltung, keine Angebote/Lieferscheine/
+  Rechnungen - das bleibt bewusst außerhalb von MONTA (bestehende
+  OneNote-Arbeitsabläufe unverändert).
+
+Keine Daten gelöscht, keine neue Datenbankstruktur (bestehende, bisher
+ungenutzte Felder `material_items.bestellt`/`bereit` werden jetzt
+verwendet statt eines zusätzlichen Lokalspeichers).
+
+---
+
+# Sprint 7 – Korrekturen aus Praxistest
+
+## Paternoster
+
+- Fachzuordnung vollständig neu aufgebaut anhand der vom Betrieb
+  bestätigten Liste (Fach 1–7, 9, 24–27). Fach 8 und 10–23 bleiben ohne
+  MONTA-Zuordnung.
+- Größenabhängige Zuordnung für galvanische und Edelstahl-Schrauben
+  (z. B. M5 → Fach 1, M8 → Fach 27, M12 → Fach 26; Edelstahl M5 → Fach 6,
+  M10 → Fach 5).
+- Verbindlicher Laufweg: 27 → 26 → 25 → 24 → 9 → 7 → 6 → 5 → 4 → 3 → 2 → 1.
+- Weiterhin nur eine zentrale Konfigurationsdatei, keine Pflegeoberfläche.
+
+## Warenkorb
+
+- Spalte „Regalfach" entfernt (irrelevant im Warenkorb; bleibt in Lager und
+  Druck).
+- Checkbox „Bestellung erfolgt" (Baugruppen-Häkchen) entfernt.
+- Neu: „Alle Positionen bestellt" oberhalb der Tabellen - setzt/entfernt
+  bestellt bei allen sichtbaren Zeilen; Haken folgt automatisch den
+  Einzelhaken.
+- Neu: Checkbox „Vollständig geliefert" je Position (zusätzlich zur
+  Mengeneingabe); Teillieferungen bleiben möglich.
+- „Tabelle kopieren" und „CSV exportieren" entfernt, ersetzt durch
+  „Anfrage per Mail" (Standard-Mailprogramm, Empfänger Schrauben-Jäger AG,
+  Betreff „Anfrage BV <Projektname>", Klartexttabelle mit Bezeichnung/
+  Größe/Länge/Ausführung/Menge).
+
+## Status
+
+- Ampel wird ausschließlich aus den Materialpositionen berechnet
+  (bestellt / bereit). Keine zweite, lokale Statuskopie mehr.
+- Rot / Gelb / Grün folgen der Regel: Offen → Bestellt → Bereit, sichtbar
+  in Projektübersicht, TB, Prüfung, Lager, Warenkorb und Druck.
+
+## Druck
+
+- Separate Sortierbuttons entfernt.
+- Sortierung wie TB/Lager/Warenkorb über anklickbare Spaltenüberschriften
+  (Position, Menge, Bezeichnung, Größe, Länge, Ausführung, Regalfach).
+
+Keine Daten gelöscht, keine neue Datenbankstruktur.
+
+---
+
+# Abschlusskorrekturen vor Pilot
+
+## Lager
+
+- Spalte „Vorhanden" ist jetzt numerisch sortierbar (auf-/absteigend, Pfeil).
+
+## Tabellen
+
+- Einheitliches hellgraues Raster (horizontale und vertikale Linien) in TB,
+  Lager, Warenkorb und Druck - auch in der Druckansicht.
+
+## Warenkorb – vollständig geliefert
+
+- Positionen bleiben nach „Vollständig geliefert" sichtbar (dezent grün,
+  am Tabellenende).
+- Checkbox kann wieder deaktiviert werden; vorheriger Lieferwert wird
+  wiederhergestellt.
+- Keine automatische Ausblendung mehr.
+- Statusampel bleibt unabhängig von der Sichtbarkeit (Grün nur wenn keine
+  Restmenge mehr).
+
+## Regalfach Mitlaufartikel
+
+- U-Scheiben und Sechskantmuttern erhalten dasselbe Regalfach wie Schrauben
+  gleicher Größe und Ausführung (unabhängig von manuell/automatisch).
+
+Keine Daten gelöscht, keine neue Datenbankstruktur.
+
+---
+
 # Regeln
 
 Nach jedem abgeschlossenen Sprint werden hier ergänzt:
