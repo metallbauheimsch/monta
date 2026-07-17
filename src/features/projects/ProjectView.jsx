@@ -1,6 +1,7 @@
+import { useEffect } from "react";
 import ProjectHeader from "../../components/ProjectHeader";
 import { projectStatus, baugruppeStatus } from "../../utils/helpers";
-import { TAB_ORDER, TAB_LABELS, PC_ONLY_TABS } from "../../utils/tabs";
+import { TAB_LABELS, visibleTabsFor } from "../../utils/tabs";
 import TabContent from "./TabContent";
 
 export default function ProjectView({
@@ -12,25 +13,27 @@ export default function ProjectView({
   projectItems,
   allItems,
   backToDetail,
-  deviceMode,
+  isNarrow,
   tab,
   setTab,
   addItem,
   updateItem,
   deleteItem,
 }) {
-  const visibleTabs = TAB_ORDER.filter((t) => deviceMode === "pc" || !PC_ONLY_TABS.includes(t));
+  const visibleTabs = visibleTabsFor(isNarrow);
+
+  // Wenn die Ansicht schmal wird und der aktuelle Reiter (z. B. TB) dort
+  // nicht sichtbar ist, auf den ersten verfügbaren Reiter wechseln.
+  useEffect(() => {
+    if (!visibleTabs.includes(tab)) setTab(visibleTabs[0] || "material");
+  }, [visibleTabs, tab, setTab]);
+
   // Sprint 7: In der TB-Erfassung ist die eigentliche Arbeit die
   // Materialerfassung, nicht die Projektübersicht. Deshalb dort statt der
   // großen Projektkarte nur eine kleine Kontextzeile (Baugruppe/Bauteil im
   // Vordergrund, Projektname/-nummer klein). In allen anderen Reitern bleibt
   // die gewohnte Projektkarte mit Status/Fortschritt erhalten.
   const isTbTab = tab === "tb";
-  // Sprint 7 Abschluss: dieselbe Status-Ampel wie in Prüfung/Lager/
-  // Warenkorb/Druck, damit der Materialstatus in jeder Ansicht gleich
-  // sichtbar ist (Punkt 5, "Materialstatus vereinheitlichen"). Sprint 7 -
-  // Korrekturen aus Praxistest: wird direkt aus den Materialpositionen
-  // berechnet (siehe helpers.js).
   const tbStatus = baugruppeStatus(baugruppeItems);
 
   return (
@@ -56,7 +59,6 @@ export default function ProjectView({
       </div>
       <TabContent
         tab={tab}
-        deviceMode={deviceMode}
         project={project}
         baugruppe={baugruppe}
         bauteil={bauteil}

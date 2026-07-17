@@ -428,6 +428,39 @@ Keine Daten gelöscht, keine neue Datenbankstruktur.
 
 ---
 
+# Stabilitäts-Sprint vor PWA
+
+## Projekt löschen
+
+- Auch das letzte Projekt kann gelöscht werden.
+- Danach leere Projektübersicht mit „Noch kein Projekt vorhanden." und
+  Button „Neues Projekt".
+- Fehlgeschlagene Löschvorgänge werden sichtbar gemeldet; kein stilles
+  Fehlschlagen mehr.
+- RLS-Delete-Policy für Projekte in `supabase_schema.sql` ergänzt (in der
+  Live-Datenbank einmalig anwenden, falls noch nicht vorhanden).
+
+## Synchronisation PC ↔ Mobil
+
+- Lokale Oberfläche aktualisiert sich nach Schreiben sofort.
+- Realtime-Channel-Status wird in der Konsole protokolliert.
+- Beim Zurückkehren in den Tab und beim Fenster-Fokus werden Daten neu
+  geladen.
+- Sparsamer Fallback alle 20 Sekunden, nur bei sichtbarer Seite.
+- Hintergrund-Sync ohne Vollbild-Ladezustand (kein „Lade MONTA…" bei jedem
+  Realtime-Ereignis).
+
+## Bedienung
+
+- Manueller PC/Mobil-Umschalter entfernt.
+- Darstellung und TB-Sichtbarkeit folgen der Bildschirmbreite.
+
+Keine Fachfunktionen neu hinzugefügt. Bestehende Daten bleiben erhalten.
+Schema-Ergänzung nur für die fehlende Delete-Policy (für zuverlässiges
+Löschen zwingend).
+
+---
+
 # Regeln
 
 Nach jedem abgeschlossenen Sprint werden hier ergänzt:

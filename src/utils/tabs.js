@@ -22,9 +22,15 @@ export const TAB_LABELS = {
   druck: "Druck",
 };
 
-// TB ist auf schnelle PC-Erfassung ausgelegt und wird mobil ausgeblendet.
-export const PC_ONLY_TABS = ["tb"];
+// TB ist auf schnelle PC-Erfassung ausgelegt und wird auf schmalen
+// Bildschirmen (≤760px) ausgeblendet – früher über den manuellen
+// PC/Mobil-Umschalter, jetzt automatisch über die Viewport-Breite.
+export const NARROW_HIDDEN_TABS = ["tb"];
 
-export function defaultTabFor(deviceMode) {
-  return deviceMode === "pc" ? "tb" : "material";
+export function defaultTabFor(isNarrow) {
+  return isNarrow ? "material" : "tb";
+}
+
+export function visibleTabsFor(isNarrow) {
+  return TAB_ORDER.filter((t) => !isNarrow || !NARROW_HIDDEN_TABS.includes(t));
 }

@@ -22,7 +22,6 @@ import PrintView from "../fastening/PrintView";
 // und soll genau diese Montage abbilden.
 export default function TabContent({
   tab,
-  deviceMode,
   project,
   baugruppe,
   bauteil,

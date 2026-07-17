@@ -56,22 +56,31 @@ export default function ProjectDetail({
     setAddingBauteilTo(null);
   }
 
-  function handleDeleteProject() {
+  async function handleDeleteProject() {
     if (!confirm("Projekt wirklich dauerhaft löschen?")) return;
-    deleteProject(project.id);
-    setView("projects");
+    try {
+      // Bei Erfolg setzt App.jsx projectId/Baugruppe/Bauteil zurück und
+      // zeigt die Projektübersicht (auch wenn es das letzte Projekt war).
+      await deleteProject(project.id);
+    } catch {
+      // Fehler bereits in deleteProject gemeldet; Ansicht bleibt geöffnet.
+    }
   }
 
   // Baugruppe löschen ist bewusst nur nach ausdrücklicher Bestätigung
   // möglich und funktioniert auch, wenn die Baugruppe bereits Material
   // enthält. Andere Baugruppen/Projekte bleiben unberührt (siehe
   // App.jsx deleteBaugruppe).
-  function handleDeleteBaugruppe(baugruppeName) {
+  async function handleDeleteBaugruppe(baugruppeName) {
     const ok = confirm(
       "Baugruppe wirklich löschen? Alle enthaltenen Bauteile und Materialpositionen werden dauerhaft gelöscht."
     );
     if (!ok) return;
-    deleteBaugruppe?.(project.id, baugruppeName);
+    try {
+      await deleteBaugruppe?.(project.id, baugruppeName);
+    } catch {
+      // Fehler bereits in deleteBaugruppe gemeldet.
+    }
   }
 
   function startRenameBaugruppe(name) {

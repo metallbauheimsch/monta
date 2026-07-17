@@ -20,14 +20,27 @@ function baugruppenSummary(project, items) {
 }
 
 export default function ProjectsList({ projects, items, setView, setProjectId }) {
+  if (projects.length === 0) {
+    return (
+      <>
+        <div className="top">
+          <h2>Projekte</h2>
+        </div>
+        <div className="card emptyProjectsCard">
+          <p>Noch kein Projekt vorhanden.</p>
+          <button onClick={() => setView("newProject")}>Neues Projekt</button>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <div className="top">
         <h2>Projekte</h2>
-        <button onClick={() => setView("newProject")}>+ Neues Projekt</button>
+        <button onClick={() => setView("newProject")}>Neues Projekt</button>
       </div>
       <p className="hint">Erfassung am PC. Workflow-Bearbeitung mobil oder am Tablet.</p>
-      {projects.length === 0 && <p>Keine Projekte vorhanden.</p>}
       {projects.map((p) => {
         const s = projectStatus(p, items);
         const projectItems = items.filter((i) => i.project_id === p.id);

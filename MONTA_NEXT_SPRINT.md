@@ -1,26 +1,38 @@
 # MONTA – Nächster Sprint
 
-## Abschlusskorrekturen vor Pilot – erledigt
+## Stabilitäts-Sprint vor PWA – erledigt
 
-- Lager: Spalte „Vorhanden" numerisch sortierbar.
-- Tabellen: einheitliches hellgraues Raster in TB, Lager, Warenkorb, Druck.
-- Warenkorb: vollständig gelieferte Positionen bleiben sichtbar (grün, unten),
-  Checkbox wieder deaktivierbar.
-- U-Scheiben/Sechskantmuttern: Regalfach wie passende Schraube (Größe +
-  Ausführung).
+- Letztes Projekt löschbar; leere Übersicht danach.
+- Mehrgeräte-Sync: sofortige lokale Updates, Realtime, Fokus-/Sichtbarkeits-
+  Reload, sparsamer 20-Sekunden-Fallback bei sichtbarer Seite.
+- PC/Mobil-Umschalter entfernt; TB auf schmalen Bildschirmen ausgeblendet.
+- Einheitliche Fehlerbehandlung bei create/update/delete.
 
 Details siehe `MONTA_PROJECT.md`, `MONTA_DECISIONS.md` und
 `MONTA_CHANGELOG.md`.
 
-## Sprint 7 – Korrekturen aus Praxistest – erledigt
+## Vor dem nächsten Pilot-Test in Supabase prüfen / anwenden
 
-- Paternoster: vollständige Fachzuordnung und Laufweg 27 → … → 1.
-- Warenkorb: kein Regalfach, „Alle Positionen bestellt", „Anfrage per Mail".
-- Statusampel aus Materialpositionen; Druck über Spaltenüberschriften.
+Falls in der Live-Datenbank noch nicht vorhanden:
 
-## Offene Punkte aus der Bestandsaufnahme (weiterhin nicht umgesetzt)
+```sql
+create policy "public delete projects" on projects for delete using (true);
 
-- Prüfen, ob geräteübergreifend geteilte lokale Daten für PC+iPhone
-  ausreichen, oder ob diese künftig über Supabase gespeichert werden sollen.
+alter publication supabase_realtime add table projects;
+alter publication supabase_realtime add table material_items;
+```
+
+(Realtime-Publication-Befehle schlagen fehl, wenn die Tabelle bereits
+enthalten ist – dann ist Realtime schon aktiv.)
+
+## Nächster sinnvoller Fokus
+
+- PWA / App-Icon / Installierbarkeit für die mobile Pilotnutzung
+  (separater Auftrag, nicht Teil dieses Stabilitäts-Sprints).
+
+## Weiterhin offen (nicht blockierend für Stabilität)
+
 - `supabase_schema.sql` um die Spalte `archived` ergänzen, sobald eine
   echte Migration gewünscht ist.
+- Geräteübergreifende Teilung rein lokaler Hilfsdaten (leere
+  Baugruppen-Registry, gelernte Bezeichnungen) – nur bei Bedarf.

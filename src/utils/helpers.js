@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 export function articleKey(item) {
   return [item.bezeichnung, item.groesse, item.laenge, item.oberflaeche].filter(Boolean).join(" ");
 }
@@ -55,4 +57,18 @@ export function groupBy(arr, fn) {
 
 export function isMobileLike() {
   return window.matchMedia("(max-width: 760px)").matches;
+}
+
+// Schmale Ansicht (Smartphone): gleiche Grenze wie CSS @media max-width 760px.
+// Ersetzt den früheren manuellen PC/Mobil-Umschalter.
+export function useIsNarrow() {
+  const [narrow, setNarrow] = useState(() => isMobileLike());
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 760px)");
+    const onChange = () => setNarrow(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return narrow;
 }

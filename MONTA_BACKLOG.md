@@ -15,58 +15,29 @@ Regeln:
 
 Diese Punkte müssen vor dem produktiven Einsatz abgeschlossen sein.
 
-## Baugruppen
+## Stabilität / Sync
 
-(Erledigt mit Sprint 6/7: Löschen, Umbenennen, kein Auto-Anlegen, vereinfachte
-Bedienung. Siehe Changelog.)
+(Erledigt mit Stabilitäts-Sprint vor PWA: letztes Projekt löschen,
+Mehrgeräte-Sync mit Realtime + Fokus/Sichtbarkeit + Fallback,
+PC/Mobil-Umschalter entfernt. Siehe Changelog.)
 
----
-
-## Lager
-
-(Erledigt mit Sprint 6/7 inkl. Korrekturen: Tabelle, Herkunft mit
-Positionsnummern, echte Paternoster-Zuordnung und verbindlicher Laufweg.
-Siehe Changelog.)
+In der Live-Supabase einmalig prüfen: Delete-Policy für `projects` und
+Realtime-Publication für `projects` / `material_items`
+(siehe `MONTA_NEXT_SPRINT.md`).
 
 ---
 
-## Warenkorb (bisher Bestellliste)
+## Baugruppen / Lager / Warenkorb / Druck / Status / Regal / Tabellen
 
-(Erledigt inkl. Abschlusskorrekturen vor Pilot: Fehlmengen, Bestellt/
-Geliefert, vollständig gelieferte bleiben sichtbar/grün, Anfrage per Mail,
-kein Regalfach. Siehe Changelog.)
-
----
-
-## Druck
-
-(Erledigt inkl. einheitlichem Tabellenraster und Sortierung über
-Spaltenüberschriften. Siehe Changelog.)
+(Erledigt mit Sprint 6/7 inkl. Korrekturen und Abschlusskorrekturen vor
+Pilot. Siehe Changelog.)
 
 ---
 
-## Tabellen sortierbar
+## PWA / mobile Installation
 
-(Erledigt inkl. Lager-Spalte „Vorhanden". Siehe Changelog.)
-
----
-
-## Status
-
-(Erledigt: Ampel aus Materialpositionen, unabhängig von Warenkorb-
-Sichtbarkeit. Siehe Changelog.)
-
----
-
-(„Prüfung ähnlicher Verbindungsmittel" ist erledigt. Siehe Changelog.)
-
----
-
-## Regal
-
-(Erledigt inkl. U-Scheiben/Sechskantmuttern bei passenden Schrauben.
-Artikel ohne eindeutige Regel bleiben „Ohne Fachzuordnung". Siehe
-Changelog.)
+- App als installierbare PWA für den mobilen Pilotbetrieb vorbereiten
+  (Icons liegen bereits vor; Service Worker / Installationsfluss noch offen).
 
 ---
 

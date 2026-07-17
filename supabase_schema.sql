@@ -32,6 +32,7 @@ alter table material_items enable row level security;
 drop policy if exists "public read projects" on projects;
 drop policy if exists "public insert projects" on projects;
 drop policy if exists "public update projects" on projects;
+drop policy if exists "public delete projects" on projects;
 drop policy if exists "public read items" on material_items;
 drop policy if exists "public insert items" on material_items;
 drop policy if exists "public update items" on material_items;
@@ -41,8 +42,16 @@ drop policy if exists "public delete items" on material_items;
 create policy "public read projects" on projects for select using (true);
 create policy "public insert projects" on projects for insert with check (true);
 create policy "public update projects" on projects for update using (true);
+-- Ohne Delete-Policy schlägt jedes Projekt-Löschen still fehl (RLS) –
+-- auch das letzte verbleibende Projekt (Stabilitäts-Sprint vor PWA).
+create policy "public delete projects" on projects for delete using (true);
 
 create policy "public read items" on material_items for select using (true);
 create policy "public insert items" on material_items for insert with check (true);
 create policy "public update items" on material_items for update using (true);
 create policy "public delete items" on material_items for delete using (true);
+
+-- Realtime für Mehrgeräte-Sync (in Supabase: Publication supabase_realtime).
+-- Falls noch nicht aktiv, im SQL-Editor ausführen:
+-- alter publication supabase_realtime add table projects;
+-- alter publication supabase_realtime add table material_items;

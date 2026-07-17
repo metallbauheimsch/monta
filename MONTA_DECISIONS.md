@@ -194,6 +194,31 @@ MONTA muss vollständig nutzbar sein auf:
 
 - Android
 
+Die Darstellung erfolgt automatisch responsiv über die Bildschirmbreite.
+
+Es gibt keinen manuellen PC/Mobil-Umschalter.
+
+Der Reiter TB ist auf schmalen Bildschirmen ausgeblendet; die Erfassung
+erfolgt am PC.
+
+---
+
+## Daten und Synchronisation
+
+Supabase ist die zentrale Datenquelle für Projekte und Materialpositionen.
+
+Lokale Oberflächen-Updates erfolgen sofort nach erfolgreichem Schreiben.
+
+Mehrgeräte-Nutzung wird über Realtime sowie Reload bei Fokus und
+Sichtbarkeit abgesichert (mit sparsamen Fallback, solange die Seite sichtbar
+ist).
+
+Demo-Daten werden nicht erneut eingesetzt, wenn bereits echte Projektdaten
+vorhanden waren oder die Projektliste bewusst leer ist.
+
+Auch das letzte verbleibende Projekt darf nach Sicherheitsabfrage gelöscht
+werden.
+
 ---
 
 ## Bedienung

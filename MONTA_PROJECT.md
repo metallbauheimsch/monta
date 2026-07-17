@@ -16,14 +16,23 @@ Projekt → Baugruppe → Bauteil → Materialposition
 - Leer angelegte Baugruppen/Bauteile (noch ohne Materialposition) werden nur
   lokal im Browser gemerkt (siehe „Speicherorte" unten).
 
-## Funktionen (Ist-Stand nach Sprint 7 – Korrekturen aus Praxistest)
+## Funktionen (Ist-Stand nach Stabilitäts-Sprint vor PWA)
 
-- **Projektverwaltung**: Anlegen, Archivieren/Zurückholen, endgültiges Löschen.
+- **Projektverwaltung**: Anlegen, Archivieren/Zurückholen, endgültiges Löschen
+  (auch das letzte verbleibende Projekt). Nach dem Löschen erscheint die
+  leere Projektübersicht („Noch kein Projekt vorhanden." / „Neues Projekt").
   Ein neu angelegtes Projekt ist zunächst leer - es wird **keine** Baugruppe
   automatisch angelegt oder angezeigt. Solange keine Baugruppe existiert,
   steht nur das Eingabefeld „Neue Baugruppe" mit Button „Anlegen" da (kein
   zusätzlicher großer Button, identische Bedienung wie beim Anlegen eines
   Bauteils).
+- **Mehrgeräte-Sync**: Supabase ist die zentrale Datenquelle. Die Oberfläche
+  aktualisiert sich nach Schreibvorgängen sofort lokal. Zusätzlich sichern
+  Realtime sowie Reload bei Fokus/Sichtbarkeit (und ein sparsamer Fallback
+  alle 20 Sekunden bei sichtbarer Seite) die Aktualität auf anderen Geräten.
+- **Darstellung**: Kein manueller PC/Mobil-Umschalter. Desktop und Smartphone
+  werden automatisch über die Bildschirmbreite gesteuert. Der Reiter TB ist
+  auf schmalen Bildschirmen ausgeblendet (Erfassung am PC).
 - **TB-Erfassung** (PC): Schnelle Tabellenerfassung, Positionsnummer sichtbar,
   Vorschlagsliste für Bezeichnungen, automatische Ergänzung von
   U-Scheibe(n)/Mutter bei Sechskantschraube/Senkschraube. Statt einer großen
@@ -133,8 +142,11 @@ keine Rolle.
 
 ## Speicherorte
 
-**In Supabase** (sofern Zugangsdaten konfiguriert sind): Projekte, alle
-Materialpositionen (inkl. `bestellt` und `bereit`).
+**In Supabase** (sofern Zugangsdaten konfiguriert sind): zentrale Datenquelle
+für Projekte und alle Materialpositionen (inkl. `bestellt` und `bereit`).
+Schreibvorgänge aktualisieren zuerst Supabase, danach sofort den lokalen
+React-State. Realtime und Fokus-/Sichtbarkeits-Reload halten andere Geräte
+aktuell.
 
 **Nur lokal im Browser** (gerätegebunden, nicht zwischen PC und iPhone
 geteilt):
@@ -150,6 +162,12 @@ geteilt):
 - Kein Login/Benutzerverwaltung (interner Prototyp).
 - `supabase_schema.sql` kennt (noch) keine Spalte `archived` – Archivieren
   funktioniert dann nur lokal, bis die Spalte in der Datenbank ergänzt wird.
+- Projekt-Löschen erfordert die RLS-Policy `public delete projects` (siehe
+  `supabase_schema.sql`). Fehlt sie in der Live-Datenbank, schlägt Löschen
+  fehl und wird verständlich gemeldet.
+- Realtime muss für `projects` und `material_items` in der Supabase-
+  Publication aktiv sein; sonst greifen Fokus-/Sichtbarkeits-Reload und der
+  20-Sekunden-Fallback.
 - Artikel ohne eindeutige Zuordnung (z. B. U-Scheibe, Sechskantmutter ohne
   passende Fachregel, oder Ausführungstexte wie „A2-70" statt „Edelstahl"/
   „VA") erscheinen bewusst als „Ohne Fachzuordnung".
