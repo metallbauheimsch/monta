@@ -1,15 +1,32 @@
 MONTA Web-App v0.4
 
-Wichtige fachliche Änderung:
-- Die Ersterfassung ist für den Techniker am PC optimiert.
-- Mobile Geräte sind für den Workflow nach der Erfassung gedacht: Lager, Bestellung, Lieferung, Druck/Montage.
-- Umschalter PC/Mobil ist im Header.
+Interne App für Metallbau Heimsch (Befestigungsmaterial).
 
-Enthalten:
-- PC-Technikeransicht mit tabellenähnlicher Schnellerfassung
-- Mobile Lageransicht mit großen Buttons
-- Montageansicht nach Bauteilen
-- Einkaufsliste nach Artikel summiert
-- Prüfung ähnlicher Schraubenlängen
-- Druckliste
-- Supabase-Schema für spätere Live-Synchronisation
+## Start
+
+1. Abhängigkeiten: `npm install`
+2. Umgebung: `.env` mit `VITE_SUPABASE_URL` und `VITE_SUPABASE_ANON_KEY`
+3. Entwicklung: `npm run dev`
+4. Build: `npm run build`
+
+Ohne Supabase-Env startet eine lokale Demo (ohne Auth) – nicht für Produktion.
+
+## Sicherheit / Auth
+
+Siehe `AUTH_SETUP.md` und die SQL-Patches:
+
+- `supabase_patch_auth_foundation.sql`
+- `supabase_patch_auth_lockdown.sql`
+
+Service-Role-Schlüssel niemals im Browser oder Repository.
+
+Edge Function zum Benutzerlöschen: `supabase/functions/admin-users/`
+
+## Dokumentation
+
+- `HEIMSCH_PLATFORM.md`
+- `MONTA_PROJECT.md`
+- `MONTA_DECISIONS.md`
+- `MONTA_CHANGELOG.md`
+- `MONTA_BACKLOG.md`
+- `MONTA_NEXT_SPRINT.md`

@@ -535,6 +535,34 @@ SQL-Patch manuell: `supabase_patch_component_groups.sql`.
 
 ---
 
+# Sicherheits-Sprint: Anmeldung, Freigabe und Benutzerverwaltung
+
+## Zugang
+
+- MONTA ist nicht mehr öffentlich.
+- Registrierung mit E-Mail, Passwort und Anzeigename; E-Mail-Bestätigung nötig.
+- Zugriff auf Projektdaten erst nach Admin-Freigabe (`active`).
+- Pending- und Blocked-Konten sehen keine Projektdaten (auch nicht in der DB).
+
+## Administration
+
+- Benutzerverwaltung für Administratoren: freigeben, sperren, entsperren,
+  Rollen, dauerhaft löschen.
+- Erster Admin: `stoehr@metallbau-heimsch.de` per einmaligem Bootstrap-SQL
+  nach Registrierung.
+- Löschen von Auth-Nutzern über Edge Function `admin-users` (kein Service-Role
+  im Browser).
+
+## Technik (fachlich relevant)
+
+- Tabelle `user_profiles` mit Status und Rolle.
+- Öffentliche RLS-Policies werden durch active-user-Policies ersetzt
+  (Foundation zuerst, Lockdown nach Bootstrap).
+
+E-Mail-Fachbenachrichtigungen und Druckstation bewusst zurückgestellt.
+
+---
+
 # Regeln
 
 Nach jedem abgeschlossenen Sprint werden hier ergänzt:

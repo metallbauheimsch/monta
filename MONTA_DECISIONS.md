@@ -233,11 +233,15 @@ Pull-to-Refresh am Smartphone/Tablet ist der normale Browser-Reload.
 Supabase ist die zentrale Datenquelle für Projekte, Projektstruktur
 (Baugruppen/Bauteile/Bauteilgruppen) und Materialpositionen.
 
+Zugriff auf MONTA-Daten nur für authentifizierte Nutzer mit
+`user_profiles.status = active` (Row Level Security). Anonyme und
+nicht freigegebene Konten haben keinen Tabellenzugriff.
+
 Lokale Oberflächen-Updates erfolgen sofort nach erfolgreichem Schreiben.
 
 Mehrgeräte-Nutzung wird über Realtime sowie Reload bei Fokus und
 Sichtbarkeit abgesichert (mit sparsamen Fallback, solange die Seite sichtbar
-ist).
+ist). Realtime und Datenladen starten erst nach Freigabe.
 
 Die frühere rein lokale Baugruppen-/Bauteil-Registry ist nicht mehr die
 zentrale Datenquelle.
@@ -247,6 +251,31 @@ vorhanden waren oder die Projektliste bewusst leer ist.
 
 Auch das letzte verbleibende Projekt darf nach Sicherheitsabfrage gelöscht
 werden.
+
+---
+
+## Zugang und Benutzer
+
+MONTA ist nicht öffentlich zugänglich.
+
+Registrierung mit beliebiger gültiger E-Mail-Adresse und Passwort ist möglich.
+Zugriff auf Projektdaten erst nach E-Mail-Bestätigung und Admin-Freigabe.
+
+Status: pending → active (oder blocked).
+
+Rollen: user, admin.
+
+Administratoren verwalten Freigabe, Sperre, Entsperrung, Rollen und
+dauerhaftes Löschen (Löschen von Auth-Nutzern serverseitig über Edge Function).
+
+Der letzte aktive Administrator darf nicht gesperrt, gelöscht oder zur
+normalen Nutzerrolle degradiert werden. Selbstsperre und Selbstlöschung
+sind untersagt.
+
+Service-Role-Schlüssel gehören nicht in Browser oder Repository.
+
+E-Mail-Benachrichtigungen zu Baugruppen/Bestellungen und die Druckstation
+werden später auf dieser Benutzerbasis umgesetzt – nicht in diesem Stand.
 
 ---
 

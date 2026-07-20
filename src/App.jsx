@@ -6,6 +6,11 @@ import ProjectsList from "./features/projects/ProjectsList";
 import NewProjectForm from "./features/projects/NewProjectForm";
 import ProjectDetail from "./features/projects/ProjectDetail";
 import ProjectView from "./features/projects/ProjectView";
+import AuthPage from "./features/auth/AuthPage";
+import AccessPending from "./features/auth/AccessPending";
+import AccessBlocked from "./features/auth/AccessBlocked";
+import UserAdminView from "./features/admin/UserAdminView";
+import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { supabase } from "./services/supabaseClient";
 import { isMobileLike, useIsNarrow } from "./utils/helpers";
 import {
@@ -31,6 +36,21 @@ import { renameBaugruppeInManualValues } from "./features/fastening/stock";
 const SYNC_POLL_MS = 20000;
 
 function App() {
+  const auth = useAuth();
+  const {
+    supabaseConfigured,
+    authLoading,
+    session,
+    profile,
+    isActive,
+    isAdmin,
+    isPending,
+    isBlocked,
+    recoveryMode,
+    signOut,
+    refreshProfile,
+  } = auth;
+
   const [projects, setProjects] = useState([]);
   const [items, setItems] = useState([]);
   const [structureRows, setStructureRows] = useState([]);
@@ -63,6 +83,24 @@ function App() {
   );
 
   const visibleProjects = showArchived ? projects : projects.filter((p) => !p.archived);
+
+  function clearMontaState() {
+    loadGeneration.current += 1;
+    setProjects([]);
+    setItems([]);
+    setStructureRows([]);
+    setProjectId(null);
+    setSelectedBaugruppe(null);
+    setSelectedBauteil(null);
+    setView("projects");
+    setLoadError(null);
+    setLoading(false);
+  }
+
+  async function handleLogout() {
+    clearMontaState();
+    await signOut();
+  }
 
   // Fehlende Baugruppen/Bauteile aus lokaler Registry + Materialpositionen
   // nach Supabase nachziehen. Kein Abbruch über Migrations-Flag: sonst bleiben
@@ -178,7 +216,14 @@ function App() {
     }
   }, []);
 
+  // Daten und Realtime nur für freigegebene Nutzer (oder lokale Demo ohne Supabase).
   useEffect(() => {
+    const allowData = !supabaseConfigured || isActive;
+    if (!allowData) {
+      clearMontaState();
+      return undefined;
+    }
+
     load();
     if (!supabase) return undefined;
 
@@ -204,13 +249,15 @@ function App() {
       });
 
     function refreshWhenVisible() {
-      if (document.visibilityState === "visible") load({ silent: true });
+      if (document.visibilityState === "visible") {
+        refreshProfile();
+        load({ silent: true });
+      }
     }
     function refreshOnFocus() {
+      refreshProfile();
       load({ silent: true });
     }
-    // Pull-to-Refresh = normaler Browser-Reload (kein eigener Overlay).
-    // pageshow deckt bfcache/Zurück-Navigation ab → stiller Reload.
     function refreshOnPageShow(e) {
       if (e.persisted) load({ silent: true });
     }
@@ -219,7 +266,10 @@ function App() {
     window.addEventListener("pageshow", refreshOnPageShow);
 
     const pollId = setInterval(() => {
-      if (document.visibilityState === "visible") load({ silent: true });
+      if (document.visibilityState === "visible") {
+        refreshProfile();
+        load({ silent: true });
+      }
     }, SYNC_POLL_MS);
 
     return () => {
@@ -229,7 +279,7 @@ function App() {
       window.removeEventListener("pageshow", refreshOnPageShow);
       clearInterval(pollId);
     };
-  }, [load]);
+  }, [load, isActive, supabaseConfigured, refreshProfile]);
 
   useEffect(() => {
     if (!loading && !supabase) {
@@ -747,11 +797,64 @@ function App() {
     setItems((prev) => prev.filter((i) => i.id !== id));
   }
 
-  if (loading) return <Shell><p>Lade MONTA…</p></Shell>;
+  if (authLoading) {
+    return (
+      <Shell compact>
+        <p>Lade MONTA…</p>
+      </Shell>
+    );
+  }
+
+  if (supabaseConfigured && (recoveryMode || !session)) {
+    return (
+      <Shell compact>
+        <AuthPage />
+      </Shell>
+    );
+  }
+
+  if (supabaseConfigured && isBlocked) {
+    return (
+      <Shell compact>
+        <AccessBlocked />
+      </Shell>
+    );
+  }
+
+  if (supabaseConfigured && (isPending || !isActive)) {
+    return (
+      <Shell compact>
+        <AccessPending />
+      </Shell>
+    );
+  }
+
+  const shellUser = {
+    userLabel: profile?.display_name || profile?.email || session?.user?.email || "",
+    showAdmin: Boolean(isAdmin),
+    onOpenAdmin: () => setView("adminUsers"),
+    onLogout: handleLogout,
+  };
+
+  if (view === "adminUsers" && isAdmin) {
+    return (
+      <Shell {...shellUser}>
+        <UserAdminView onBack={() => setView("projects")} />
+      </Shell>
+    );
+  }
+
+  if (loading) {
+    return (
+      <Shell {...shellUser}>
+        <p>Lade MONTA…</p>
+      </Shell>
+    );
+  }
 
   if (loadError) {
     return (
-      <Shell>
+      <Shell {...shellUser}>
         <div className="card loadErrorCard">
           <h2>MONTA konnte die Daten nicht laden.</h2>
           <p className="hint">{loadError}</p>
@@ -762,7 +865,7 @@ function App() {
   }
 
   return (
-    <Shell>
+    <Shell {...shellUser}>
       {view === "projects" && (
         <div>
           <ProjectsList
@@ -829,4 +932,8 @@ function App() {
   );
 }
 
-createRoot(document.getElementById("root")).render(<App />);
+createRoot(document.getElementById("root")).render(
+  <AuthProvider>
+    <App />
+  </AuthProvider>
+);

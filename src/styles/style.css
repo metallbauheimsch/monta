@@ -3,8 +3,26 @@
 html,body{overscroll-behavior-y:auto}
 body{margin:0;background:#f5f5f7;color:#111;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
 header{position:sticky;top:0;background:white;border-bottom:1px solid #ddd;padding:12px 16px;z-index:10;display:flex;gap:12px;align-items:center;justify-content:space-between}
+.headerBrand{display:flex;gap:10px;align-items:center;min-width:0}
+.headerLogo{border-radius:10px;flex-shrink:0}
+.headerActions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.headerBtn{width:auto;padding:8px 12px;font-size:13px;font-weight:700}
+.headerUser{font-size:13px;color:#555;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 header h1{margin:0;font-size:24px}header p{margin:2px 0 0;color:#666;font-size:13px}
 main{max-width:1100px;margin:auto;padding:14px}.top,.row{display:flex;gap:12px;align-items:center;justify-content:space-between}
+.authPage{max-width:420px;margin:24px auto}
+.authCard{background:white;border:1px solid #ddd;border-radius:16px;padding:18px;box-shadow:0 1px 2px #0001}
+.authCard h2{margin:0 0 10px;font-size:18px}
+.authLinks{display:flex;gap:12px;flex-wrap:wrap;justify-content:space-between}
+.linkBtn{width:auto;padding:0;background:transparent;color:#333;border:0;font-weight:600;text-decoration:underline;cursor:pointer}
+.authMessage{background:#eef8ee;border:1px solid #cfe8cf;border-radius:12px;padding:10px 12px;color:#1a4;font-size:14px}
+.authError{background:#ffeaea;border:1px solid #f0c0c0;border-radius:12px;padding:10px 12px;color:#9b111e;font-size:14px}
+.authStatusText{font-size:16px;color:#222;margin:8px 0 12px}
+.passwordRules{list-style:none;margin:0;padding:0;font-size:13px;color:#666}
+.passwordRules li{margin:2px 0}
+.passwordRules .ruleOk{color:#1a7a3a}
+.adminActions{display:flex;flex-direction:column;gap:6px;min-width:140px}
+.adminActions button{width:auto;padding:8px 10px;font-size:13px}
 .card{background:white;border:1px solid #ddd;border-radius:16px;margin:12px 0;padding:14px;box-shadow:0 1px 2px #0001}.clickable{cursor:pointer}
 h2,h3{margin:0 0 6px}p{color:#666;margin:4px 0}.hint{font-size:14px;color:#666}small{color:#666}
 .form{display:grid;gap:10px}

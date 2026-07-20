@@ -13,14 +13,15 @@ Regeln:
 
 # Priorität A – Pilotversion
 
-## SQL-Patches in Live-Supabase
+## Auth in Live-Supabase einrichten
 
-Einmalig ausführen (falls noch nicht geschehen):
+Siehe `AUTH_SETUP.md` und `MONTA_NEXT_SPRINT.md`:
 
-- `supabase_patch_project_structure.sql`
-- `supabase_patch_component_groups.sql` (Spalte `bauteilgruppe`)
-- Delete-Policy und Realtime für projects / material_items
-  (siehe `MONTA_NEXT_SPRINT.md`)
+1. Foundation-SQL
+2. Admin-Registrierung + Bootstrap
+3. Lockdown-SQL
+4. Edge Function `admin-users` deployen
+5. Dashboard: E-Mail-Bestätigung, Passwortregeln, Redirect-URLs
 
 ## PWA / mobile Installation
 
@@ -29,35 +30,54 @@ Einmalig ausführen (falls noch nicht geschehen):
 
 ---
 
-# Priorität B – Nach Pilotbetrieb
+# Priorität B – Nach erfolgreicher Auth
+
+## E-Mail-Benachrichtigungen (beschlossen, noch nicht umgesetzt)
+
+- neue Baugruppe → sautter@metallbau-heimsch.de
+- neue offene Bestellpositionen → stoehr@metallbau-heimsch.de
+- alle Positionen bestellt → sautter@metallbau-heimsch.de
+
+## Druckstation (beschlossen, noch nicht umgesetzt)
+
+- eine konkrete angemeldete Gerätesitzung als Druckstation (nicht nur Benutzer)
+- Drucker: Ricoh IM C2010, A4 Farbe
+- automatischer Einmaldruck bei 100 % montagebereit
+- Schutz vor Mehrfachdruck
+
+## Nachvollziehbarkeit (Vorbereitung)
+
+Später erkennbar machen, wer was getan hat (ohne großen Aufwand jetzt):
+
+- wer eine Baugruppe angelegt hat
+- wer Positionen bestellt hat
+- wer eine Lieferung bestätigt hat
+- welche Gerätesitzung als Druckstation dient
+
+Noch keine `created_by`/`updated_by`-Spalten in diesem Stand.
+
+---
+
+# Priorität C – Nach Pilotbetrieb
 
 ## Lager
 
 - Schnellfilter (Freitextsuche ist vorhanden; weitere Schnellfilter optional)
 
----
-
 ## Druck
 
 - Weitere Drucklayouts
-
----
 
 ## Projekte
 
 - Archiv komfortabler durchsuchen
 
----
-
-# Priorität C – Komfortfunktionen
-
-Diese Punkte werden erst nach erfolgreichem Pilotbetrieb bewertet.
+## Komfort
 
 - Suchfunktionen erweitern
 - Weitere Druckoptionen
 
-(„Statistiken" wurde entfernt: `MONTA_DECISIONS.md` legt eindeutig fest,
-dass Statistiken grundsätzlich kein Bestandteil von MONTA sind.)
+(„Statistiken" sind laut `MONTA_DECISIONS.md` kein Bestandteil von MONTA.)
 
 ---
 
@@ -65,18 +85,14 @@ dass Statistiken grundsätzlich kein Bestandteil von MONTA sind.)
 
 Hier kommen neue Ideen hinein.
 
-Neue Ideen werden nicht sofort umgesetzt.
-
-Vor jeder Umsetzung wird geprüft:
+Vor jeder Umsetzung:
 
 > Ist das wirklich die einfachste Lösung für Metallbau Heimsch?
-
-Wenn nein, wird die Idee verworfen.
 
 ---
 
 # Aktueller Fokus
 
-1. SQL-Patches in Live-Supabase anwenden (`project_structure` + `bauteilgruppe`)
-2. Pilot-Test Bedienung (Suche, Mobile ≤1024, Gruppen, Sync PC↔Smartphone)
-3. Danach PWA
+1. Auth-Rollout in Live-Supabase (Foundation → Bootstrap → Lockdown)
+2. Edge Function deployen und Admin-Tests
+3. Danach E-Mail-Benachrichtigungen / Druckstation oder PWA

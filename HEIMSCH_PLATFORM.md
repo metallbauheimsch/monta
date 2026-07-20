@@ -82,6 +82,17 @@ Keine Entwicklung nur deshalb, weil sie technisch möglich ist.
 
 ---
 
+## Zugang
+
+Module der HEIMSCH Plattform sind interne Werkzeuge.
+
+Öffentlicher anonymer Datenzugriff ist nicht vorgesehen.
+
+Authentifizierung und Freigabe erfolgen modulbezogen (bei MONTA über
+Supabase Auth und Administratorfreigabe).
+
+---
+
 ## Grundsatz
 
 Einfach schlägt komplex.
