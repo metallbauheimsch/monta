@@ -7,80 +7,47 @@ Statistiken sind grundsätzlich kein Bestandteil von MONTA.
 
 ## Datenmodell
 
-Projekt → Baugruppe → Bauteil → Materialposition
+Projekt → Baugruppe → Bauteilgruppe (optional) → Bauteil → Materialposition
 
 - `projects` und `material_items` sind eigene Datenbanktabellen (Supabase).
 - Baugruppen und Bauteile liegen in `project_structure` (Supabase):
   - Zeile mit leerem `bauteil` → Baugruppe
   - Zeile mit Baugruppe + Bauteil → Bauteil
+  - optionale Spalte `bauteilgruppe` auf Bauteil-Zeilen (Gruppierung)
 - Materialpositionen tragen weiterhin `einbauort` im Format
-  `"Baugruppe / Bauteil"` (`src/utils/structure.js`).
-- Beim ersten Laden werden lokale Registry-Einträge und vorhandene
-  Materialpositionen einmalig nach `project_structure` migriert.
+  `"Baugruppe / Bauteil"`. Die Bauteilgruppe ändert keine Materialzuordnung
+  und keine Mengen.
 
-## Funktionen (Ist-Stand nach Pilot Sprint: Mehrgeräte-Sync)
+## Funktionen (Ist-Stand nach Bedien-Sprint)
 
-- **Projektverwaltung**: Anlegen, Archivieren/Zurückholen, endgültiges Löschen
-  (auch das letzte verbleibende Projekt). Nach dem Löschen erscheint die
-  leere Projektübersicht („Noch kein Projekt vorhanden." / „Neues Projekt").
-  Ein neu angelegtes Projekt startet ohne automatisch angelegte Baugruppe.
-- **Baugruppen/Bauteile**: Anlegen, Umbenennen, Löschen – gespeichert in
-  Supabase (`project_structure`), sofort lokal sichtbar und auf anderen
-  Geräten über Realtime/Fokus/Fallback synchron.
-- **Mehrgeräte-Sync**: Supabase ist die zentrale Datenquelle für Projekte,
-  Projektstruktur und Materialpositionen. Sofortige lokale Updates nach
-  Schreiben; Realtime; Reload bei Sichtbarkeit/Fokus; sparsamer Fallback
-  alle 20 Sekunden bei sichtbarer Seite. Pull-to-Refresh am Smartphone/
-  Tablet = normaler Browser-Reload (lädt alle Daten neu).
-- **Darstellung**: Kein manueller PC/Mobil-Umschalter. Auf schmalen
-  Bildschirmen sichtbar: Lager, Warenkorb, Druck. Ausgeblendet: TB und
-  Prüfung (Erfassung/Prüfung am PC).
-- **TB-Erfassung** (PC): Schnelle Tabellenerfassung, Positionsnummer sichtbar,
-  Vorschlagsliste, automatische Ergänzung U-Scheibe(n)/Mutter. Sortierbare
-  Spalten. Kompakte Kontextzeile statt großer Projektkarte.
-- **Prüfung ähnlicher Verbindungsmittel**: siehe eigener Abschnitt (nur PC).
-- **Lager**: Tabelle je Baugruppe mit Regalfach, Vorhanden, Restmenge,
-  Herkunft (Baugruppe · Bauteil + TB-Pos.). Paternoster-Laufweg.
-- **Warenkorb**: Fehlmengen, Bestellt/Geliefert, vollständig gelieferte
-  bleiben sichtbar (grün). „Anfrage per Mail": HTML-Tabelle in die
-  Zwischenablage (für Outlook), Klartext-Fallback, mailto an
-  vertrieb@schrauben-jaeger.de, Betreff „Anfrage BV <Projektname>".
-- **Druckansicht**: Aktuelle Baugruppe, nach Bauteil gegliedert, sortierbar.
-- **Regal/Paternoster**: Feste Zuordnung in `regalOrder.js`.
-- **Statusampel** (🔴/🟡/🟢/⚪): aus Materialpositionen (`bestellt` / `bereit`).
-
-## Prüfregel „Ähnliche Verbindungsmittel" (Stand Sprint 7)
-
-Ähnliche Verbindungsmittel bei absoluter Längendifferenz maximal 20 mm,
-gleicher Bezeichnung/Größe/Ausführung, unterschiedliche Längen.
-Automatisch ergänzte Positionen werden ignoriert.
-Umsetzung: `src/features/fastening/Checks.jsx`.
-
-## Regal/Paternoster-Zuordnung
-
-Zentrale Datei: `src/features/fastening/regalOrder.js`.
-Laufweg: 27 → 26 → 25 → 24 → 9 → 7 → 6 → 5 → 4 → 3 → 2 → 1.
-U-Scheiben/Sechskantmuttern: gleiches Fach wie passende Schraube.
+- **Freitextsuche** in TB, Prüfung, Lager und Warenkorb (Platzhalter
+  „Suchen …", Mehrwort-AND, sofortiger Filter, × zum Löschen, nicht
+  persistiert).
+- **Mobile/Tablet (≤1024 px)**: TB und Prüfung ausgeblendet; sichtbar:
+  Lager, Warenkorb, Druck. Aktiver ausgeblendeter Reiter wechselt auf Lager.
+- **TB-Autocomplete**: Pfeile, Enter, Leertaste (bei markiertem Vorschlag),
+  Escape, Tab – freies Leerzeichen bleibt möglich.
+- **Bauteilgruppen**: Mehrere Bauteile derselben Baugruppe können zu einer
+  Gruppe zusammengefasst werden (Name, Umbenennen, Mitglieder ändern,
+  Auflösen). Material bleibt je Bauteil getrennt.
+- **Darstellung**: Hierarchie Baugruppe → Bauteilgruppe → Bauteil in
+  Projektseite, TB-Kontext, Prüfung, Lager, Warenkorb und Druck.
+  „Nicht gruppiert" nur, wenn in der Baugruppe mindestens eine Gruppe existiert.
+- **Sortierung**: Spalte Bauteilgruppe (auf/ab); Standard: Anlage-Reihenfolge
+  der Gruppen und Bauteile.
+- **Mehrgeräte-Sync**: Supabase inkl. `bauteilgruppe`; Realtime; Fokus;
+  20-Sekunden-Fallback; Pull-to-Refresh.
+- **Warenkorb-Mail**: HTML-Tabelle in Zwischenablage + Klartext-Fallback.
 
 ## Speicherorte
 
-**In Supabase** (wenn konfiguriert):
+**Supabase:** Projekte, `project_structure` (inkl. Bauteilgruppe), Material.
 
-- Projekte
-- Projektstruktur (Baugruppen/Bauteile)
-- Materialpositionen inkl. `bestellt` / `bereit`
-
-**Nur lokal im Browser** (gerätegebunden):
-
-- Zuletzt manuell erfasster „bereits gelegt"/„geliefert"-Wert
-- Gelernte Bezeichnungsvorschläge
-- Ohne Supabase: sämtliche Daten inkl. lokaler Struktur-Kopie
+**Lokal:** manuelle Lager-/Lieferwerte, gelernte Bezeichnungen; ohne Supabase
+auch Struktur-Kopie.
 
 ## Bekannte Einschränkungen
 
-- Kein Login/Benutzerverwaltung (interner Prototyp).
-- Spalte `archived` ggf. noch nicht in der Live-DB.
-- Live-Supabase braucht den SQL-Patch `supabase_patch_project_structure.sql`
-  (Tabelle + RLS + Realtime) und die Delete-Policy für Projekte.
-- Sehr große Warenkörbe können die mailto-Längengrenze überschreiten –
-  dann verständliche Fehlermeldung; HTML-Tabelle bleibt in der Zwischenablage.
+- Live-DB braucht u. a. `supabase_patch_project_structure.sql` und
+  `supabase_patch_component_groups.sql` (Spalte `bauteilgruppe`).
+- Kein Login; Spalte `archived` ggf. noch nicht in der Live-DB.

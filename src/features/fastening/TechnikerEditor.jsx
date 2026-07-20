@@ -2,35 +2,58 @@ import { useMemo, useRef, useState } from "react";
 import { ausfuehrungen, groessen } from "./constants";
 import { getDescriptionOptions, rememberDescriptionIfNew } from "./descriptionsRegistry";
 import { allocatePositions, getMitlaufartikel } from "./technikerUtils";
-import { formatEinbauort } from "../../utils/structure";
+import { formatEinbauort, getBauteilgruppe } from "../../utils/structure";
 import { naturalCompare, useSortableColumns } from "../../utils/sorting";
+import { filterBySearch } from "../../utils/textSearch";
+import SearchField from "../../components/SearchField";
 import SuggestionAutocomplete from "./SuggestionAutocomplete";
 
 const emptyFields = { menge: "", bezeichnung: "", groesse: "", laenge: "", oberflaeche: "galvanisch", hinweis: "" };
 
-// items: Materialpositionen des aktuell geöffneten Bauteils (Anzeige/Bearbeitung)
-// allProjectItems: alle Positionen des Projekts (nur zur Vergabe einer projektweit eindeutigen Positionsnummer)
-// Sprint 7: Spaltenüberschriften der erfassten Positionen sind anklickbar
-// und sortieren die Tabelle (numerisch korrekt, siehe utils/sorting.js).
-// Ohne aktive Sortierung bleibt die bisherige Reihenfolge erhalten.
 function compareByColumn(a, b, key) {
   if (key === "pos" || key === "menge") return (Number(a[key]) || 0) - (Number(b[key]) || 0);
   return naturalCompare(a[key], b[key]);
 }
 
-export default function TechnikerEditor({ items, allProjectItems, addItem, updateItem, deleteItem, baugruppe, bauteil }) {
+export default function TechnikerEditor({
+  items,
+  allProjectItems,
+  structureRows,
+  addItem,
+  updateItem,
+  deleteItem,
+  baugruppe,
+  bauteil,
+  project,
+}) {
   const [draft, setDraft] = useState(() => ({ ...emptyFields, autoMitlauf: true }));
+  const [search, setSearch] = useState("");
   const mengeRef = useRef(null);
   const { sortKey, sortDir, toggleSort, arrow } = useSortableColumns(null);
-  // Startliste + bisher gemerkte Bezeichnungen; wird bei jedem Render neu
-  // gelesen, damit frisch gemerkte Vorschläge sofort verfügbar sind.
   const descriptionOptions = getDescriptionOptions();
+  const bauteilgruppe = getBauteilgruppe(structureRows, project?.id, baugruppe, bauteil);
+
+  const filteredItems = useMemo(
+    () =>
+      filterBySearch(items, search, (i) => [
+        i.pos,
+        baugruppe,
+        bauteilgruppe,
+        bauteil,
+        i.bezeichnung,
+        i.groesse,
+        i.laenge,
+        i.oberflaeche,
+        i.hinweis,
+      ]),
+    [items, search, baugruppe, bauteil, bauteilgruppe]
+  );
 
   const sortedItems = useMemo(() => {
-    if (!sortKey) return items;
-    const sorted = [...items].sort((a, b) => compareByColumn(a, b, sortKey));
+    if (!sortKey) return filteredItems;
+    const sorted = [...filteredItems].sort((a, b) => compareByColumn(a, b, sortKey));
     return sortDir === "desc" ? sorted.reverse() : sorted;
-  }, [items, sortKey, sortDir]);
+  }, [filteredItems, sortKey, sortDir]);
 
   function set(k, v) { setDraft((d) => ({ ...d, [k]: v })); }
 
@@ -74,7 +97,6 @@ export default function TechnikerEditor({ items, allProjectItems, addItem, updat
         });
       }
     } catch {
-      // Eingaben behalten - addItem hat den Fehler bereits angezeigt.
       return;
     }
 
@@ -124,6 +146,7 @@ export default function TechnikerEditor({ items, allProjectItems, addItem, updat
 
       <div className="card">
         <h2>Erfasste Positionen{bauteil ? ` · ${bauteil}` : ""}</h2>
+        <SearchField value={search} onChange={setSearch} />
         <div className="tableWrap">
           <table className="editTable">
             <tbody>
@@ -139,11 +162,6 @@ export default function TechnikerEditor({ items, allProjectItems, addItem, updat
               </tr>
               {sortedItems.map((i) => (
                 <tr key={i.id}>
-                  {/* Positionsnummer nur zur Anzeige - wird automatisch vergeben
-                      (siehe technikerUtils.allocatePositions) und ist hier bewusst
-                      nicht editierbar, um doppelte/widersprüchliche Nummern zu
-                      vermeiden. Sprint 6: macht Positionen in der Prüfungsansicht
-                      eindeutig unterscheidbar. */}
                   <td className="posCell">{i.pos}</td>
                   <td><input type="number" value={i.menge || 0} onChange={(e) => updateItem(i.id, { menge: Number(e.target.value) })} /></td>
                   <td className="suggestionCell">

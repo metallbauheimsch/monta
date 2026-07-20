@@ -1,12 +1,13 @@
 # MONTA – Nächster Sprint
 
-## Pilot Sprint: Mehrgeräte-Sync / Struktur / Mail – erledigt (Code)
+## Bedien-Sprint: Suche / Tastatur / Bauteilgruppen – erledigt (Code)
 
-- `project_structure` für Baugruppen/Bauteile
-- Migration aus lokaler Registry + Materialpositionen
-- Realtime + Fokus/Sichtbarkeit + Fallback
-- Mobile: TB und Prüfung ausgeblendet
-- Mail: HTML-Tabelle in Zwischenablage
+- Freitextsuche in TB, Prüfung, Lager, Warenkorb
+- TB/Prüfung ausgeblendet bis einschließlich 1024 px
+- Leertaste übernimmt markierte Autocomplete-Vorschläge
+- Bauteilgruppen (`bauteilgruppe` auf `project_structure`)
+- Darstellung und Sortierung in allen relevanten Reitern inkl. Druck
+- Sync wie bei Baugruppen/Bauteilen
 
 Details siehe `MONTA_PROJECT.md`, `MONTA_DECISIONS.md`, `MONTA_CHANGELOG.md`.
 
@@ -20,10 +21,13 @@ alter publication supabase_realtime add table projects;
 alter publication supabase_realtime add table material_items;
 ```
 
-2. Neu in diesem Sprint – Datei `supabase_patch_project_structure.sql`
-   vollständig im SQL Editor ausführen (Tabelle, RLS, Realtime).
+2. Falls noch nicht geschehen – `supabase_patch_project_structure.sql`
+   vollständig im SQL Editor ausführen.
 
-Ohne diesen Patch schlägt das Laden mit Hinweis auf Projektstruktur fehl.
+3. Neu in diesem Sprint – `supabase_patch_component_groups.sql`
+   (Spalte `bauteilgruppe`) im SQL Editor ausführen.
+
+Ohne die Struktur-Patches schlagen Laden bzw. Gruppierung fehl.
 
 ## Nächster sinnvoller Fokus
 

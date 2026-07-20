@@ -12,6 +12,7 @@ export default function ProjectView({
   baugruppeItems,
   projectItems,
   allItems,
+  structureRows,
   backToDetail,
   isNarrow,
   tab,
@@ -22,32 +23,43 @@ export default function ProjectView({
 }) {
   const visibleTabs = visibleTabsFor(isNarrow);
 
-  // Wenn die Ansicht schmal wird und der aktuelle Reiter (z. B. TB) dort
-  // nicht sichtbar ist, auf den ersten verfügbaren Reiter wechseln.
+  // Wenn TB/Prüfung durch Viewport ausgeblendet werden: auf Lager wechseln.
   useEffect(() => {
-    if (!visibleTabs.includes(tab)) setTab(visibleTabs[0] || "material");
+    if (!visibleTabs.includes(tab)) setTab("material");
   }, [visibleTabs, tab, setTab]);
 
-  // Sprint 7: In der TB-Erfassung ist die eigentliche Arbeit die
-  // Materialerfassung, nicht die Projektübersicht. Deshalb dort statt der
-  // großen Projektkarte nur eine kleine Kontextzeile (Baugruppe/Bauteil im
-  // Vordergrund, Projektname/-nummer klein). In allen anderen Reitern bleibt
-  // die gewohnte Projektkarte mit Status/Fortschritt erhalten.
   const isTbTab = tab === "tb";
   const tbStatus = baugruppeStatus(baugruppeItems);
+  const groupHint = (() => {
+    if (!structureRows || !baugruppe || !bauteil) return null;
+    const row = structureRows.find(
+      (r) =>
+        String(r.project_id) === String(project.id) &&
+        r.baugruppe === baugruppe &&
+        String(r.bauteil || "") === bauteil &&
+        r.bauteilgruppe
+    );
+    return row?.bauteilgruppe || null;
+  })();
 
   return (
     <>
       <button className="ghost" onClick={backToDetail}>← Baugruppen &amp; Bauteile</button>
       {isTbTab ? (
         <p className="tbContext">
-          {tbStatus.emoji} <b>Baugruppe: {baugruppe}</b> · <b>Bauteil: {bauteil}</b>
+          {tbStatus.emoji} <b>Baugruppe: {baugruppe}</b>
+          {groupHint ? <> · <b>Gruppe: {groupHint}</b></> : null}
+          {" "}· <b>Bauteil: {bauteil}</b>
           <span className="tbContextProject"> · {project.nr} {project.name}</span>
         </p>
       ) : (
         <>
           <ProjectHeader project={project} status={projectStatus(project, allItems)} />
-          <p className="breadcrumb">{baugruppe} <span className="sep">›</span> {bauteil}</p>
+          <p className="breadcrumb">
+            {baugruppe}
+            {groupHint ? <><span className="sep">›</span>{groupHint}</> : null}
+            <span className="sep">›</span>{bauteil}
+          </p>
         </>
       )}
       <div className="tabs">
@@ -65,6 +77,7 @@ export default function ProjectView({
         bauteilItems={bauteilItems}
         baugruppeItems={baugruppeItems}
         projectItems={projectItems}
+        structureRows={structureRows}
         addItem={addItem}
         updateItem={updateItem}
         deleteItem={deleteItem}

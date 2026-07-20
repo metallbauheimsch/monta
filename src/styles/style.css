@@ -89,7 +89,7 @@ th{background:#eee;font-weight:700}
 .toolbarButtons button{width:auto}
 /* Warenkorb: Sammel-Checkbox über allen Tabellen (Sprint 7 - Korrekturen). */
 .allBestelltLine{margin:10px 0 4px;font-weight:700}
-@media (max-width:760px){
+@media (max-width:1024px){
   main{padding:10px}.row{align-items:flex-start}.entryGrid{grid-template-columns:1fr}.pcOnly{display:none}.badge{font-size:12px}
   .card{border-radius:14px}.workflowCard b{font-size:17px}
   .tabs button{padding:14px 16px;font-size:15px}
@@ -103,14 +103,25 @@ th{background:#eee;font-weight:700}
 .autocompleteItem:hover,.autocompleteItem.active{background:#f2f2f2}
 .autocompleteListFixed{position:fixed;z-index:1000}
 /* TB am PC: Vorschlagslisten hoch genug, dass Standardgrößen M4–M20
-   ohne Scrollen sichtbar sind (Hotfix vor Pilot). Mobil bleibt begrenzt. */
-@media (min-width:761px){
+   ohne Scrollen sichtbar sind. Tablet/Smartphone ≤1024 px begrenzt. */
+@media (min-width:1025px){
   .autocompleteList{max-height:min(70vh, 480px)}
 }
+.searchField{position:relative;margin:8px 0 12px;max-width:420px}
+.searchField input{width:100%;padding-right:40px}
+.searchClear{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:auto;padding:4px 10px;background:transparent;color:#666;border:0;font-size:18px;line-height:1}
+.bauteilgruppeBlock{margin:10px 0 8px}
+.bauteilgruppeHead{display:flex;align-items:center;gap:8px;margin:0 0 4px}
+.bauteilgruppeHead h4{margin:0;font-size:14px;color:#444}
+.bauteilgruppeForm{margin-top:10px;padding-top:8px;border-top:1px solid #eee}
+.printGruppeSection{margin:8px 0 6px}
+.printGruppeSection > h4{margin:0 0 4px;font-size:14px;color:#333}
+.printBauteilSection{margin:4px 0 10px}
+.printBauteilSection h4,.printBauteilSection h5{margin:0 0 4px;font-size:13px;color:#444}
 .editTable .suggestionCell,.editTable .bezeichnungCell{max-width:180px}
 .editTable .suggestionEllipsis,.editTable .bezeichnungEllipsis{text-overflow:ellipsis;overflow:hidden;white-space:nowrap;min-width:0}
 @media print{
-  header,button,.tabs,.hint,.ghost,.noPrint{display:none!important}
+  header,button,.tabs,.hint,.ghost,.noPrint,.searchField{display:none!important}
   main{max-width:none;padding:0}
   .card{border:0;box-shadow:none;padding:0;margin:0}
   .printArea{display:block}

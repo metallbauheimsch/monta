@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 
 function isPcViewport() {
-  return window.matchMedia("(min-width: 761px)").matches;
+  return window.matchMedia("(min-width: 1025px)").matches;
 }
 
 function focusNextField(current) {
@@ -31,6 +31,10 @@ const SuggestionAutocomplete = forwardRef(function SuggestionAutocomplete({
   }));
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
+  // true, wenn der Nutzer die Vorauswahl per Pfeiltaste geändert hat –
+  // dann darf Leertaste den Vorschlag übernehmen, auch ohne getippten Text
+  // (z. B. Bezeichnungsliste nach Fokus komplett durchblättern).
+  const [navActive, setNavActive] = useState(false);
   const [tooltip, setTooltip] = useState("");
   const [listStyle, setListStyle] = useState(null);
 
@@ -42,9 +46,6 @@ const SuggestionAutocomplete = forwardRef(function SuggestionAutocomplete({
 
   const showList = open && suggestions.length > 0;
 
-  // Die Trefferliste beginnt immer markiert beim ersten (besten) Treffer -
-  // das ist die "Vorauswahl", die per Klick, Tab, Enter oder Leertaste
-  // übernommen werden kann.
   useEffect(() => {
     setHighlight(0);
   }, [value, suggestions.length]);
@@ -87,11 +88,9 @@ const SuggestionAutocomplete = forwardRef(function SuggestionAutocomplete({
   function accept(suggestion) {
     onChange(suggestion);
     setOpen(false);
+    setNavActive(false);
   }
 
-  // Liefert den markierten ("vorausgewählten") Vorschlag: exakter Treffer
-  // hat Vorrang, sonst der aktuell hervorgehobene Eintrag (Standard: der
-  // erste/beste Treffer, per Pfeiltasten änderbar).
   function bestSuggestion() {
     if (!suggestions.length) return null;
     const exact = suggestions.find((s) => s.toLowerCase() === value.trim().toLowerCase());
@@ -101,41 +100,66 @@ const SuggestionAutocomplete = forwardRef(function SuggestionAutocomplete({
 
   function handleFocus() {
     setOpen(true);
+    setNavActive(false);
     updateTooltip();
   }
 
   function handleBlur() {
     onCommit?.(value);
     setTimeout(() => {
-      if (wrapRef.current && !wrapRef.current.contains(document.activeElement)) setOpen(false);
+      if (wrapRef.current && !wrapRef.current.contains(document.activeElement)) {
+        setOpen(false);
+        setNavActive(false);
+      }
     }, 120);
   }
 
   function handleKeyDown(e) {
     if (e.key === "ArrowDown" && open && suggestions.length) {
       e.preventDefault();
+      // Erster Pfeil markiert den aktuellen Eintrag (oft Index 0), ohne zu springen.
+      if (!navActive) {
+        setNavActive(true);
+        return;
+      }
       setHighlight((h) => Math.min(h + 1, suggestions.length - 1));
       return;
     }
     if (e.key === "ArrowUp" && open && suggestions.length) {
       e.preventDefault();
+      if (!navActive) {
+        setNavActive(true);
+        return;
+      }
       setHighlight((h) => Math.max(h - 1, 0));
       return;
     }
-    if (e.key === "Tab" && !e.shiftKey && open && suggestions.length && value.trim()) {
+    if (e.key === "Tab" && !e.shiftKey && open && suggestions.length) {
       const pick = bestSuggestion();
-      if (pick && pick !== value) {
+      if (pick) {
+        if (pick !== value) {
+          e.preventDefault();
+          accept(pick);
+          focusNextField(inputRef.current);
+          return;
+        }
+        setOpen(false);
+      }
+    }
+    if (e.key === "Enter" && open && suggestions.length) {
+      const pick = bestSuggestion();
+      if (pick) {
         e.preventDefault();
-        accept(pick);
-        focusNextField(inputRef.current);
+        if (pick !== value) accept(pick);
+        else setOpen(false);
         return;
       }
     }
-    // Enter oder Leertaste übernehmen den markierten ("vorausgewählten")
-    // Vorschlag - genau wie ein Klick darauf.
-    if ((e.key === "Enter" || e.key === " ") && open && suggestions.length && value.trim()) {
-      const pick = bestSuggestion();
-      if (pick && pick !== value) {
+    // Leertaste: nur übernehmen, wenn Liste offen und ein Eintrag aktiv
+    // markiert ist (Pfeil oder Maus über Vorschlag). Sonst normales Leerzeichen.
+    if (e.key === " " && open && suggestions.length && navActive) {
+      const pick = suggestions[highlight] ?? suggestions[0];
+      if (pick) {
         e.preventDefault();
         accept(pick);
         return;
@@ -143,6 +167,7 @@ const SuggestionAutocomplete = forwardRef(function SuggestionAutocomplete({
     }
     if (e.key === "Escape") {
       setOpen(false);
+      setNavActive(false);
     }
   }
 
@@ -157,6 +182,7 @@ const SuggestionAutocomplete = forwardRef(function SuggestionAutocomplete({
         onChange={(e) => {
           onChange(e.target.value);
           setOpen(true);
+          setNavActive(false);
         }}
         onFocus={handleFocus}
         onBlur={handleBlur}
@@ -179,7 +205,10 @@ const SuggestionAutocomplete = forwardRef(function SuggestionAutocomplete({
               className={"autocompleteItem" + (idx === highlight ? " active" : "")}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => accept(s)}
-              onMouseEnter={() => setHighlight(idx)}
+              onMouseEnter={() => {
+                setHighlight(idx);
+                setNavActive(true);
+              }}
             >
               {s}
             </li>

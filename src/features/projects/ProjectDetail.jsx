@@ -1,10 +1,8 @@
 import { useRef, useState } from "react";
 import ProjectHeader from "../../components/ProjectHeader";
 import { projectStatus, baugruppeStatus } from "../../utils/helpers";
-import { buildProjectStructure, parseEinbauort } from "../../utils/structure";
+import { buildProjectStructure, parseEinbauort, UNGROUPED_LABEL } from "../../utils/structure";
 
-// Projektseite: Baugruppen/Bauteile aus project_structure (Supabase),
-// ergänzt um Materialpositionen. Anlegen/Umbenennen/Löschen synchronisiert.
 export default function ProjectDetail({
   project,
   items,
@@ -19,6 +17,10 @@ export default function ProjectDetail({
   deleteBauteil,
   renameBaugruppe,
   renameBauteil,
+  groupBauteile,
+  renameBauteilgruppe,
+  setBauteileInGruppe,
+  dissolveBauteilgruppe,
 }) {
   const [newBaugruppe, setNewBaugruppe] = useState("");
   const [addingBauteilTo, setAddingBauteilTo] = useState(null);
@@ -27,6 +29,12 @@ export default function ProjectDetail({
   const [renameBaugruppeValue, setRenameBaugruppeValue] = useState("");
   const [renamingBauteil, setRenamingBauteil] = useState(null);
   const [renameBauteilValue, setRenameBauteilValue] = useState("");
+  const [groupingFor, setGroupingFor] = useState(null); // baugruppe name
+  const [groupName, setGroupName] = useState("");
+  const [groupSelected, setGroupSelected] = useState([]);
+  const [editingGroup, setEditingGroup] = useState(null); // { baugruppe, bauteilgruppe }
+  const [editGroupName, setEditGroupName] = useState("");
+  const [editGroupMembers, setEditGroupMembers] = useState([]);
   const newBaugruppeInputRef = useRef(null);
 
   const structure = buildProjectStructure(project, items, structureRows);
@@ -37,9 +45,7 @@ export default function ProjectDetail({
     try {
       await addBaugruppe?.(project.id, newBaugruppe.trim());
       setNewBaugruppe("");
-    } catch {
-      // Fehler bereits gemeldet
-    }
+    } catch { /* gemeldet */ }
   }
 
   async function handleAddBauteil(baugruppeName, e) {
@@ -49,18 +55,14 @@ export default function ProjectDetail({
       await addBauteil?.(project.id, baugruppeName, newBauteil.trim());
       setNewBauteil("");
       setAddingBauteilTo(null);
-    } catch {
-      // Fehler bereits gemeldet
-    }
+    } catch { /* gemeldet */ }
   }
 
   async function handleDeleteProject() {
     if (!confirm("Projekt wirklich dauerhaft löschen?")) return;
     try {
       await deleteProject(project.id);
-    } catch {
-      // Fehler bereits gemeldet
-    }
+    } catch { /* gemeldet */ }
   }
 
   async function handleDeleteBaugruppe(baugruppeName) {
@@ -70,9 +72,7 @@ export default function ProjectDetail({
     if (!ok) return;
     try {
       await deleteBaugruppe?.(project.id, baugruppeName);
-    } catch {
-      // Fehler bereits gemeldet
-    }
+    } catch { /* gemeldet */ }
   }
 
   async function handleDeleteBauteil(baugruppeName, bauteilName) {
@@ -82,9 +82,7 @@ export default function ProjectDetail({
     if (!ok) return;
     try {
       await deleteBauteil?.(project.id, baugruppeName, bauteilName);
-    } catch {
-      // Fehler bereits gemeldet
-    }
+    } catch { /* gemeldet */ }
   }
 
   function startRenameBaugruppe(name) {
@@ -99,9 +97,7 @@ export default function ProjectDetail({
     try {
       await renameBaugruppe?.(project.id, oldName, clean);
       setRenamingBaugruppe(null);
-    } catch {
-      // Fehler bereits gemeldet
-    }
+    } catch { /* gemeldet */ }
   }
 
   function startRenameBauteil(baugruppeName, bauteilName) {
@@ -116,9 +112,126 @@ export default function ProjectDetail({
     try {
       await renameBauteil?.(project.id, baugruppeName, oldName, clean);
       setRenamingBauteil(null);
-    } catch {
-      // Fehler bereits gemeldet
+    } catch { /* gemeldet */ }
+  }
+
+  function startGrouping(baugruppeName) {
+    setGroupingFor(baugruppeName);
+    setGroupName("");
+    setGroupSelected([]);
+    setEditingGroup(null);
+  }
+
+  function toggleGroupSelect(bt) {
+    setGroupSelected((prev) =>
+      prev.includes(bt) ? prev.filter((x) => x !== bt) : [...prev, bt]
+    );
+  }
+
+  async function submitGrouping(e) {
+    e.preventDefault();
+    try {
+      await groupBauteile?.(project.id, groupingFor, groupSelected, groupName);
+      setGroupingFor(null);
+      setGroupName("");
+      setGroupSelected([]);
+    } catch { /* gemeldet */ }
+  }
+
+  function startEditGroup(baugruppeName, section) {
+    if (section.ungrouped || !section.bauteilgruppe) return;
+    setEditingGroup({ baugruppe: baugruppeName, bauteilgruppe: section.bauteilgruppe });
+    setEditGroupName(section.bauteilgruppe);
+    setEditGroupMembers([...section.bauteile]);
+    setGroupingFor(null);
+  }
+
+  function toggleEditMember(bt) {
+    setEditGroupMembers((prev) =>
+      prev.includes(bt) ? prev.filter((x) => x !== bt) : [...prev, bt]
+    );
+  }
+
+  async function submitEditGroup(e, allBauteile) {
+    e.preventDefault();
+    if (!editingGroup) return;
+    try {
+      if (editGroupName.trim() !== editingGroup.bauteilgruppe) {
+        await renameBauteilgruppe?.(
+          project.id,
+          editingGroup.baugruppe,
+          editingGroup.bauteilgruppe,
+          editGroupName.trim()
+        );
+      }
+      await setBauteileInGruppe?.(
+        project.id,
+        editingGroup.baugruppe,
+        editGroupName.trim() || editingGroup.bauteilgruppe,
+        editGroupMembers
+      );
+      setEditingGroup(null);
+    } catch { /* gemeldet */ }
+  }
+
+  async function handleDissolve(baugruppeName, groupName) {
+    const ok = confirm(
+      "Bauteilgruppe wirklich auflösen? Die Bauteile und Materialpositionen bleiben erhalten."
+    );
+    if (!ok) return;
+    try {
+      await dissolveBauteilgruppe?.(project.id, baugruppeName, groupName);
+      setEditingGroup(null);
+    } catch { /* gemeldet */ }
+  }
+
+  function renderBauteilChip(baugruppe, bauteil) {
+    const isRenaming =
+      renamingBauteil &&
+      renamingBauteil.baugruppe === baugruppe &&
+      renamingBauteil.bauteil === bauteil;
+    if (isRenaming) {
+      return (
+        <form
+          key={bauteil}
+          className="inlineForm chipInlineForm"
+          onSubmit={(e) => submitRenameBauteil(e, baugruppe, bauteil)}
+        >
+          <input
+            autoFocus
+            value={renameBauteilValue}
+            onChange={(e) => setRenameBauteilValue(e.target.value)}
+          />
+          <button>Speichern</button>
+          <button type="button" className="ghost" onClick={() => setRenamingBauteil(null)}>
+            Abbrechen
+          </button>
+        </form>
+      );
     }
+    return (
+      <span className="chipWithEdit" key={bauteil}>
+        <button className="chip" onClick={() => openBauteil(baugruppe, bauteil)}>
+          {bauteil}
+        </button>
+        <button
+          type="button"
+          className="ghost chipEdit"
+          title="Bauteil umbenennen"
+          onClick={() => startRenameBauteil(baugruppe, bauteil)}
+        >
+          ✎
+        </button>
+        <button
+          type="button"
+          className="ghost chipEdit dangerBtnSmall"
+          title="Bauteil löschen"
+          onClick={() => handleDeleteBauteil(baugruppe, bauteil)}
+        >
+          ×
+        </button>
+      </span>
+    );
   }
 
   return (
@@ -128,11 +241,13 @@ export default function ProjectDetail({
 
       <h3>Baugruppen &amp; Bauteile</h3>
 
-      {structure.map(({ baugruppe, bauteile }) => {
+      {structure.map(({ baugruppe, bauteile, sections }) => {
         const baugruppeItems = items.filter(
           (i) => parseEinbauort(i.einbauort, project?.baugruppe).baugruppe === baugruppe
         );
         const status = baugruppeStatus(baugruppeItems);
+        const hasNamedGroups = sections.some((s) => s.bauteilgruppe && !s.ungrouped);
+
         return (
           <div className="card" key={baugruppe}>
             {renamingBaugruppe === baugruppe ? (
@@ -166,57 +281,119 @@ export default function ProjectDetail({
                 </button>
               </h3>
             )}
-            <div className="chipRow">
-              {bauteile.length === 0 && <p className="hint">Noch keine Bauteile angelegt.</p>}
-              {bauteile.map((bauteil) => {
-                const isRenaming =
-                  renamingBauteil &&
-                  renamingBauteil.baugruppe === baugruppe &&
-                  renamingBauteil.bauteil === bauteil;
-                if (isRenaming) {
-                  return (
-                    <form
-                      key={bauteil}
-                      className="inlineForm chipInlineForm"
-                      onSubmit={(e) => submitRenameBauteil(e, baugruppe, bauteil)}
-                    >
-                      <input
-                        autoFocus
-                        value={renameBauteilValue}
-                        onChange={(e) => setRenameBauteilValue(e.target.value)}
-                      />
-                      <button>Speichern</button>
-                      <button type="button" className="ghost" onClick={() => setRenamingBauteil(null)}>
-                        Abbrechen
-                      </button>
-                    </form>
-                  );
-                }
+
+            {sections.map((section) => {
+              const label = section.bauteilgruppe;
+              const showLabel = hasNamedGroups || (label && !section.ungrouped);
+              const isEditing =
+                editingGroup &&
+                editingGroup.baugruppe === baugruppe &&
+                editingGroup.bauteilgruppe === section.bauteilgruppe;
+
+              if (isEditing) {
                 return (
-                  <span className="chipWithEdit" key={bauteil}>
-                    <button className="chip" onClick={() => openBauteil(baugruppe, bauteil)}>
-                      {bauteil}
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost chipEdit"
-                      title="Bauteil umbenennen"
-                      onClick={() => startRenameBauteil(baugruppe, bauteil)}
-                    >
-                      ✎
-                    </button>
-                    <button
-                      type="button"
-                      className="ghost chipEdit dangerBtnSmall"
-                      title="Bauteil löschen"
-                      onClick={() => handleDeleteBauteil(baugruppe, bauteil)}
-                    >
-                      ×
-                    </button>
-                  </span>
+                  <div className="bauteilgruppeBlock" key={`${baugruppe}|edit|${section.bauteilgruppe}`}>
+                    <form className="form" onSubmit={(e) => submitEditGroup(e, bauteile)}>
+                      <label className="hint">Bauteilgruppe umbenennen / Mitglieder</label>
+                      <input
+                        value={editGroupName}
+                        onChange={(e) => setEditGroupName(e.target.value)}
+                        placeholder="Gruppenname"
+                        required
+                      />
+                      <div className="chipRow">
+                        {bauteile.map((bt) => (
+                          <label key={bt} className="checkboxLine">
+                            <input
+                              type="checkbox"
+                              checked={editGroupMembers.includes(bt)}
+                              onChange={() => toggleEditMember(bt)}
+                            />
+                            {bt}
+                          </label>
+                        ))}
+                      </div>
+                      <div className="inlineForm">
+                        <button type="submit">Speichern</button>
+                        <button type="button" className="ghost" onClick={() => setEditingGroup(null)}>
+                          Abbrechen
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost dangerBtnSmall"
+                          onClick={() => handleDissolve(baugruppe, section.bauteilgruppe)}
+                        >
+                          Auflösen
+                        </button>
+                      </div>
+                    </form>
+                  </div>
                 );
-              })}
-            </div>
+              }
+
+              return (
+                <div className="bauteilgruppeBlock" key={`${baugruppe}|${label || "flat"}`}>
+                  {showLabel && label ? (
+                    <div className="bauteilgruppeHead">
+                      <h4>{label === UNGROUPED_LABEL ? UNGROUPED_LABEL : `Bauteilgruppe: ${label}`}</h4>
+                      {!section.ungrouped && (
+                        <button
+                          type="button"
+                          className="ghost renameBtn"
+                          onClick={() => startEditGroup(baugruppe, section)}
+                        >
+                          Bearbeiten
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
+                  <div className="chipRow">
+                    {section.bauteile.length === 0 && (
+                      <p className="hint">Noch keine Bauteile angelegt.</p>
+                    )}
+                    {section.bauteile.map((bt) => renderBauteilChip(baugruppe, bt))}
+                  </div>
+                </div>
+              );
+            })}
+
+            {groupingFor === baugruppe ? (
+              <form className="form bauteilgruppeForm" onSubmit={submitGrouping}>
+                <h4>Bauteile gruppieren</h4>
+                <input
+                  autoFocus
+                  placeholder="Name der Bauteilgruppe (z. B. Stützen)"
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  required
+                />
+                <div className="chipRow">
+                  {bauteile.map((bt) => (
+                    <label key={bt} className="checkboxLine">
+                      <input
+                        type="checkbox"
+                        checked={groupSelected.includes(bt)}
+                        onChange={() => toggleGroupSelect(bt)}
+                      />
+                      {bt}
+                    </label>
+                  ))}
+                </div>
+                <div className="inlineForm">
+                  <button type="submit">Gruppieren</button>
+                  <button type="button" className="ghost" onClick={() => setGroupingFor(null)}>
+                    Abbrechen
+                  </button>
+                </div>
+              </form>
+            ) : (
+              bauteile.length >= 2 && (
+                <button className="ghost" onClick={() => startGrouping(baugruppe)}>
+                  Bauteile gruppieren
+                </button>
+              )
+            )}
+
             {addingBauteilTo === baugruppe ? (
               <form className="inlineForm" onSubmit={(e) => handleAddBauteil(baugruppe, e)}>
                 <input autoFocus placeholder="Bauteilname (z. B. Stütze S1)" value={newBauteil} onChange={(e) => setNewBauteil(e.target.value)} />

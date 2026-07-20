@@ -84,6 +84,7 @@ function App() {
         project_id: c.project_id,
         baugruppe: c.baugruppe,
         bauteil: c.bauteil,
+        bauteilgruppe: null,
         sort_order: null,
       }));
       const { data, error } = await supabase.from("project_structure").insert(payload).select("*");
@@ -264,6 +265,7 @@ function App() {
       project_id: String(project_id),
       baugruppe: bg,
       bauteil: bt,
+      bauteilgruppe: null,
       sort_order: null,
     };
 
@@ -537,6 +539,139 @@ function App() {
     }
   }
 
+  // Bauteilgruppe: setzt bauteilgruppe auf mehreren Bauteil-Zeilen derselben Baugruppe.
+  // Materialpositionen und Mengen bleiben unverändert.
+  async function groupBauteile(pid, baugruppeName, bauteilNames, groupName) {
+    const cleanGroup = String(groupName || "").trim();
+    const list = (bauteilNames || []).map((b) => String(b || "").trim()).filter(Boolean);
+    if (!cleanGroup) {
+      alert("Bitte einen Namen für die Bauteilgruppe eingeben.");
+      return;
+    }
+    if (list.length < 2) {
+      alert("Bitte mindestens zwei Bauteile auswählen.");
+      return;
+    }
+    const existingNames = new Set(
+      structureRowsRef.current
+        .filter(
+          (r) =>
+            String(r.project_id) === String(pid) &&
+            r.baugruppe === baugruppeName &&
+            r.bauteil &&
+            r.bauteilgruppe
+        )
+        .map((r) => String(r.bauteilgruppe).trim())
+    );
+    if (existingNames.has(cleanGroup)) {
+      alert("Dieser Gruppenname existiert in dieser Baugruppe bereits.");
+      return;
+    }
+    const sortOrder = Date.now();
+    await patchBauteilgruppe(pid, baugruppeName, list, cleanGroup, sortOrder);
+  }
+
+  async function renameBauteilgruppe(pid, baugruppeName, oldGroupName, newGroupName) {
+    const clean = String(newGroupName || "").trim();
+    if (!clean || clean === oldGroupName) return;
+    const clash = structureRowsRef.current.some(
+      (r) =>
+        String(r.project_id) === String(pid) &&
+        r.baugruppe === baugruppeName &&
+        String(r.bauteilgruppe || "").trim() === clean
+    );
+    if (clash) {
+      alert("Dieser Gruppenname existiert in dieser Baugruppe bereits.");
+      return;
+    }
+    const bauteile = structureRowsRef.current
+      .filter(
+        (r) =>
+          String(r.project_id) === String(pid) &&
+          r.baugruppe === baugruppeName &&
+          String(r.bauteilgruppe || "").trim() === oldGroupName
+      )
+      .map((r) => String(r.bauteil));
+    await patchBauteilgruppe(pid, baugruppeName, bauteile, clean, null);
+  }
+
+  async function setBauteileInGruppe(pid, baugruppeName, groupName, bauteilNames) {
+    const cleanGroup = String(groupName || "").trim();
+    const want = new Set((bauteilNames || []).map((b) => String(b).trim()).filter(Boolean));
+    const inGroup = structureRowsRef.current.filter(
+      (r) =>
+        String(r.project_id) === String(pid) &&
+        r.baugruppe === baugruppeName &&
+        String(r.bauteilgruppe || "").trim() === cleanGroup
+    );
+    const sortOrder =
+      inGroup.find((r) => r.sort_order != null)?.sort_order ?? Date.now();
+    const toAdd = [...want].filter(
+      (bt) =>
+        !inGroup.some((r) => String(r.bauteil) === bt)
+    );
+    const toRemove = inGroup
+      .map((r) => String(r.bauteil))
+      .filter((bt) => !want.has(bt));
+    if (toAdd.length) await patchBauteilgruppe(pid, baugruppeName, toAdd, cleanGroup, sortOrder);
+    if (toRemove.length) await patchBauteilgruppe(pid, baugruppeName, toRemove, null, null);
+  }
+
+  async function dissolveBauteilgruppe(pid, baugruppeName, groupName) {
+    const bauteile = structureRowsRef.current
+      .filter(
+        (r) =>
+          String(r.project_id) === String(pid) &&
+          r.baugruppe === baugruppeName &&
+          String(r.bauteilgruppe || "").trim() === groupName
+      )
+      .map((r) => String(r.bauteil));
+    await patchBauteilgruppe(pid, baugruppeName, bauteile, null, null);
+  }
+
+  async function patchBauteilgruppe(pid, baugruppeName, bauteilNames, groupName, sortOrder) {
+    const list = (bauteilNames || []).map((b) => String(b || "").trim()).filter(Boolean);
+    if (!list.length) return;
+    const patch = {
+      bauteilgruppe: groupName,
+    };
+    if (sortOrder != null) patch.sort_order = sortOrder;
+
+    if (supabase) {
+      for (const bt of list) {
+        const { error } = await supabase
+          .from("project_structure")
+          .update(patch)
+          .eq("project_id", pid)
+          .eq("baugruppe", baugruppeName)
+          .eq("bauteil", bt);
+        if (error) {
+          console.error("MONTA: Bauteilgruppe speichern fehlgeschlagen.", error);
+          alert(`Bauteilgruppe konnte nicht gespeichert werden: ${error.message || "unbekannter Fehler"}`);
+          throw error;
+        }
+      }
+    }
+
+    loadGeneration.current += 1;
+    setStructureRows((prev) =>
+      prev.map((r) => {
+        if (
+          String(r.project_id) !== String(pid) ||
+          r.baugruppe !== baugruppeName ||
+          !list.includes(String(r.bauteil || ""))
+        ) {
+          return r;
+        }
+        return {
+          ...r,
+          bauteilgruppe: groupName,
+          ...(sortOrder != null ? { sort_order: sortOrder } : {}),
+        };
+      })
+    );
+  }
+
   function openBauteil(baugruppeName, bauteilName) {
     setSelectedBaugruppe(baugruppeName);
     setSelectedBauteil(bauteilName);
@@ -664,6 +799,10 @@ function App() {
           deleteBauteil={deleteBauteil}
           renameBaugruppe={renameBaugruppe}
           renameBauteil={renameBauteil}
+          groupBauteile={groupBauteile}
+          renameBauteilgruppe={renameBauteilgruppe}
+          setBauteileInGruppe={setBauteileInGruppe}
+          dissolveBauteilgruppe={dissolveBauteilgruppe}
         />
       )}
 
@@ -676,6 +815,7 @@ function App() {
           baugruppeItems={baugruppeItems}
           projectItems={projectItems}
           allItems={items}
+          structureRows={structureRows}
           backToDetail={() => setView("projectDetail")}
           isNarrow={isNarrow}
           tab={tab}

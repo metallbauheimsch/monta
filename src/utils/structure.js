@@ -151,8 +151,95 @@ export function hasStructureRow(rows, projectId, baugruppe, bauteil) {
   );
 }
 
+export function findBauteilRow(rows, projectId, baugruppe, bauteil) {
+  const key = structureRowKey(projectId, baugruppe, bauteil);
+  return (rows || []).find(
+    (r) => structureRowKey(r.project_id, r.baugruppe, r.bauteil) === key && !isBaugruppeRow(r)
+  ) || null;
+}
+
+export function getBauteilgruppe(rows, projectId, baugruppe, bauteil) {
+  const row = findBauteilRow(rows, projectId, baugruppe, bauteil);
+  const g = row?.bauteilgruppe;
+  return g == null || String(g).trim() === "" ? null : String(g).trim();
+}
+
+const UNGROUPED_LABEL = "Nicht gruppiert";
+
+// Abschnitte einer Baugruppe: benannte Bauteilgruppen (Anlage-Reihenfolge)
+// plus optional „Nicht gruppiert“, wenn mindestens eine Gruppe existiert.
+export function buildBaugruppeSections(projectId, baugruppe, bauteile, structureRows = []) {
+  const pid = String(projectId || "");
+  const bg = String(baugruppe || "").trim();
+  const meta = new Map(); // bauteil -> { bauteilgruppe, createdAt, sortOrder }
+
+  (structureRows || [])
+    .filter((r) => String(r.project_id || "") === pid && String(r.baugruppe || "").trim() === bg)
+    .filter((r) => !isBaugruppeRow(r))
+    .forEach((r) => {
+      const bt = String(r.bauteil || "").trim();
+      if (!bt) return;
+      const gruppe = r.bauteilgruppe == null || String(r.bauteilgruppe).trim() === ""
+        ? null
+        : String(r.bauteilgruppe).trim();
+      meta.set(bt, {
+        bauteilgruppe: gruppe,
+        createdAt: r.created_at || "",
+        sortOrder: r.sort_order == null ? null : Number(r.sort_order),
+      });
+    });
+
+  (bauteile || []).forEach((bt) => {
+    if (!meta.has(bt)) meta.set(bt, { bauteilgruppe: null, createdAt: "", sortOrder: null });
+  });
+
+  const groupOrder = new Map(); // groupName -> min sort/created
+  meta.forEach((m, bt) => {
+    if (!m.bauteilgruppe) return;
+    const key = m.bauteilgruppe;
+    const stamp = m.sortOrder != null && !Number.isNaN(m.sortOrder)
+      ? m.sortOrder
+      : Date.parse(m.createdAt) || 0;
+    if (!groupOrder.has(key) || stamp < groupOrder.get(key)) groupOrder.set(key, stamp);
+  });
+
+  const named = Array.from(groupOrder.entries())
+    .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0], undefined, { numeric: true }))
+    .map(([name]) => {
+      const list = Array.from(meta.entries())
+        .filter(([, m]) => m.bauteilgruppe === name)
+        .sort((a, b) => {
+          const ca = Date.parse(a[1].createdAt) || 0;
+          const cb = Date.parse(b[1].createdAt) || 0;
+          return ca - cb || a[0].localeCompare(b[0], undefined, { numeric: true });
+        })
+        .map(([bt]) => bt);
+      return { bauteilgruppe: name, bauteile: list, ungrouped: false };
+    });
+
+  const ungrouped = Array.from(meta.entries())
+    .filter(([, m]) => !m.bauteilgruppe)
+    .sort((a, b) => {
+      const ca = Date.parse(a[1].createdAt) || 0;
+      const cb = Date.parse(b[1].createdAt) || 0;
+      return ca - cb || a[0].localeCompare(b[0], undefined, { numeric: true });
+    })
+    .map(([bt]) => bt);
+
+  const sections = [...named];
+  if (named.length > 0 && ungrouped.length > 0) {
+    sections.push({ bauteilgruppe: UNGROUPED_LABEL, bauteile: ungrouped, ungrouped: true });
+  } else if (named.length === 0) {
+    sections.push({ bauteilgruppe: null, bauteile: ungrouped, ungrouped: true });
+  }
+
+  return sections;
+}
+
+export { UNGROUPED_LABEL };
+
 // Baut die Übersicht aus project_structure (+ Materialpositionen als
-// Sicherheitsnetz, falls ein Eintrag nur dort vorkommt).
+// Sicherheitsnetz). Enthält zusätzlich Bauteilgruppen-Abschnitte.
 export function buildProjectStructure(project, items, structureRows = []) {
   const map = new Map();
   const pid = String(project?.id || "");
@@ -174,10 +261,14 @@ export function buildProjectStructure(project, items, structureRows = []) {
     map.get(baugruppe).add(bauteil);
   });
 
-  return Array.from(map.entries()).map(([baugruppe, bauteile]) => ({
-    baugruppe,
-    bauteile: Array.from(bauteile),
-  }));
+  return Array.from(map.entries()).map(([baugruppe, bauteileSet]) => {
+    const bauteile = Array.from(bauteileSet);
+    return {
+      baugruppe,
+      bauteile,
+      sections: buildBaugruppeSections(pid, baugruppe, bauteile, structureRows),
+    };
+  });
 }
 
 // --- Lokaler Fallback (kein Supabase) ---------------------------------

@@ -30,11 +30,18 @@ Baugruppe
 
 ↓
 
+Bauteilgruppe (optional)
+
+↓
+
 Bauteil
 
 ↓
 
 Materialposition
+
+Bauteilgruppen fassen nur die Anzeige/Struktur zusammen. Bauteile und
+Materialpositionen bleiben eigenständig; Mengen werden nicht verändert.
 
 ---
 
@@ -171,7 +178,13 @@ Die Materialzuordnung erfolgt nach:
 
 - Baugruppe
 
+- Bauteilgruppe (optional)
+
 - Bauteil
+
+Die Druckansicht zeigt die Hierarchie Baugruppe → Bauteilgruppe → Bauteil
+mit kompakten Überschriften; die Bauteilgruppe wird nicht auf jeder
+Materialzeile wiederholt.
 
 Die Druckansicht wird über anklickbare Spaltenüberschriften sortiert (wie TB, Lager und Warenkorb), nicht über separate Sortierbuttons.
 
@@ -186,6 +199,10 @@ und geräteübergreifend synchronisiert.
 
 Baugruppen und Bauteile können umbenannt und nach Sicherheitsabfrage
 gelöscht werden.
+
+Innerhalb einer Baugruppe können Bauteile optional zu Bauteilgruppen
+zusammengefasst werden. Die Gruppierung synchronisiert über Supabase und
+ändert keine Materialzuordnung und keine Mengen.
 
 ---
 
@@ -203,8 +220,9 @@ Die Darstellung erfolgt automatisch responsiv über die Bildschirmbreite.
 
 Es gibt keinen manuellen PC/Mobil-Umschalter.
 
-Auf schmalen Bildschirmen sind TB und Prüfung ausgeblendet; sichtbar bleiben
-Lager, Warenkorb und Druck. Die Erfassung erfolgt am PC.
+Bis einschließlich 1024 px Bildschirmbreite (Smartphone und Tablet, auch
+Querformat) sind TB und Prüfung ausgeblendet; sichtbar bleiben Lager,
+Warenkorb und Druck. Die Erfassung erfolgt am PC.
 
 Pull-to-Refresh am Smartphone/Tablet ist der normale Browser-Reload.
 
@@ -213,7 +231,7 @@ Pull-to-Refresh am Smartphone/Tablet ist der normale Browser-Reload.
 ## Daten und Synchronisation
 
 Supabase ist die zentrale Datenquelle für Projekte, Projektstruktur
-(Baugruppen/Bauteile) und Materialpositionen.
+(Baugruppen/Bauteile/Bauteilgruppen) und Materialpositionen.
 
 Lokale Oberflächen-Updates erfolgen sofort nach erfolgreichem Schreiben.
 
@@ -247,6 +265,11 @@ werden.
 - keine ausklappbaren Detailansichten, wenn eine direkte Anzeige möglich ist
 
 - Tabellenüberschriften sind anklickbar und sortieren die jeweilige Spalte (kein Dialog, kein Einstellungsmenü)
+
+- Freitextsuche in TB, Prüfung, Lager und Warenkorb (nicht persistiert)
+
+- TB-Vorschlagslisten: Übernahme per Enter/Leertaste bei markiertem Eintrag;
+  freies Leerzeichen bleibt möglich
 
 ---
 

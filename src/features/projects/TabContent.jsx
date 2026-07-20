@@ -4,22 +4,6 @@ import LagerView from "../fastening/LagerView";
 import Checks from "../fastening/Checks";
 import PrintView from "../fastening/PrintView";
 
-// Reihenfolge/Bezeichnung der Reiter: siehe utils/tabs.js
-// - tb: aktuelles Bauteil (schnelle PC-Erfassung)
-// - pruefung: aktuelle Baugruppe
-// - material (Anzeige "Lager") / bestellliste (Anzeige "Warenkorb") / druck: gesamtes Projekt
-//
-// Sprint 3: Reiter "Montage" entfernt (siehe utils/tabs.js). Die Druckansicht
-// ist bereits unabhängig von der Montageansicht (eigene Props, kein Import).
-//
-// Sprint 5: Lager zeigt jetzt projektweit alle Positionen (inkl. Baugruppe
-// je Zeile) statt nur die aktuelle Baugruppe - entspricht dem tatsächlichen
-// Arbeitsablauf im Lager.
-//
-// Sprint 7: Die Druckansicht (Montageunterlage) zeigt bewusst nur noch die
-// aktuell geöffnete Baugruppe (baugruppeItems) statt des ganzen Projekts -
-// sie wird immer aus dem Arbeitskontext einer Baugruppe heraus aufgerufen
-// und soll genau diese Montage abbilden.
 export default function TabContent({
   tab,
   project,
@@ -28,6 +12,7 @@ export default function TabContent({
   bauteilItems,
   baugruppeItems,
   projectItems,
+  structureRows,
   addItem,
   updateItem,
   deleteItem,
@@ -37,11 +22,13 @@ export default function TabContent({
       <TechnikerEditor
         items={bauteilItems}
         allProjectItems={projectItems}
+        structureRows={structureRows}
         addItem={addItem}
         updateItem={updateItem}
         deleteItem={deleteItem}
         baugruppe={baugruppe}
         bauteil={bauteil}
+        project={project}
       />
     );
   }
@@ -51,6 +38,7 @@ export default function TabContent({
         items={baugruppeItems}
         baugruppe={baugruppe}
         project={project}
+        structureRows={structureRows}
       />
     );
   if (tab === "material")
@@ -59,6 +47,7 @@ export default function TabContent({
         items={projectItems}
         updateItem={updateItem}
         project={project}
+        structureRows={structureRows}
       />
     );
   if (tab === "bestellliste")
@@ -67,6 +56,7 @@ export default function TabContent({
         items={projectItems}
         project={project}
         updateItem={updateItem}
+        structureRows={structureRows}
       />
     );
   if (tab === "druck")
@@ -75,6 +65,7 @@ export default function TabContent({
         project={project}
         baugruppe={baugruppe}
         items={baugruppeItems}
+        structureRows={structureRows}
       />
     );
   return null;

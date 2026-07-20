@@ -496,6 +496,45 @@ Bestehende Projektdaten bleiben erhalten. SQL-Patch manuell ausführen:
 
 ---
 
+# Bedien-Sprint: Suche, Tastaturauswahl und Bauteilgruppen
+
+## Freitextsuche
+
+- Kompakte Suche oberhalb der Tabellen in TB, Prüfung, Lager und Warenkorb.
+- Filtert sofort (Groß-/Kleinschreibung egal, Teilbegriffe, Mehrwort-AND).
+- Durchsucht u. a. Positionsnummer, Baugruppe, Bauteilgruppe, Bauteil,
+  Bezeichnung, Größe, Länge, Ausführung, Regalfach, Hinweis, Herkunft.
+- × löscht die Suche; keine Persistenz, keine Datenänderung.
+
+## Mobile / Tablet
+
+- Bis einschließlich 1024 px: TB und Prüfung ausgeblendet.
+- Sichtbar: Lager, Warenkorb, Druck.
+- Wird der aktive Reiter ausgeblendet, Wechsel auf Lager.
+- Kein manueller PC/Mobil-Umschalter.
+
+## Tastatur in TB-Vorschlägen
+
+- Pfeile markieren, Enter und Leertaste übernehmen den markierten Vorschlag.
+- Freies Leerzeichen bleibt möglich, wenn kein Vorschlag markiert ist.
+- Escape schließt, Tab übernimmt und geht weiter.
+
+## Bauteilgruppen
+
+- Innerhalb einer Baugruppe können Bauteile zu einer Bauteilgruppe
+  zusammengefasst werden (Name, Umbenennen, Mitglieder, Auflösen).
+- Bauteile und Material bleiben eigenständig; Mengen unverändert.
+- Speicherung: nullable Spalte `bauteilgruppe` in `project_structure`.
+- Darstellung Baugruppe → Bauteilgruppe → Bauteil in allen relevanten Reitern
+  und in der Druckansicht; „Nicht gruppiert" nur wenn Gruppen existieren.
+- Sortierung nach Bauteilgruppe möglich; Standard: Anlage-Reihenfolge.
+- Synchronisation wie bei Baugruppen/Bauteilen (Realtime, Fokus, Fallback,
+  Pull-to-Refresh).
+
+SQL-Patch manuell: `supabase_patch_component_groups.sql`.
+
+---
+
 # Regeln
 
 Nach jedem abgeschlossenen Sprint werden hier ergänzt:

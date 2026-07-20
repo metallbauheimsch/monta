@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { groupBy, baugruppeStatus } from "../../utils/helpers";
-import { parseEinbauort } from "../../utils/structure";
+import { parseEinbauort, getBauteilgruppe } from "../../utils/structure";
 import { naturalCompare, useSortableColumns } from "../../utils/sorting";
+import { filterBySearch } from "../../utils/textSearch";
 import { regalOrderIndex, getRegalPlatz } from "./regalOrder";
 import { distribute, readManualValues, writeManualValues } from "./stock";
 import { buildHerkunft } from "./herkunft";
+import SearchField from "../../components/SearchField";
 
 // Lager (Sprint 5 Erweiterung #1/#2): baugleiche Positionen werden je
 // Baugruppe automatisch zusammengefasst (gleiche Bezeichnung/Größe/Länge/
@@ -60,6 +62,7 @@ function compareByColumn(a, b, key) {
   if (key === "menge" || key === "rest" || key === "gelegt") {
     return (Number(a[key]) || 0) - (Number(b[key]) || 0);
   }
+  // bauteilgruppe und übrige Textspalten: natürliche Sortierung
   return naturalCompare(a[key], b[key]);
 }
 
@@ -74,11 +77,23 @@ function sortLagerRows(rows, sortKey, sortDir) {
   return [...open, ...done];
 }
 
-export default function LagerView({ items, updateItem, project }) {
+function uniqueBauteilgruppen(arr) {
+  return [...new Set(arr.map((i) => i.bauteilgruppe).filter(Boolean))];
+}
+
+export default function LagerView({ items, updateItem, project, structureRows }) {
   const [manualValues, setManualValues] = useState(readManualValues);
+  const [search, setSearch] = useState("");
   const { sortKey, sortDir, toggleSort, arrow } = useSortableColumns(null);
 
-  const enriched = items.map((i) => ({ ...i, ...parseEinbauort(i.einbauort, project?.baugruppe) }));
+  const enriched = items.map((i) => {
+    const parsed = parseEinbauort(i.einbauort, project?.baugruppe);
+    return {
+      ...i,
+      ...parsed,
+      bauteilgruppe: getBauteilgruppe(structureRows, project?.id, parsed.baugruppe, parsed.bauteil),
+    };
+  });
   const byBaugruppe = groupBy(enriched, (i) => i.baugruppe);
   const baugruppeNames = Object.keys(byBaugruppe).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
@@ -120,6 +135,7 @@ export default function LagerView({ items, updateItem, project }) {
       <p className="hint">
         Baugleiche Positionen je Baugruppe zusammengefasst. Standard: Reihenfolge im Paternoster. Restmenge = Gesamtmenge − Vorhanden.
       </p>
+      <SearchField value={search} onChange={setSearch} />
       {baugruppeNames.length === 0 && <p>Keine Materialpositionen in diesem Projekt.</p>}
       {baugruppeNames.map((bg) => {
         const combos = groupBy(byBaugruppe[bg], comboKey);
@@ -129,13 +145,19 @@ export default function LagerView({ items, updateItem, project }) {
           const gelegt = arr.reduce((s, i) => s + Number(i.bereit || 0), 0);
           const rest = Math.max(0, menge - gelegt);
           const vollstaendig = menge > 0 && rest === 0;
-          const herkunft = buildHerkunft(bg, arr);
+          const gruppen = uniqueBauteilgruppen(arr);
+          const herkunft = buildHerkunft(bg, arr).map((h) => {
+            const sample = arr.find((i) => i.bauteil === h.bauteil);
+            return { ...h, bauteilgruppe: sample?.bauteilgruppe || null };
+          });
           return {
             key: `${project.id}|${bg}|${comboKey(first)}`,
             bezeichnung: first.bezeichnung,
             groesse: first.groesse,
             laenge: first.laenge,
             oberflaeche: first.oberflaeche,
+            bauteilgruppe: gruppen.join(", "),
+            baugruppe: bg,
             menge,
             gelegt,
             rest,
@@ -144,7 +166,22 @@ export default function LagerView({ items, updateItem, project }) {
             items: arr,
           };
         });
-        const sortedRows = sortLagerRows(rows, sortKey, sortDir);
+        const filteredRows = filterBySearch(rows, search, (row) => [
+          row.bezeichnung,
+          row.groesse,
+          row.laenge,
+          row.oberflaeche,
+          getRegalPlatz(row),
+          row.baugruppe,
+          row.bauteilgruppe,
+          ...row.herkunft.flatMap((h) => [
+            h.baugruppe,
+            h.bauteilgruppe,
+            h.bauteil,
+            ...(h.positions || []),
+          ]),
+        ]);
+        const sortedRows = sortLagerRows(filteredRows, sortKey, sortDir);
 
         const status = baugruppeStatus(byBaugruppe[bg]);
 
@@ -156,6 +193,7 @@ export default function LagerView({ items, updateItem, project }) {
                 <tbody>
                   <tr>
                     <th className="sortableTh" onClick={() => toggleSort("regal")}>Regalfach{arrow("regal")}</th>
+                    <th className="sortableTh" onClick={() => toggleSort("bauteilgruppe")}>Bauteilgruppe{arrow("bauteilgruppe")}</th>
                     <th className="sortableTh" onClick={() => toggleSort("bezeichnung")}>Bezeichnung{arrow("bezeichnung")}</th>
                     <th className="sortableTh" onClick={() => toggleSort("groesse")}>Größe{arrow("groesse")}</th>
                     <th className="sortableTh" onClick={() => toggleSort("laenge")}>Länge{arrow("laenge")}</th>
@@ -168,6 +206,7 @@ export default function LagerView({ items, updateItem, project }) {
                   {sortedRows.map((row) => (
                     <tr key={row.key} className={row.vollstaendig ? "rowDone" : undefined}>
                       <td>{getRegalPlatz(row)}</td>
+                      <td>{row.bauteilgruppe}</td>
                       <td>{row.bezeichnung}</td>
                       <td>{row.groesse}</td>
                       <td>{row.laenge}</td>
@@ -199,7 +238,11 @@ export default function LagerView({ items, updateItem, project }) {
                       <td>
                         {row.herkunft.map((h) => (
                           <div key={h.bauteil} className="herkunftLine">
-                            <div>{h.baugruppe} · {h.bauteil}</div>
+                            <div>
+                              {h.bauteilgruppe
+                                ? `${h.baugruppe} · ${h.bauteilgruppe} · ${h.bauteil}`
+                                : `${h.baugruppe} · ${h.bauteil}`}
+                            </div>
                             {h.positions.length > 0 && (
                               <div className="hint">Pos. {h.positions.join(", ")}</div>
                             )}

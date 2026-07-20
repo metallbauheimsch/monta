@@ -32,6 +32,7 @@ create table if not exists project_structure (
   project_id uuid not null references projects(id) on delete cascade,
   baugruppe text not null,
   bauteil text,
+  bauteilgruppe text,
   created_at timestamptz default now(),
   sort_order integer
 );

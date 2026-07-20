@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { articleKey, groupBy, baugruppeStatus } from "../../utils/helpers";
-import { parseEinbauort } from "../../utils/structure";
+import { parseEinbauort, getBauteilgruppe } from "../../utils/structure";
 import { naturalCompare, useSortableColumns } from "../../utils/sorting";
+import { filterBySearch } from "../../utils/textSearch";
 import { distribute, readManualValues, writeManualValues } from "./stock";
 import { buildHerkunft } from "./herkunft";
 import { prepareAndOpenMailRequest } from "../../utils/mailRequest";
+import SearchField from "../../components/SearchField";
 
 // Warenkorb: komplettes Projekt, gruppiert nach Baugruppe und Artikel.
 // Zeigt Fehlmengen und - bewusst - auch vollständig gelieferte Positionen
@@ -30,6 +32,7 @@ function defaultSort(rows) {
 function compareByColumn(a, b, key) {
   if (key === "fehlmenge" || key === "geliefert") return (Number(a[key]) || 0) - (Number(b[key]) || 0);
   if (key === "bestellt") return Number(a.bestellt) - Number(b.bestellt);
+  // bauteilgruppe und übrige Textspalten: natürliche Sortierung
   return naturalCompare(a[key], b[key]);
 }
 
@@ -58,12 +61,24 @@ function buildMailRows(rows) {
   }));
 }
 
-export default function EinkaufView({ items, project, updateItem }) {
+function uniqueBauteilgruppen(arr) {
+  return [...new Set(arr.map((i) => i.bauteilgruppe).filter(Boolean))];
+}
+
+export default function EinkaufView({ items, project, updateItem, structureRows }) {
   const [mailError, setMailError] = useState(null);
   const [manualValues, setManualValues] = useState(readManualValues);
+  const [search, setSearch] = useState("");
   const { sortKey, sortDir, toggleSort, arrow } = useSortableColumns(null);
 
-  const enriched = items.map((i) => ({ ...i, ...parseEinbauort(i.einbauort, project?.baugruppe) }));
+  const enriched = items.map((i) => {
+    const parsed = parseEinbauort(i.einbauort, project?.baugruppe);
+    return {
+      ...i,
+      ...parsed,
+      bauteilgruppe: getBauteilgruppe(structureRows, project?.id, parsed.baugruppe, parsed.bauteil),
+    };
+  });
   const byBaugruppe = groupBy(enriched, (i) => i.baugruppe);
   const baugruppeNames = Object.keys(byBaugruppe).sort((a, b) => naturalCompare(a, b));
 
@@ -77,17 +92,24 @@ export default function EinkaufView({ items, project, updateItem }) {
         const geliefert = arr.reduce((s, i) => s + Number(i.bereit || 0), 0);
         const fehlmenge = Math.max(0, menge - geliefert);
         const vollstaendig = menge > 0 && fehlmenge === 0;
+        const gruppen = uniqueBauteilgruppen(arr);
+        const herkunft = buildHerkunft(bg, arr).map((h) => {
+          const sample = arr.find((i) => i.bauteil === h.bauteil);
+          return { ...h, bauteilgruppe: sample?.bauteilgruppe || null };
+        });
         return {
           key: `${project.id}|${bg}|${comboKey(first)}`,
           bezeichnung: first.bezeichnung,
           groesse: first.groesse,
           laenge: first.laenge,
           oberflaeche: first.oberflaeche,
+          bauteilgruppe: gruppen.join(", "),
+          baugruppe: bg,
           menge,
           geliefert,
           fehlmenge,
           vollstaendig,
-          herkunft: buildHerkunft(bg, arr),
+          herkunft,
           bestellt: arr.every((i) => i.bestellt),
           items: arr,
         };
@@ -97,7 +119,21 @@ export default function EinkaufView({ items, project, updateItem }) {
       // zu sein (geliefert = 0 und fehlmenge = 0) kommt hier nicht vor,
       // weil fehlmenge = 0 und geliefert = 0 nur bei menge = 0 eintreten.
       .filter((r) => r.fehlmenge > 0 || r.vollstaendig);
-    sectionRows[bg] = sortCartRows(rows, sortKey, sortDir);
+    const filtered = filterBySearch(rows, search, (row) => [
+      row.bezeichnung,
+      row.groesse,
+      row.laenge,
+      row.oberflaeche,
+      row.baugruppe,
+      row.bauteilgruppe,
+      ...row.herkunft.flatMap((h) => [
+        h.baugruppe,
+        h.bauteilgruppe,
+        h.bauteil,
+        ...(h.positions || []),
+      ]),
+    ]);
+    sectionRows[bg] = sortCartRows(filtered, sortKey, sortDir);
   });
 
   const baugruppeNamesWithRows = baugruppeNames.filter((bg) => sectionRows[bg].length > 0);
@@ -165,6 +201,7 @@ export default function EinkaufView({ items, project, updateItem }) {
       <p className="hint">
         Fehlmengen aus dem Lager, komplettes Projekt. Vollständig gelieferte Positionen bleiben sichtbar (grün) und können wieder deaktiviert werden.
       </p>
+      <SearchField value={search} onChange={setSearch} />
       {baugruppeNamesWithRows.length === 0 && <p>Keine Positionen im Warenkorb.</p>}
       {baugruppeNamesWithRows.length > 0 && (
         <label className="checkboxLine allBestelltLine">
@@ -187,6 +224,7 @@ export default function EinkaufView({ items, project, updateItem }) {
               <table>
                 <tbody>
                   <tr>
+                    <th className="sortableTh" onClick={() => toggleSort("bauteilgruppe")}>Bauteilgruppe{arrow("bauteilgruppe")}</th>
                     <th className="sortableTh" onClick={() => toggleSort("bezeichnung")}>Bezeichnung{arrow("bezeichnung")}</th>
                     <th className="sortableTh" onClick={() => toggleSort("groesse")}>Größe{arrow("groesse")}</th>
                     <th className="sortableTh" onClick={() => toggleSort("laenge")}>Länge{arrow("laenge")}</th>
@@ -198,6 +236,7 @@ export default function EinkaufView({ items, project, updateItem }) {
                   </tr>
                   {rows.map((row) => (
                     <tr key={row.key} className={row.vollstaendig ? "rowDone" : undefined}>
+                      <td>{row.bauteilgruppe}</td>
                       <td>{row.bezeichnung}</td>
                       <td>{row.groesse}</td>
                       <td>{row.laenge}</td>
@@ -208,7 +247,11 @@ export default function EinkaufView({ items, project, updateItem }) {
                       <td>
                         {row.herkunft.map((h) => (
                           <div key={h.bauteil} className="herkunftLine">
-                            <div>{h.baugruppe} · {h.bauteil}</div>
+                            <div>
+                              {h.bauteilgruppe
+                                ? `${h.baugruppe} · ${h.bauteilgruppe} · ${h.bauteil}`
+                                : `${h.baugruppe} · ${h.bauteil}`}
+                            </div>
                             {h.positions.length > 0 && (
                               <div className="hint">Pos. {h.positions.join(", ")}</div>
                             )}

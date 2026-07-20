@@ -56,15 +56,14 @@ export function groupBy(arr, fn) {
 }
 
 export function isMobileLike() {
-  return window.matchMedia("(max-width: 760px)").matches;
+  return window.matchMedia("(max-width: 1024px)").matches;
 }
 
-// Schmale Ansicht (Smartphone): gleiche Grenze wie CSS @media max-width 760px.
-// Ersetzt den früheren manuellen PC/Mobil-Umschalter.
+// Tablet/Smartphone inkl. Querformat: Grenze ≤1024 px (Vorgabe Bedien-Sprint).
 export function useIsNarrow() {
   const [narrow, setNarrow] = useState(() => isMobileLike());
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 760px)");
+    const mq = window.matchMedia("(max-width: 1024px)");
     const onChange = () => setNarrow(mq.matches);
     onChange();
     mq.addEventListener("change", onChange);

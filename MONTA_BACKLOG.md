@@ -13,23 +13,14 @@ Regeln:
 
 # Priorität A – Pilotversion
 
-## Mehrgeräte-Sync / Projektstruktur / Mail
+## SQL-Patches in Live-Supabase
 
-(Erledigt im Code mit Pilot Sprint. Siehe Changelog.)
-
-In der Live-Supabase einmalig ausführen:
+Einmalig ausführen (falls noch nicht geschehen):
 
 - `supabase_patch_project_structure.sql`
+- `supabase_patch_component_groups.sql` (Spalte `bauteilgruppe`)
 - Delete-Policy und Realtime für projects / material_items
   (siehe `MONTA_NEXT_SPRINT.md`)
-
----
-
-## Stabilität / Lager / Warenkorb / Druck / Status / Regal
-
-(Erledigt mit Sprint 6/7 und Stabilitäts-Sprint. Siehe Changelog.)
-
----
 
 ## PWA / mobile Installation
 
@@ -42,7 +33,7 @@ In der Live-Supabase einmalig ausführen:
 
 ## Lager
 
-- Schnellfilter
+- Schnellfilter (Freitextsuche ist vorhanden; weitere Schnellfilter optional)
 
 ---
 
@@ -86,6 +77,6 @@ Wenn nein, wird die Idee verworfen.
 
 # Aktueller Fokus
 
-1. SQL-Patch in Live-Supabase anwenden
-2. Pilot-Test Mehrgeräte (PC + Smartphone)
+1. SQL-Patches in Live-Supabase anwenden (`project_structure` + `bauteilgruppe`)
+2. Pilot-Test Bedienung (Suche, Mobile ≤1024, Gruppen, Sync PC↔Smartphone)
 3. Danach PWA

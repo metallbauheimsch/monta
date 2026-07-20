@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { sortByPosNumber, uniqueSortedPositions } from "./technikerUtils";
-import { parseEinbauort, formatEinbauort } from "../../utils/structure";
+import { parseEinbauort, formatEinbauort, buildBaugruppeSections, getBauteilgruppe } from "../../utils/structure";
 import { naturalCompare, useSortableColumns } from "../../utils/sorting";
 import { regalOrderIndex, getRegalPlatz } from "./regalOrder";
 import { groupBy, baugruppeStatus } from "../../utils/helpers";
@@ -8,11 +8,10 @@ import { groupBy, baugruppeStatus } from "../../utils/helpers";
 // Druckansicht / Montageunterlage (Sprint 7): zeigt immer nur die aktuell
 // geöffnete Baugruppe (items kommen bereits vorgefiltert von TabContent).
 // Die Darstellung ist deshalb immer nach Bauteil gegliedert (Projekt ->
-// Baugruppe [aktuell] -> Bauteil -> Material) - unabhängig von der
-// gewählten Sortierung. Die Bauteil-Abschnitte selbst stehen immer in
-// alphabetischer Reihenfolge, damit der Seitenaufbau bei jeder Sortierung
-// gleich bleibt; die gewählte Sortierung bestimmt nur die Reihenfolge der
-// Materialzeilen INNERHALB jedes Bauteils.
+// Baugruppe [aktuell] -> Bauteilgruppe -> Bauteil -> Material). Die
+// Bauteilgruppen folgen der Anlage-Reihenfolge (structureRows); die
+// gewählte Sortierung bestimmt nur die Reihenfolge der Materialzeilen
+// INNERHALB jedes Bauteils.
 //
 // Sprint 7: Sortierung "Baugruppe (Montage)" entfernt (war nur nötig, als
 // die Druckansicht noch alle Baugruppen gleichzeitig zeigte). Dafür neu:
@@ -31,10 +30,11 @@ import { groupBy, baugruppeStatus } from "../../utils/helpers";
 // Sortierbuttons wurden entfernt. Sortiert wird jetzt wie in TB/Lager/
 // Warenkorb über anklickbare Spaltenüberschriften (ein gemeinsamer
 // Sortierzustand für alle Bauteil-Tabellen der Seite).
-function aggregateForPrint(items, project) {
+function aggregateForPrint(items, project, structureRows) {
   const groups = new Map();
   items.forEach((item) => {
     const { baugruppe, bauteil } = parseEinbauort(item.einbauort, project?.baugruppe);
+    const bauteilgruppe = getBauteilgruppe(structureRows, project?.id, baugruppe, bauteil);
     const key = [bauteil, item.bezeichnung, item.groesse, item.laenge, item.oberflaeche].join("|");
     if (!groups.has(key)) {
       groups.set(key, {
@@ -44,6 +44,7 @@ function aggregateForPrint(items, project) {
         groesse: item.groesse,
         laenge: item.laenge,
         oberflaeche: item.oberflaeche,
+        bauteilgruppe,
         menge: 0,
         _items: [],
         _hinweise: [],
@@ -121,18 +122,51 @@ function MontageRow({ item, idx }) {
   );
 }
 
-export default function PrintView({ project, baugruppe, items }) {
+function BauteilBlock({ bauteil, items, toggleSort, arrow, headingTag: Heading = "h4" }) {
+  return (
+    <div className="printBauteilSection">
+      <Heading>Bauteil: {bauteil}</Heading>
+      <table>
+        <tbody>
+          <MontageTableHead toggleSort={toggleSort} arrow={arrow} />
+          {items.map((i, idx) => (
+            <MontageRow key={i.id} item={i} idx={idx} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export default function PrintView({ project, baugruppe, items, structureRows }) {
   const { sortKey, sortDir, toggleSort, arrow } = useSortableColumns(null);
-  const aggregatedItems = useMemo(() => aggregateForPrint(items, project), [items, project]);
+  const aggregatedItems = useMemo(
+    () => aggregateForPrint(items, project, structureRows),
+    [items, project, structureRows]
+  );
 
   const status = baugruppeStatus(items);
 
-  const bauteilSections = useMemo(() => {
-    const groups = groupBy(aggregatedItems, (i) => parseEinbauort(i.einbauort, project?.baugruppe).bauteil);
-    return Object.keys(groups)
-      .sort((a, b) => naturalCompare(a, b))
-      .map((bt) => [bt, sortRows(groups[bt], sortKey, sortDir)]);
-  }, [aggregatedItems, sortKey, sortDir, project]);
+  const printSections = useMemo(() => {
+    const byBauteil = groupBy(
+      aggregatedItems,
+      (i) => parseEinbauort(i.einbauort, project?.baugruppe).bauteil
+    );
+    const bauteile = Object.keys(byBauteil);
+    const sections = buildBaugruppeSections(project?.id, baugruppe, bauteile, structureRows || []);
+
+    return sections
+      .map((section) => {
+        const bauteilBlocks = section.bauteile
+          .filter((bt) => byBauteil[bt]?.length)
+          .map((bt) => ({
+            bauteil: bt,
+            items: sortRows(byBauteil[bt], sortKey, sortDir),
+          }));
+        return { ...section, bauteilBlocks };
+      })
+      .filter((section) => section.bauteilBlocks.length > 0);
+  }, [aggregatedItems, sortKey, sortDir, project, baugruppe, structureRows]);
 
   return (
     <div className="card printArea">
@@ -143,20 +177,31 @@ export default function PrintView({ project, baugruppe, items }) {
       <p>{project.nr} {project.name} · {project.zeichnung}</p>
       <h3>{status.emoji} {baugruppe} <small>({status.label})</small></h3>
 
-      {bauteilSections.length === 0 && <p>Keine Materialpositionen in dieser Baugruppe.</p>}
-      {bauteilSections.map(([bt, btItems]) => (
-        <div className="printBauteilSection" key={bt}>
-          <h4>Bauteil {bt}</h4>
-          <table>
-            <tbody>
-              <MontageTableHead toggleSort={toggleSort} arrow={arrow} />
-              {btItems.map((i, idx) => (
-                <MontageRow key={i.id} item={i} idx={idx} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
+      {printSections.length === 0 && <p>Keine Materialpositionen in dieser Baugruppe.</p>}
+      {printSections.map((section) => {
+        const showGruppe = Boolean(section.bauteilgruppe);
+        const blocks = section.bauteilBlocks.map(({ bauteil, items: btItems }) => (
+          <BauteilBlock
+            key={bauteil}
+            bauteil={bauteil}
+            items={btItems}
+            toggleSort={toggleSort}
+            arrow={arrow}
+            headingTag={showGruppe ? "h5" : "h4"}
+          />
+        ));
+
+        if (!showGruppe) {
+          return <div key="ungrouped">{blocks}</div>;
+        }
+
+        return (
+          <div className="printGruppeSection" key={section.bauteilgruppe}>
+            <h4>Bauteilgruppe: {section.bauteilgruppe}</h4>
+            {blocks}
+          </div>
+        );
+      })}
     </div>
   );
 }
