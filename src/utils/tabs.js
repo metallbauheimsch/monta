@@ -9,14 +9,33 @@ export const TAB_LABELS = {
   druck: "Druck",
 };
 
-// Smartphone/Tablet inkl. Querformat (≤1024 px): TB und Prüfung ausblenden.
+// Smartphone/Tablet inkl. Querformat (≤1024 px): TB und Prüfung ausblenden,
+// sofern kein Vollzugriff (Admin oder full_module_access).
 // Sichtbar bleiben Lager, Warenkorb, Druck. Desktop (>1024 px) unverändert.
 export const NARROW_HIDDEN_TABS = ["tb", "pruefung"];
 
-export function defaultTabFor(isNarrow) {
-  return isNarrow ? "material" : "tb";
+/**
+ * Ob TB/Prüfung auch mobil sichtbar sind.
+ * Solange Session da ist und Profil noch lädt: nicht vorschnell ausblenden
+ * (sonst fehlen Admin/Vollzugriff-Nutzer kurz die Reiter / openBauteil landet auf Lager).
+ */
+export function resolveTabFullAccess({
+  hasFullModuleAccess,
+  session,
+  profile,
+  authLoading,
+} = {}) {
+  if (hasFullModuleAccess) return true;
+  if (session && (authLoading || !profile)) return true;
+  return false;
 }
 
-export function visibleTabsFor(isNarrow) {
+export function defaultTabFor(isNarrow, { fullAccess } = {}) {
+  if (fullAccess || !isNarrow) return "tb";
+  return "material";
+}
+
+export function visibleTabsFor(isNarrow, { fullAccess } = {}) {
+  if (fullAccess) return [...TAB_ORDER];
   return TAB_ORDER.filter((t) => !isNarrow || !NARROW_HIDDEN_TABS.includes(t));
 }

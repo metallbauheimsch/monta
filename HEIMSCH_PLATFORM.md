@@ -1,5 +1,24 @@
 # HEIMSCH Plattform
 
+## Verbindliche Entwicklungsgrundlagen
+
+Vor jeder Weiterentwicklung von MONTA müssen folgende Dokumente vollständig gelesen werden:
+
+1. MONTA_MASTER_SPRINT.md
+2. MONTA_SAFETY.md
+3. MONTA_PRINCIPLES.md
+4. MONTA_PROJECT.md
+5. MONTA_DECISIONS.md
+6. MONTA_CHANGELOG.md
+7. MONTA_BACKLOG.md
+8. MONTA_NEXT_SPRINT.md
+9. AUTH_SETUP.md
+10. PRINT_STATION_SETUP.md
+
+Diese Dokumente bilden gemeinsam die verbindliche Wissensbasis.
+
+Die Regeln aus MONTA_SAFETY.md und MONTA_PRINCIPLES.md besitzen Vorrang vor Komfortfunktionen.
+
 ## Vision
 
 Die HEIMSCH Plattform ist die interne digitale Arbeitsplattform von Metallbau Heimsch.
@@ -25,20 +44,20 @@ Ist dies nicht eindeutig der Fall, wird sie nicht umgesetzt.
 ### Einfachheit
 
 - so wenig Klicks wie möglich
-
 - so wenig Eingaben wie möglich
-
 - so wenig unterschiedliche Ansichten wie möglich
+
+
 
 ### Mobile Nutzung
 
 Alle Module müssen vollständig nutzbar sein auf:
 
 - Windows
-
 - iOS
-
 - Android
+
+
 
 ### Einheitliche Bedienung
 
@@ -60,7 +79,11 @@ Aktuell besitzt MONTA höchste Priorität.
 
 ---
 
+
+
 ## Module
+
+
 
 ### MONTA
 
@@ -69,6 +92,8 @@ Erfassung, Prüfung, Vorbereitung und Bereitstellung von Befestigungsmaterial.
 Weitere Module entstehen ausschließlich nach betrieblichem Bedarf.
 
 ---
+
+
 
 ## Nicht Bestandteil
 
@@ -82,6 +107,8 @@ Keine Entwicklung nur deshalb, weil sie technisch möglich ist.
 
 ---
 
+
+
 ## Zugang
 
 Module der HEIMSCH Plattform sind interne Werkzeuge.
@@ -91,7 +118,12 @@ Module der HEIMSCH Plattform sind interne Werkzeuge.
 Authentifizierung und Freigabe erfolgen modulbezogen (bei MONTA über
 Supabase Auth und Administratorfreigabe).
 
+Workflow-Benachrichtigungen (bewusste Abschlussfreigaben) und gerätebezogene
+Druckstationen sind Teil des MONTA-Moduls, keine Plattform-ERP-Funktionen.
+
 ---
+
+
 
 ## Grundsatz
 
@@ -103,21 +135,32 @@ Nicht die Technik.
 
 ---
 
+
+
 ## Ideenparkplatz
+
+
 
 ### Standard-Initialisierung neuer Module
 
 Beim nächsten neuen Modul wird zuerst dieselbe schlanke Dokumentationsstruktur wie bei MONTA angelegt:
 
 - MODUL_[PROJECT.md](http://PROJECT.md)
-
 - MODUL_[DECISIONS.md](http://DECISIONS.md)
-
 - MODUL_[CHANGELOG.md](http://CHANGELOG.md)
-
 - MODUL_[BACKLOG.md](http://BACKLOG.md)
-
 - MODUL_NEXT_[SPRINT.md](http://SPRINT.md)
 
-Diese Regel wird erst beim nächsten Modul angewendet.
+Diese Regel wird erst beim nächsten Modul angewendet. ## Verbindliche Grundlagen
 
+Vor jeder Entwicklung sind folgende Dokumente vollständig zu lesen:
+
+1. MONTA_[PROJECT.md](http://PROJECT.md)
+2. MONTA_[DECISIONS.md](http://DECISIONS.md)
+3. MONTA_[SAFETY.md](http://SAFETY.md)
+4. MONTA_[PRINCIPLES.md](http://PRINCIPLES.md)
+5. MONTA_[CHANGELOG.md](http://CHANGELOG.md)
+6. MONTA_[BACKLOG.md](http://BACKLOG.md)
+7. MONTA_NEXT_[SPRINT.md](http://SPRINT.md)
+
+Diese Dokumente bilden gemeinsam die verbindliche Wissensbasis für jede Weiterentwicklung von MONTA.

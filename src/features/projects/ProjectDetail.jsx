@@ -1,7 +1,68 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ProjectHeader from "../../components/ProjectHeader";
 import { projectStatus, baugruppeStatus } from "../../utils/helpers";
-import { buildProjectStructure, parseEinbauort, UNGROUPED_LABEL } from "../../utils/structure";
+import { buildProjectStructure, parseEinbauort } from "../../utils/structure";
+
+const LONG_PRESS_MS = 600;
+const MOVE_CANCEL_PX = 10;
+
+/**
+ * Bauteil-Kontextmenü (Desktop: Rechtsklick, Mobil: Long Press).
+ * Position: Desktop Maus, Mobil Finger.
+ */
+function BauteilContextMenu({ x, y, onClose, onRename, onDuplicate, onDelete }) {
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === "Escape") onClose();
+    }
+    function onPointer(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointer, true);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointer, true);
+    };
+  }, [onClose]);
+
+  useEffect(() => {
+    const el = menuRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    let left = x;
+    let top = y;
+    if (left + rect.width > window.innerWidth - 8) {
+      left = Math.max(8, window.innerWidth - rect.width - 8);
+    }
+    if (top + rect.height > window.innerHeight - 8) {
+      top = Math.max(8, window.innerHeight - rect.height - 8);
+    }
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+  }, [x, y]);
+
+  return (
+    <div
+      ref={menuRef}
+      className="bauteilContextMenu"
+      style={{ left: x, top: y }}
+      role="menu"
+    >
+      <button type="button" role="menuitem" onClick={onRename}>
+        Umbenennen
+      </button>
+      <button type="button" role="menuitem" onClick={onDuplicate}>
+        Duplizieren
+      </button>
+      <button type="button" role="menuitem" className="dangerItem" onClick={onDelete}>
+        Löschen
+      </button>
+    </div>
+  );
+}
 
 export default function ProjectDetail({
   project,
@@ -17,27 +78,84 @@ export default function ProjectDetail({
   deleteBauteil,
   renameBaugruppe,
   renameBauteil,
-  groupBauteile,
-  renameBauteilgruppe,
-  setBauteileInGruppe,
-  dissolveBauteilgruppe,
+  duplicateBauteil,
 }) {
   const [newBaugruppe, setNewBaugruppe] = useState("");
   const [addingBauteilTo, setAddingBauteilTo] = useState(null);
   const [newBauteil, setNewBauteil] = useState("");
   const [renamingBaugruppe, setRenamingBaugruppe] = useState(null);
   const [renameBaugruppeValue, setRenameBaugruppeValue] = useState("");
-  const [renamingBauteil, setRenamingBauteil] = useState(null);
-  const [renameBauteilValue, setRenameBauteilValue] = useState("");
-  const [groupingFor, setGroupingFor] = useState(null); // baugruppe name
-  const [groupName, setGroupName] = useState("");
-  const [groupSelected, setGroupSelected] = useState([]);
-  const [editingGroup, setEditingGroup] = useState(null); // { baugruppe, bauteilgruppe }
-  const [editGroupName, setEditGroupName] = useState("");
-  const [editGroupMembers, setEditGroupMembers] = useState([]);
+  /** @type {[{ baugruppe: string, bauteil: string, x: number, y: number } | null, Function]} */
+  const [menu, setMenu] = useState(null);
+  /** @type {[{ mode: 'rename'|'duplicate', baugruppe: string, bauteil: string, value: string } | null, Function]} */
+  const [dialog, setDialog] = useState(null);
+  const [dialogBusy, setDialogBusy] = useState(false);
   const newBaugruppeInputRef = useRef(null);
+  const suppressClickRef = useRef(false);
+  const longPressRef = useRef(null);
 
   const structure = buildProjectStructure(project, items, structureRows);
+
+  function clearLongPress() {
+    if (longPressRef.current) {
+      clearTimeout(longPressRef.current.timer);
+      longPressRef.current = null;
+    }
+  }
+
+  function openMenu(baugruppe, bauteil, x, y) {
+    setMenu({ baugruppe, bauteil, x, y });
+  }
+
+  function closeMenu() {
+    setMenu(null);
+  }
+
+  function handleBauteilClick(baugruppe, bauteil) {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    closeMenu();
+    openBauteil(baugruppe, bauteil);
+  }
+
+  function handleContextMenu(e, baugruppe, bauteil) {
+    e.preventDefault();
+    e.stopPropagation();
+    clearLongPress();
+    openMenu(baugruppe, bauteil, e.clientX, e.clientY);
+  }
+
+  function handlePointerDown(e, baugruppe, bauteil) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    clearLongPress();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    longPressRef.current = {
+      baugruppe,
+      bauteil,
+      startX,
+      startY,
+      timer: setTimeout(() => {
+        longPressRef.current = null;
+        suppressClickRef.current = true;
+        openMenu(baugruppe, bauteil, startX, startY);
+      }, LONG_PRESS_MS),
+    };
+  }
+
+  function handlePointerMove(e) {
+    const lp = longPressRef.current;
+    if (!lp) return;
+    const dx = Math.abs(e.clientX - lp.startX);
+    const dy = Math.abs(e.clientY - lp.startY);
+    if (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX) clearLongPress();
+  }
+
+  function handlePointerUp() {
+    clearLongPress();
+  }
 
   async function handleAddBaugruppe(e) {
     e.preventDefault();
@@ -72,22 +190,15 @@ export default function ProjectDetail({
     if (!ok) return;
     try {
       await deleteBaugruppe?.(project.id, baugruppeName);
-    } catch { /* gemeldet */ }
-  }
-
-  async function handleDeleteBauteil(baugruppeName, bauteilName) {
-    const ok = confirm(
-      "Bauteil wirklich löschen? Zugehörige Materialpositionen werden dauerhaft gelöscht."
-    );
-    if (!ok) return;
-    try {
-      await deleteBauteil?.(project.id, baugruppeName, bauteilName);
+      if (menu?.baugruppe === baugruppeName) closeMenu();
+      if (dialog?.baugruppe === baugruppeName) setDialog(null);
     } catch { /* gemeldet */ }
   }
 
   function startRenameBaugruppe(name) {
     setRenamingBaugruppe(name);
     setRenameBaugruppeValue(name);
+    closeMenu();
   }
 
   async function submitRenameBaugruppe(e, oldName) {
@@ -100,138 +211,53 @@ export default function ProjectDetail({
     } catch { /* gemeldet */ }
   }
 
-  function startRenameBauteil(baugruppeName, bauteilName) {
-    setRenamingBauteil({ baugruppe: baugruppeName, bauteil: bauteilName });
-    setRenameBauteilValue(bauteilName);
+  function startRenameFromMenu() {
+    if (!menu) return;
+    const { baugruppe, bauteil } = menu;
+    closeMenu();
+    setDialog({ mode: "rename", baugruppe, bauteil, value: bauteil });
   }
 
-  async function submitRenameBauteil(e, baugruppeName, oldName) {
-    e.preventDefault();
-    const clean = renameBauteilValue.trim();
-    if (!clean) return;
-    try {
-      await renameBauteil?.(project.id, baugruppeName, oldName, clean);
-      setRenamingBauteil(null);
-    } catch { /* gemeldet */ }
+  function startDuplicateFromMenu() {
+    if (!menu) return;
+    const { baugruppe, bauteil } = menu;
+    closeMenu();
+    setDialog({ mode: "duplicate", baugruppe, bauteil, value: "" });
   }
 
-  function startGrouping(baugruppeName) {
-    setGroupingFor(baugruppeName);
-    setGroupName("");
-    setGroupSelected([]);
-    setEditingGroup(null);
-  }
-
-  function toggleGroupSelect(bt) {
-    setGroupSelected((prev) =>
-      prev.includes(bt) ? prev.filter((x) => x !== bt) : [...prev, bt]
-    );
-  }
-
-  async function submitGrouping(e) {
-    e.preventDefault();
-    try {
-      await groupBauteile?.(project.id, groupingFor, groupSelected, groupName);
-      setGroupingFor(null);
-      setGroupName("");
-      setGroupSelected([]);
-    } catch { /* gemeldet */ }
-  }
-
-  function startEditGroup(baugruppeName, section) {
-    if (section.ungrouped || !section.bauteilgruppe) return;
-    setEditingGroup({ baugruppe: baugruppeName, bauteilgruppe: section.bauteilgruppe });
-    setEditGroupName(section.bauteilgruppe);
-    setEditGroupMembers([...section.bauteile]);
-    setGroupingFor(null);
-  }
-
-  function toggleEditMember(bt) {
-    setEditGroupMembers((prev) =>
-      prev.includes(bt) ? prev.filter((x) => x !== bt) : [...prev, bt]
-    );
-  }
-
-  async function submitEditGroup(e, allBauteile) {
-    e.preventDefault();
-    if (!editingGroup) return;
-    try {
-      if (editGroupName.trim() !== editingGroup.bauteilgruppe) {
-        await renameBauteilgruppe?.(
-          project.id,
-          editingGroup.baugruppe,
-          editingGroup.bauteilgruppe,
-          editGroupName.trim()
-        );
-      }
-      await setBauteileInGruppe?.(
-        project.id,
-        editingGroup.baugruppe,
-        editGroupName.trim() || editingGroup.bauteilgruppe,
-        editGroupMembers
-      );
-      setEditingGroup(null);
-    } catch { /* gemeldet */ }
-  }
-
-  async function handleDissolve(baugruppeName, groupName) {
+  async function handleDeleteFromMenu() {
+    if (!menu) return;
+    const { baugruppe, bauteil } = menu;
+    closeMenu();
     const ok = confirm(
-      "Bauteilgruppe wirklich auflösen? Die Bauteile und Materialpositionen bleiben erhalten."
+      `Bauteil „${bauteil}“ wirklich löschen? Zugehörige Materialpositionen werden dauerhaft gelöscht.`
     );
     if (!ok) return;
     try {
-      await dissolveBauteilgruppe?.(project.id, baugruppeName, groupName);
-      setEditingGroup(null);
+      await deleteBauteil?.(project.id, baugruppe, bauteil);
     } catch { /* gemeldet */ }
   }
 
-  function renderBauteilChip(baugruppe, bauteil) {
-    const isRenaming =
-      renamingBauteil &&
-      renamingBauteil.baugruppe === baugruppe &&
-      renamingBauteil.bauteil === bauteil;
-    if (isRenaming) {
-      return (
-        <form
-          key={bauteil}
-          className="inlineForm chipInlineForm"
-          onSubmit={(e) => submitRenameBauteil(e, baugruppe, bauteil)}
-        >
-          <input
-            autoFocus
-            value={renameBauteilValue}
-            onChange={(e) => setRenameBauteilValue(e.target.value)}
-          />
-          <button>Speichern</button>
-          <button type="button" className="ghost" onClick={() => setRenamingBauteil(null)}>
-            Abbrechen
-          </button>
-        </form>
-      );
+  async function submitDialog(e) {
+    e.preventDefault();
+    if (!dialog) return;
+    const clean = dialog.value.trim();
+    if (!clean) {
+      alert("Bitte einen Namen eingeben.");
+      return;
     }
-    return (
-      <span className="chipWithEdit" key={bauteil}>
-        <button className="chip" onClick={() => openBauteil(baugruppe, bauteil)}>
-          {bauteil}
-        </button>
-        <button
-          type="button"
-          className="ghost chipEdit"
-          title="Bauteil umbenennen"
-          onClick={() => startRenameBauteil(baugruppe, bauteil)}
-        >
-          ✎
-        </button>
-        <button
-          type="button"
-          className="ghost chipEdit dangerBtnSmall"
-          title="Bauteil löschen"
-          onClick={() => handleDeleteBauteil(baugruppe, bauteil)}
-        >
-          ×
-        </button>
-      </span>
-    );
+    setDialogBusy(true);
+    try {
+      if (dialog.mode === "rename") {
+        await renameBauteil?.(project.id, dialog.baugruppe, dialog.bauteil, clean);
+      } else if (dialog.mode === "duplicate") {
+        await duplicateBauteil?.(project.id, dialog.baugruppe, dialog.bauteil, clean);
+      }
+      setDialog(null);
+    } catch { /* gemeldet */ }
+    finally {
+      setDialogBusy(false);
+    }
   }
 
   return (
@@ -241,12 +267,11 @@ export default function ProjectDetail({
 
       <h3>Baugruppen &amp; Bauteile</h3>
 
-      {structure.map(({ baugruppe, bauteile, sections }) => {
+      {structure.map(({ baugruppe, bauteile }) => {
         const baugruppeItems = items.filter(
           (i) => parseEinbauort(i.einbauort, project?.baugruppe).baugruppe === baugruppe
         );
         const status = baugruppeStatus(baugruppeItems);
-        const hasNamedGroups = sections.some((s) => s.bauteilgruppe && !s.ungrouped);
 
         return (
           <div className="card" key={baugruppe}>
@@ -264,7 +289,10 @@ export default function ProjectDetail({
               </form>
             ) : (
               <h3>
-                {baugruppe} <span className="statusPill" title={status.label}>{status.emoji} {status.label}</span>
+                {baugruppe}{" "}
+                <span className="statusPill" title={status.label}>
+                  {status.emoji} {status.label}
+                </span>
                 <button
                   type="button"
                   className="ghost renameBtn"
@@ -282,126 +310,45 @@ export default function ProjectDetail({
               </h3>
             )}
 
-            {sections.map((section) => {
-              const label = section.bauteilgruppe;
-              const showLabel = hasNamedGroups || (label && !section.ungrouped);
-              const isEditing =
-                editingGroup &&
-                editingGroup.baugruppe === baugruppe &&
-                editingGroup.bauteilgruppe === section.bauteilgruppe;
-
-              if (isEditing) {
-                return (
-                  <div className="bauteilgruppeBlock" key={`${baugruppe}|edit|${section.bauteilgruppe}`}>
-                    <form className="form" onSubmit={(e) => submitEditGroup(e, bauteile)}>
-                      <label className="hint">Bauteilgruppe umbenennen / Mitglieder</label>
-                      <input
-                        value={editGroupName}
-                        onChange={(e) => setEditGroupName(e.target.value)}
-                        placeholder="Gruppenname"
-                        required
-                      />
-                      <div className="chipRow">
-                        {bauteile.map((bt) => (
-                          <label key={bt} className="checkboxLine">
-                            <input
-                              type="checkbox"
-                              checked={editGroupMembers.includes(bt)}
-                              onChange={() => toggleEditMember(bt)}
-                            />
-                            {bt}
-                          </label>
-                        ))}
-                      </div>
-                      <div className="inlineForm">
-                        <button type="submit">Speichern</button>
-                        <button type="button" className="ghost" onClick={() => setEditingGroup(null)}>
-                          Abbrechen
-                        </button>
-                        <button
-                          type="button"
-                          className="ghost dangerBtnSmall"
-                          onClick={() => handleDissolve(baugruppe, section.bauteilgruppe)}
-                        >
-                          Auflösen
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                );
-              }
-
-              return (
-                <div className="bauteilgruppeBlock" key={`${baugruppe}|${label || "flat"}`}>
-                  {showLabel && label ? (
-                    <div className="bauteilgruppeHead">
-                      <h4>{label === UNGROUPED_LABEL ? UNGROUPED_LABEL : `Bauteilgruppe: ${label}`}</h4>
-                      {!section.ungrouped && (
-                        <button
-                          type="button"
-                          className="ghost renameBtn"
-                          onClick={() => startEditGroup(baugruppe, section)}
-                        >
-                          Bearbeiten
-                        </button>
-                      )}
-                    </div>
-                  ) : null}
-                  <div className="chipRow">
-                    {section.bauteile.length === 0 && (
-                      <p className="hint">Noch keine Bauteile angelegt.</p>
-                    )}
-                    {section.bauteile.map((bt) => renderBauteilChip(baugruppe, bt))}
-                  </div>
-                </div>
-              );
-            })}
-
-            {groupingFor === baugruppe ? (
-              <form className="form bauteilgruppeForm" onSubmit={submitGrouping}>
-                <h4>Bauteile gruppieren</h4>
-                <input
-                  autoFocus
-                  placeholder="Name der Bauteilgruppe (z. B. Stützen)"
-                  value={groupName}
-                  onChange={(e) => setGroupName(e.target.value)}
-                  required
-                />
-                <div className="chipRow">
-                  {bauteile.map((bt) => (
-                    <label key={bt} className="checkboxLine">
-                      <input
-                        type="checkbox"
-                        checked={groupSelected.includes(bt)}
-                        onChange={() => toggleGroupSelect(bt)}
-                      />
-                      {bt}
-                    </label>
-                  ))}
-                </div>
-                <div className="inlineForm">
-                  <button type="submit">Gruppieren</button>
-                  <button type="button" className="ghost" onClick={() => setGroupingFor(null)}>
-                    Abbrechen
-                  </button>
-                </div>
-              </form>
-            ) : (
-              bauteile.length >= 2 && (
-                <button className="ghost" onClick={() => startGrouping(baugruppe)}>
-                  Bauteile gruppieren
+            <div className="chipRow">
+              {bauteile.length === 0 && (
+                <p className="hint">Noch keine Bauteile angelegt.</p>
+              )}
+              {bauteile.map((bt) => (
+                <button
+                  key={bt}
+                  type="button"
+                  className="chip bauteilChip"
+                  onClick={() => handleBauteilClick(baugruppe, bt)}
+                  onContextMenu={(e) => handleContextMenu(e, baugruppe, bt)}
+                  onPointerDown={(e) => handlePointerDown(e, baugruppe, bt)}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerUp}
+                  onPointerLeave={handlePointerUp}
+                >
+                  {bt}
                 </button>
-              )
-            )}
+              ))}
+            </div>
 
             {addingBauteilTo === baugruppe ? (
               <form className="inlineForm" onSubmit={(e) => handleAddBauteil(baugruppe, e)}>
-                <input autoFocus placeholder="Bauteilname (z. B. Stütze S1)" value={newBauteil} onChange={(e) => setNewBauteil(e.target.value)} />
+                <input
+                  autoFocus
+                  placeholder="Bauteilname (z. B. Stütze S1)"
+                  value={newBauteil}
+                  onChange={(e) => setNewBauteil(e.target.value)}
+                />
                 <button>Anlegen</button>
-                <button type="button" className="ghost" onClick={() => setAddingBauteilTo(null)}>Abbrechen</button>
+                <button type="button" className="ghost" onClick={() => setAddingBauteilTo(null)}>
+                  Abbrechen
+                </button>
               </form>
             ) : (
-              <button className="ghost" onClick={() => setAddingBauteilTo(baugruppe)}>+ Bauteil</button>
+              <button className="ghost" onClick={() => setAddingBauteilTo(baugruppe)}>
+                + Bauteil
+              </button>
             )}
           </div>
         );
@@ -420,17 +367,77 @@ export default function ProjectDetail({
       <div className="card manageZone">
         <h3>Projekt verwalten</h3>
         {project.archived ? (
-          <button className="ghost" onClick={() => setProjectArchived(project.id, false)}>Aus Archiv zurückholen</button>
+          <button className="ghost" onClick={() => setProjectArchived(project.id, false)}>
+            Aus Archiv zurückholen
+          </button>
         ) : (
-          <button className="ghost" onClick={() => setProjectArchived(project.id, true)}>Projekt archivieren</button>
+          <button className="ghost" onClick={() => setProjectArchived(project.id, true)}>
+            Projekt archivieren
+          </button>
         )}
       </div>
 
       <div className="card dangerZone">
         <h3>Gefahrenbereich</h3>
-        <p className="hint">Löscht das Projekt und alle zugehörigen Materialpositionen unwiderruflich.</p>
-        <button className="danger" onClick={handleDeleteProject}>Projekt löschen</button>
+        <p className="hint">
+          Löscht das Projekt und alle zugehörigen Materialpositionen unwiderruflich.
+        </p>
+        <button className="danger" onClick={handleDeleteProject}>
+          Projekt löschen
+        </button>
       </div>
+
+      {menu && (
+        <BauteilContextMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={closeMenu}
+          onRename={startRenameFromMenu}
+          onDuplicate={startDuplicateFromMenu}
+          onDelete={handleDeleteFromMenu}
+        />
+      )}
+
+      {dialog && (
+        <div className="bauteilDialogBackdrop" onClick={() => !dialogBusy && setDialog(null)}>
+          <form
+            className="bauteilDialog card"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={submitDialog}
+          >
+            <label className="hint">
+              {dialog.mode === "rename"
+                ? `Neuer Name für „${dialog.bauteil}“`
+                : `Name der Kopie von „${dialog.bauteil}“`}
+            </label>
+            <input
+              autoFocus
+              value={dialog.value}
+              onChange={(e) => setDialog({ ...dialog, value: e.target.value })}
+              placeholder={dialog.mode === "duplicate" ? "z. B. S2" : dialog.bauteil}
+              required
+              disabled={dialogBusy}
+            />
+            <div className="inlineForm">
+              <button type="submit" disabled={dialogBusy}>
+                {dialogBusy
+                  ? "…"
+                  : dialog.mode === "rename"
+                    ? "Umbenennen"
+                    : "Duplizieren"}
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                disabled={dialogBusy}
+                onClick={() => setDialog(null)}
+              >
+                Abbrechen
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </>
   );
 }

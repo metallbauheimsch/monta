@@ -1,51 +1,34 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { sortByPosNumber, uniqueSortedPositions } from "./technikerUtils";
-import { parseEinbauort, formatEinbauort, buildBaugruppeSections, getBauteilgruppe } from "../../utils/structure";
+import {
+  parseEinbauort,
+  formatEinbauort,
+  buildProjectStructure,
+} from "../../utils/structure";
 import { naturalCompare, useSortableColumns } from "../../utils/sorting";
+import { filterBySearch, sizeLengthSearchParts } from "../../utils/textSearch";
 import { regalOrderIndex, getRegalPlatz } from "./regalOrder";
 import { groupBy, baugruppeStatus } from "../../utils/helpers";
+import { dedupeHinweisText, normalizeHinweisForCompare } from "./fasteningRules";
+import SearchField from "../../components/SearchField";
 
-// Druckansicht / Montageunterlage (Sprint 7): zeigt immer nur die aktuell
-// geöffnete Baugruppe (items kommen bereits vorgefiltert von TabContent).
-// Die Darstellung ist deshalb immer nach Bauteil gegliedert (Projekt ->
-// Baugruppe [aktuell] -> Bauteilgruppe -> Bauteil -> Material). Die
-// Bauteilgruppen folgen der Anlage-Reihenfolge (structureRows); die
-// gewählte Sortierung bestimmt nur die Reihenfolge der Materialzeilen
-// INNERHALB jedes Bauteils.
-//
-// Sprint 7: Sortierung "Baugruppe (Montage)" entfernt (war nur nötig, als
-// die Druckansicht noch alle Baugruppen gleichzeitig zeigte). Dafür neu:
-// Sortierung nach Bezeichnung/Größe/Länge (zusätzlich zu Position/Regal).
-//
-// Gleiche Verbindungsmittel innerhalb desselben Bauteils (gleiche
-// Bezeichnung/Größe/Länge/Ausführung) werden weiterhin zu einer Zeile
-// zusammengefasst, Mengen addiert (unverändert aus Sprint 6).
-//
-// Sprint 7 Abschluss (Punkt 6): "Regal" -> "Regalfach" (Beschriftung wie in
-// Lager/Warenkorb), Positionsnummern beim Zusammenfassen jetzt numerisch
-// sortiert und ohne Duplikate (siehe uniqueSortedPositions), engere Abstände
-// je Bauteil-Abschnitt (siehe style.css).
-//
-// Sprint 7 - Korrekturen aus Praxistest (Punkt 7): die separaten
-// Sortierbuttons wurden entfernt. Sortiert wird jetzt wie in TB/Lager/
-// Warenkorb über anklickbare Spaltenüberschriften (ein gemeinsamer
-// Sortierzustand für alle Bauteil-Tabellen der Seite).
-function aggregateForPrint(items, project, structureRows) {
+function aggregateForPrint(items, project) {
   const groups = new Map();
   items.forEach((item) => {
     const { baugruppe, bauteil } = parseEinbauort(item.einbauort, project?.baugruppe);
-    const bauteilgruppe = getBauteilgruppe(structureRows, project?.id, baugruppe, bauteil);
     const key = [bauteil, item.bezeichnung, item.groesse, item.laenge, item.oberflaeche].join("|");
     if (!groups.has(key)) {
       groups.set(key, {
         id: item.id,
         einbauort: formatEinbauort(baugruppe, bauteil),
+        baugruppe,
+        bauteil,
         bezeichnung: item.bezeichnung,
         groesse: item.groesse,
         laenge: item.laenge,
         oberflaeche: item.oberflaeche,
-        bauteilgruppe,
         menge: 0,
+        important_note: false,
         _items: [],
         _hinweise: [],
       });
@@ -53,25 +36,31 @@ function aggregateForPrint(items, project, structureRows) {
     const g = groups.get(key);
     g.menge += Number(item.menge || 0);
     g._items.push(item);
-    if (item.hinweis && !g._hinweise.includes(item.hinweis)) g._hinweise.push(item.hinweis);
+    if (item.important_note) g.important_note = true;
+    if (item.hinweis) {
+      for (const part of String(item.hinweis).split(/\n|(?:\s*[·•|]\s*)/)) {
+        const t = part.trim();
+        if (
+          t &&
+          !g._hinweise.some(
+            (h) => normalizeHinweisForCompare(h) === normalizeHinweisForCompare(t)
+          )
+        ) {
+          g._hinweise.push(t);
+        }
+      }
+    }
   });
-  // Positionsnummern numerisch sortiert und ohne Duplikate (Sprint 7
-  // Abschluss, Punkt 6) - konsistent mit Herkunft in Lager/Warenkorb.
   return Array.from(groups.values()).map((g) => ({
     ...g,
     pos: uniqueSortedPositions(g._items).join(", "),
-    hinweis: g._hinweise.join("; "),
+    hinweis: dedupeHinweisText(g._hinweise.join(" · ")),
   }));
 }
 
 function posValue(item) {
   const n = parseInt(String(item.pos ?? "").trim(), 10);
   return Number.isNaN(n) ? Infinity : n;
-}
-
-// Ohne aktive Sortierung gilt die Positionsnummer als Standard (wie bisher).
-function defaultSort(items) {
-  return sortByPosNumber([...items]);
 }
 
 function compareByColumn(a, b, key) {
@@ -82,53 +71,54 @@ function compareByColumn(a, b, key) {
 }
 
 function sortRows(items, sortKey, sortDir) {
-  if (!sortKey) return defaultSort(items);
+  if (!sortKey) return sortByPosNumber([...items]);
   return [...items].sort(
-    (a, b) => (sortDir === "desc" ? -1 : 1) * compareByColumn(a, b, sortKey) || posValue(a) - posValue(b)
+    (a, b) =>
+      (sortDir === "desc" ? -1 : 1) * compareByColumn(a, b, sortKey) || posValue(a) - posValue(b)
   );
 }
 
-// Kompakte Tabelle für die Montageunterlage: Bauteil steht bereits als
-// Überschrift darüber, deshalb hier nicht nochmal als Spalte. Spalten sind
-// anklickbar sortierbar (wie in TB/Lager/Warenkorb) - ein gemeinsamer
-// Sortierzustand für alle Bauteil-Tabellen dieser Seite.
 function MontageTableHead({ toggleSort, arrow }) {
   return (
-    <tr>
-      <th className="sortableTh" onClick={() => toggleSort("pos")}>Pos.{arrow("pos")}</th>
-      <th className="sortableTh" onClick={() => toggleSort("menge")}>Menge{arrow("menge")}</th>
-      <th className="sortableTh" onClick={() => toggleSort("bezeichnung")}>Bezeichnung{arrow("bezeichnung")}</th>
-      <th className="sortableTh" onClick={() => toggleSort("groesse")}>Größe{arrow("groesse")}</th>
-      <th className="sortableTh" onClick={() => toggleSort("laenge")}>Länge{arrow("laenge")}</th>
-      <th className="sortableTh" onClick={() => toggleSort("oberflaeche")}>Ausführung{arrow("oberflaeche")}</th>
-      <th className="sortableTh" onClick={() => toggleSort("regal")}>Regalfach{arrow("regal")}</th>
-      <th>Hinweis</th>
-    </tr>
+    <thead>
+      <tr>
+        <th className="sortableTh colPos" onClick={() => toggleSort("pos")}>Pos.{arrow("pos")}</th>
+        <th className="sortableTh colMenge" onClick={() => toggleSort("menge")}>Menge{arrow("menge")}</th>
+        <th className="sortableTh colBez" onClick={() => toggleSort("bezeichnung")}>Bezeichnung{arrow("bezeichnung")}</th>
+        <th className="sortableTh colGr" onClick={() => toggleSort("groesse")}>Größe{arrow("groesse")}</th>
+        <th className="sortableTh colLa" onClick={() => toggleSort("laenge")}>Länge{arrow("laenge")}</th>
+        <th className="sortableTh colAus" onClick={() => toggleSort("oberflaeche")}>Ausführung{arrow("oberflaeche")}</th>
+        <th className="sortableTh colRegal" onClick={() => toggleSort("regal")}>Regalfach{arrow("regal")}</th>
+        <th className="colHinweis">Hinweis</th>
+      </tr>
+    </thead>
   );
 }
 
 function MontageRow({ item, idx }) {
   return (
     <tr>
-      <td>{item.pos || idx + 1}</td>
-      <td>{item.menge}</td>
-      <td>{item.bezeichnung}</td>
-      <td>{item.groesse}</td>
-      <td>{item.laenge}</td>
-      <td>{item.oberflaeche}</td>
-      <td>{getRegalPlatz(item)}</td>
-      <td>{item.hinweis}</td>
+      <td className="colPos">{item.pos || idx + 1}</td>
+      <td className="colMenge">{item.menge}</td>
+      <td className="colBez">{item.bezeichnung}</td>
+      <td className="colGr">{item.groesse}</td>
+      <td className="colLa">{item.laenge}</td>
+      <td className="colAus">{item.oberflaeche}</td>
+      <td className="colRegal">{getRegalPlatz(item)}</td>
+      <td className={"colHinweis" + (item.important_note ? " importantNote" : "")}>
+        {dedupeHinweisText(item.hinweis)}
+      </td>
     </tr>
   );
 }
 
-function BauteilBlock({ bauteil, items, toggleSort, arrow, headingTag: Heading = "h4" }) {
+function BauteilBlock({ bauteil, items, toggleSort, arrow }) {
   return (
     <div className="printBauteilSection">
-      <Heading>Bauteil: {bauteil}</Heading>
-      <table>
+      <h4>Bauteil: {bauteil}</h4>
+      <table className="printMaterialTable">
+        <MontageTableHead toggleSort={toggleSort} arrow={arrow} />
         <tbody>
-          <MontageTableHead toggleSort={toggleSort} arrow={arrow} />
           {items.map((i, idx) => (
             <MontageRow key={i.id} item={i} idx={idx} />
           ))}
@@ -138,70 +128,98 @@ function BauteilBlock({ bauteil, items, toggleSort, arrow, headingTag: Heading =
   );
 }
 
-export default function PrintView({ project, baugruppe, items, structureRows }) {
+/**
+ * Druck: Baugruppe → Bauteil in derselben Reihenfolge wie die Projektübersicht
+ * (buildProjectStructure), nicht alphabetisch.
+ */
+export default function PrintView({ project, baugruppe, items, projectItems, structureRows }) {
+  const [search, setSearch] = useState("");
   const { sortKey, sortDir, toggleSort, arrow } = useSortableColumns(null);
-  const aggregatedItems = useMemo(
-    () => aggregateForPrint(items, project, structureRows),
-    [items, project, structureRows]
+
+  const printSource = projectItems || items;
+
+  const structure = useMemo(
+    () => buildProjectStructure(project, printSource, structureRows || []),
+    [project, printSource, structureRows]
   );
 
-  const status = baugruppeStatus(items);
+  const byBaugruppe = useMemo(() => {
+    const enriched = printSource.map((i) => ({
+      ...i,
+      ...parseEinbauort(i.einbauort, project?.baugruppe),
+    }));
+    return groupBy(enriched, (i) => i.baugruppe || "");
+  }, [printSource, project]);
 
-  const printSections = useMemo(() => {
-    const byBauteil = groupBy(
-      aggregatedItems,
-      (i) => parseEinbauort(i.einbauort, project?.baugruppe).bauteil
-    );
-    const bauteile = Object.keys(byBauteil);
-    const sections = buildBaugruppeSections(project?.id, baugruppe, bauteile, structureRows || []);
+  const searchActive = Boolean(String(search || "").trim());
 
-    return sections
-      .map((section) => {
-        const bauteilBlocks = section.bauteile
+  const blocks = useMemo(() => {
+    return structure
+      .map(({ baugruppe: bg, bauteile }) => {
+        const bgItems = byBaugruppe[bg] || [];
+        const aggregated = aggregateForPrint(bgItems, project);
+        const filtered = filterBySearch(aggregated, search, (i) => [
+          project?.nr,
+          project?.name,
+          bg,
+          i.bauteil,
+          i.pos,
+          i.bezeichnung,
+          i.groesse,
+          i.laenge,
+          i.oberflaeche,
+          i.hinweis,
+          getRegalPlatz(i),
+          `Pos ${i.pos}`,
+          `Pos. ${i.pos}`,
+          ...sizeLengthSearchParts(i.groesse, i.laenge),
+        ]);
+        const byBauteil = groupBy(filtered, (i) => i.bauteil);
+        // Bauteil-Reihenfolge wie in der Projektübersicht (structure.bauteile)
+        const bauteilBlocks = bauteile
           .filter((bt) => byBauteil[bt]?.length)
           .map((bt) => ({
             bauteil: bt,
             items: sortRows(byBauteil[bt], sortKey, sortDir),
           }));
-        return { ...section, bauteilBlocks };
+        const status = baugruppeStatus(bgItems);
+        return { baugruppe: bg, status, bauteilBlocks };
       })
-      .filter((section) => section.bauteilBlocks.length > 0);
-  }, [aggregatedItems, sortKey, sortDir, project, baugruppe, structureRows]);
+      .filter((b) => b.bauteilBlocks.length > 0);
+  }, [structure, byBaugruppe, project, search, sortKey, sortDir]);
 
   return (
     <div className="card printArea">
       <div className="row noPrint">
         <button onClick={() => window.print()}>Drucken</button>
       </div>
+      <div className="noPrint">
+        <SearchField value={search} onChange={setSearch} />
+        {searchActive && <p className="hint">Druckausgabe gefiltert</p>}
+      </div>
       <h2>Befestigungsmaterial</h2>
-      <p>{project.nr} {project.name} · {project.zeichnung}</p>
-      <h3>{status.emoji} {baugruppe} <small>({status.label})</small></h3>
+      <p>
+        {project.nr} {project.name} · {project.zeichnung}
+      </p>
+      {searchActive && <p className="printFilterHint">Druckausgabe gefiltert</p>}
 
-      {printSections.length === 0 && <p>Keine Materialpositionen in dieser Baugruppe.</p>}
-      {printSections.map((section) => {
-        const showGruppe = Boolean(section.bauteilgruppe);
-        const blocks = section.bauteilBlocks.map(({ bauteil, items: btItems }) => (
-          <BauteilBlock
-            key={bauteil}
-            bauteil={bauteil}
-            items={btItems}
-            toggleSort={toggleSort}
-            arrow={arrow}
-            headingTag={showGruppe ? "h5" : "h4"}
-          />
-        ));
-
-        if (!showGruppe) {
-          return <div key="ungrouped">{blocks}</div>;
-        }
-
-        return (
-          <div className="printGruppeSection" key={section.bauteilgruppe}>
-            <h4>Bauteilgruppe: {section.bauteilgruppe}</h4>
-            {blocks}
-          </div>
-        );
-      })}
+      {blocks.length === 0 && <p>Keine Materialpositionen.</p>}
+      {blocks.map(({ baugruppe: bg, status, bauteilBlocks }) => (
+        <div key={bg} className="printBaugruppeSection">
+          <h3>
+            {status.emoji} {bg} <small>({status.label})</small>
+          </h3>
+          {bauteilBlocks.map(({ bauteil, items: btItems }) => (
+            <BauteilBlock
+              key={`${bg}|${bauteil}`}
+              bauteil={bauteil}
+              items={btItems}
+              toggleSort={toggleSort}
+              arrow={arrow}
+            />
+          ))}
+        </div>
+      ))}
     </div>
   );
 }

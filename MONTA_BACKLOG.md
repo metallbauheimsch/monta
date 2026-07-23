@@ -2,97 +2,59 @@
 
 Dieses Dokument enthält ausschließlich noch offene Aufgaben.
 
-Regeln:
-
-- Nur fachliche Aufgaben.
-- Nach Priorität sortieren.
-- Erledigte Aufgaben werden entfernt und im Changelog dokumentiert.
-- Neue Ideen werden zuerst bewertet und anschließend hier einsortiert.
-
 ---
 
 # Priorität A – Pilotversion
 
-## Auth in Live-Supabase einrichten
+## Auth + Workflow in Live-Supabase
 
-Siehe `AUTH_SETUP.md` und `MONTA_NEXT_SPRINT.md`:
+Siehe `AUTH_SETUP.md`, `MONTA_NEXT_SPRINT.md`, `PRINT_STATION_SETUP.md`:
 
-1. Foundation-SQL
-2. Admin-Registrierung + Bootstrap
-3. Lockdown-SQL
-4. Edge Function `admin-users` deployen
-5. Dashboard: E-Mail-Bestätigung, Passwortregeln, Redirect-URLs
+1. Auth Foundation → Bootstrap → Lockdown
+2. `supabase_patch_workflow_notifications.sql`
+3. `supabase_patch_print_station.sql`
+4. `supabase_patch_workflow_completion.sql`
+5. Edge Functions deployen: `admin-users`, `workflow-notifications`
+6. Mail-Secrets (Resend o. ä.) setzen
+7. Druckstations-Benutzer zuweisen und PC einrichten
+8. Sautter: `full_module_access` in der Benutzerverwaltung setzen
+   („Vollzugriff auf TB und Prüfung“; Spalte aus `supabase_patch_workflow_completion.sql`)
 
 ## PWA / mobile Installation
 
-- App als installierbare PWA für den mobilen Pilotbetrieb vorbereiten
-  (Icons liegen bereits vor; Service Worker / Installationsfluss noch offen).
+- Service Worker / Installationsfluss noch offen
+
+## Live-Test Projektlogik / Korrekturen
+
+- `.env.local` prüfen (gleiche Werte wie Vercel)
+- Bauteil duplizieren an Echtdaten (bewusst)
+- HV-Drehmoment-Kurzformat
+- Hinweisfilter Lager/Warenkorb
 
 ---
 
-# Priorität B – Nach erfolgreicher Auth
+# Priorität B – Nach Pilotbetrieb
 
-## E-Mail-Benachrichtigungen (beschlossen, noch nicht umgesetzt)
+## Nachvollziehbarkeit (bewusst zurückgestellt)
 
-- neue Baugruppe → sautter@metallbau-heimsch.de
-- neue offene Bestellpositionen → stoehr@metallbau-heimsch.de
-- alle Positionen bestellt → sautter@metallbau-heimsch.de
+Später: wer Baugruppe/Bestellung/Lieferung/Druckstation – ohne großes Protokoll jetzt.
+Keine `created_by`-Pflichtspalten in diesem Stand.
 
-## Druckstation (beschlossen, noch nicht umgesetzt)
+## Lager / Druck / Projekte
 
-- eine konkrete angemeldete Gerätesitzung als Druckstation (nicht nur Benutzer)
-- Drucker: Ricoh IM C2010, A4 Farbe
-- automatischer Einmaldruck bei 100 % montagebereit
-- Schutz vor Mehrfachdruck
-
-## Nachvollziehbarkeit (Vorbereitung)
-
-Später erkennbar machen, wer was getan hat (ohne großen Aufwand jetzt):
-
-- wer eine Baugruppe angelegt hat
-- wer Positionen bestellt hat
-- wer eine Lieferung bestätigt hat
-- welche Gerätesitzung als Druckstation dient
-
-Noch keine `created_by`/`updated_by`-Spalten in diesem Stand.
-
----
-
-# Priorität C – Nach Pilotbetrieb
-
-## Lager
-
-- Schnellfilter (Freitextsuche ist vorhanden; weitere Schnellfilter optional)
-
-## Druck
-
-- Weitere Drucklayouts
-
-## Projekte
-
-- Archiv komfortabler durchsuchen
-
-## Komfort
-
-- Suchfunktionen erweitern
-- Weitere Druckoptionen
-
-(„Statistiken" sind laut `MONTA_DECISIONS.md` kein Bestandteil von MONTA.)
+- Weitere Schnellfilter, Drucklayouts, Archivsuche
 
 ---
 
 # Ideenparkplatz
 
-Hier kommen neue Ideen hinein.
-
-Vor jeder Umsetzung:
-
-> Ist das wirklich die einfachste Lösung für Metallbau Heimsch?
+Vor jeder Umsetzung: einfachste sinnvolle Lösung für Metallbau Heimsch?
 
 ---
 
 # Aktueller Fokus
 
-1. Auth-Rollout in Live-Supabase (Foundation → Bootstrap → Lockdown)
-2. Edge Function deployen und Admin-Tests
-3. Danach E-Mail-Benachrichtigungen / Druckstation oder PWA
+1. Auth- und Workflow-Patches live anwenden
+2. Mailanbieter + Edge Functions
+3. Druckstation am Büro-PC testen
+4. Danach PWA

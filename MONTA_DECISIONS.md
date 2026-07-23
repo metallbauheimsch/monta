@@ -99,9 +99,19 @@ Gleiche Artikel werden innerhalb einer Baugruppe zusammengefasst.
 
 Die Lageransicht zeigt das Regalfach an und sortiert im tatsächlichen Paternoster-Laufweg:
 
-27 → 26 → 25 → 24 → 9 → 7 → 6 → 5 → 4 → 3 → 2 → 1
+27 → 26 → 25 → 24 → 10 → 9 → 7 → 6 → 5 → 4 → 3 → 2 → 1
 
-Die Regalfachzuordnung ist fest in einer zentralen Konfigurationsdatei hinterlegt.
+Die Regalfachzuordnung wird dynamisch aus Bezeichnung + Ausführung + Größe berechnet
+(`regalOrder.js`). Es gibt keine gespeicherte Fach-Spalte in der Datenbank und keine
+globale Migration bestehender Positionen.
+
+Verbindliche Fachlogik (Priorität):
+
+1. Sonderartikel: GiRo→10, Keilscheiben→26, Hilti HAS→2,
+   Dübelfamilie (Edelstahl→4, verzinkt/feuerverzinkt→25), HV→26
+2. Edelstahl-Kleinmaß M4–M6 → Fach 6
+3. Galvanisch M3–M6 → Fach 1
+4. Matrix ab M8 (Edelstahl→5, galvanisch 27/26, feuerverzinkt→9)
 
 Keine Pflegeoberfläche.
 
@@ -274,8 +284,58 @@ sind untersagt.
 
 Service-Role-Schlüssel gehören nicht in Browser oder Repository.
 
-E-Mail-Benachrichtigungen zu Baugruppen/Bestellungen und die Druckstation
-werden später auf dieser Benutzerbasis umgesetzt – nicht in diesem Stand.
+Workflow-Benachrichtigungen erfolgen serverseitig per Edge Function.
+Auslöser sind bewusste Abschlussaktionen bzw. der fachliche Übergang
+„vollständig bestellt“:
+
+- TB/Prüfung abgeschlossen → sautter@metallbau-heimsch.de
+- Lagerprüfung abgeschlossen → stoehr@metallbau-heimsch.de
+- Alle offenen Positionen des **gesamten Projekts** bestellt → sautter@metallbau-heimsch.de
+
+Keine Mail beim bloßen Anlegen einer Baugruppe.
+Keine Mail allein durch neue offene Warenkorbzeilen.
+
+Doppelversand wird über eindeutige `event_key` (inkl. Abschlusszyklus) in
+`notification_events` verhindert. Empfänger bestimmt nur der Server.
+
+Abschlussstatus gehört zur Baugruppe (`project_structure`, bauteil IS NULL):
+`tb_pruefung_abgeschlossen`, `lager_abgeschlossen`.
+
+„Anfrage per Mail“ enthält nur Positionen mit offener Fehlmenge, die noch
+nicht bestellt und noch nicht vollständig geliefert sind.
+
+Mobile Reiter (≤1024 px): TB und Prüfung nur für Administratoren und Nutzer
+mit `full_module_access`. Andere Nutzer sehen mobil Lager, Warenkorb, Druck.
+Solange das Profil noch lädt, werden TB/Prüfung nicht vorschnell ausgeblendet.
+
+Anmeldung: Checkbox „Angemeldet bleiben“ (Standard an). Aktiv → Session in
+localStorage; deaktiviert → sessionStorage (nur aktuelle Browser-Sitzung).
+Passwörter werden nie gespeichert.
+
+`sort_order` in `project_structure` ist eine kleine integer-Reihenfolge,
+niemals ein Millisekunden-Zeitstempel.
+
+Die optionale UI „Bauteile gruppieren“ ist entfernt. Die DB-Spalte
+`bauteilgruppe` bleibt unangetastet und wird ignoriert.
+
+Prüfung, Lager und Warenkorb aggregieren identische Artikel nur zur Anzeige
+projektweit; Originalpositionen bleiben unverändert.
+
+Druck bleibt nach Baugruppe → Bauteil gegliedert und besitzt eine Freitextsuche.
+
+- HV-Garnitur, Hilti-HIT-/Verbundmörtel-Drehmomente und Ankerstangen-Mitlauf
+gelten nur für neue bzw. bewusst bearbeitete Positionen.
+Automatische Drehmomente werden kurz als „450 Nm“ gespeichert (nicht
+„Anziehdrehmoment: …“).
+
+Bauteil-Duplizieren kopiert Material mit neuen UUIDs und setzt Lager-/Bestellstatus
+zurück. Baugruppe-Duplizieren gibt es nicht.
+
+Die Druckstation ist benutzer- und gerätebezogen: Admin weist einen Benutzer
+zu; dieser aktiviert genau ein PC-Gerät. Zielgerät Ricoh IM C2010 (A4, Farbe).
+Stilles Drucken erfordert lokale Windows-/Browser-Konfiguration.
+
+Es gibt keine allgemeine Bestellverwaltung und keine umfassende Änderungshistorie.
 
 ---
 
@@ -299,6 +359,10 @@ werden später auf dieser Benutzerbasis umgesetzt – nicht in diesem Stand.
 
 - TB-Vorschlagslisten: Übernahme per Enter/Leertaste bei markiertem Eintrag;
   freies Leerzeichen bleibt möglich
+
+- „Wichtiger Hinweis“: rot und fett in allen relevanten Ansichten und im Druck
+
+- Lager: Spalte Herkunft sortierbar (Baugruppe → Bauteilgruppe → Bauteil → Pos.)
 
 ---
 

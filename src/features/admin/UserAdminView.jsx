@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../../services/supabaseClient";
 import { useAuth } from "../../auth/AuthContext";
+import {
+  loadActivePrintStation,
+  loadPrintJobs,
+  loadPrintStationSettings,
+  resetPrintJob,
+  setPrintStationUser,
+  adminCompletePrintJob,
+} from "../../services/printStation";
 
 const FILTERS = [
   { id: "pending", label: "Wartet auf Freigabe" },
@@ -25,12 +33,15 @@ function statusLabel(s) {
   return s || "–";
 }
 
-export default function UserAdminView({ onBack }) {
+export default function UserAdminView({ onBack, onPrintStationUserChanged }) {
   const { user, profile, invokeAdminUsers, isAdmin } = useAuth();
   const [rows, setRows] = useState([]);
   const [filter, setFilter] = useState("pending");
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState(null);
+  const [stationUserId, setStationUserId] = useState(null);
+  const [activeStation, setActiveStation] = useState(null);
+  const [printJobs, setPrintJobs] = useState([]);
 
   const loadUsers = useCallback(async () => {
     if (!supabase || !isAdmin) return;
@@ -49,6 +60,26 @@ export default function UserAdminView({ onBack }) {
   useEffect(() => {
     loadUsers();
   }, [loadUsers]);
+
+  const reloadPrintMeta = useCallback(async () => {
+    const [s, st, jobs] = await Promise.all([
+      loadPrintStationSettings(),
+      loadActivePrintStation(),
+      loadPrintJobs(12),
+    ]);
+    setStationUserId(s?.user_id || null);
+    setActiveStation(st);
+    setPrintJobs(jobs);
+  }, []);
+
+  useEffect(() => {
+    if (isAdmin) reloadPrintMeta();
+  }, [isAdmin, reloadPrintMeta]);
+
+  const activeUsers = useMemo(
+    () => rows.filter((r) => r.status === "active"),
+    [rows]
+  );
 
   const activeAdminCount = useMemo(
     () => rows.filter((r) => r.status === "active" && r.role === "admin").length,
@@ -136,6 +167,11 @@ export default function UserAdminView({ onBack }) {
     await patchProfile(row.user_id, { role: "user" });
   }
 
+  async function toggleFullModuleAccess(row) {
+    const next = !row.full_module_access;
+    await patchProfile(row.user_id, { full_module_access: next });
+  }
+
   async function deleteUser(row) {
     if (isSelf(row)) {
       setError("Sie können sich nicht selbst löschen.");
@@ -187,6 +223,113 @@ export default function UserAdminView({ onBack }) {
 
       {error && <p className="authError">{error}</p>}
 
+      <div className="card noPrint">
+        <h3>Druckstations-Benutzer</h3>
+        <p className="hint">Nur ein Benutzer. Das konkrete Gerät aktiviert dieser Nutzer selbst am PC.</p>
+        <label className="radioLine">
+          <input
+            type="radio"
+            name="printStationUser"
+            checked={!stationUserId}
+            onChange={async () => {
+              if (
+                !confirm(
+                  "Druckstations-Benutzer wirklich ändern? Die bisherige Druckstation wird deaktiviert."
+                )
+              ) {
+                return;
+              }
+                try {
+                await setPrintStationUser(null);
+                setStationUserId(null);
+                onPrintStationUserChanged?.(null);
+                await reloadPrintMeta();
+              } catch (err) {
+                setError(err?.message || "Speichern fehlgeschlagen.");
+              }
+            }}
+          />
+          Keine Druckstation
+        </label>
+        {activeUsers.map((r) => (
+          <label className="radioLine" key={r.user_id}>
+            <input
+              type="radio"
+              name="printStationUser"
+              checked={stationUserId === r.user_id}
+              onChange={async () => {
+                if (stationUserId === r.user_id) return;
+                if (
+                  !confirm(
+                    "Druckstations-Benutzer wirklich ändern? Die bisherige Druckstation wird deaktiviert."
+                  )
+                ) {
+                  return;
+                }
+                try {
+                  await setPrintStationUser(r.user_id);
+                  setStationUserId(r.user_id);
+                  onPrintStationUserChanged?.(r.user_id);
+                  await reloadPrintMeta();
+                } catch (err) {
+                  setError(err?.message || "Speichern fehlgeschlagen.");
+                }
+              }}
+            />
+            {r.display_name || "–"} – {r.email}
+          </label>
+        ))}
+        <p className="hint" style={{ marginTop: 8 }}>
+          Aktive Station:{" "}
+          {activeStation
+            ? `${activeStation.device_name || "Gerät"} · Kontakt ${
+                activeStation.last_seen_at
+                  ? new Date(activeStation.last_seen_at).toLocaleString("de-DE")
+                  : "–"
+              }`
+            : "keine"}
+        </p>
+        <h4>Druckaufträge</h4>
+        <div className="tableWrap">
+          <table className="editTable">
+            <thead>
+              <tr>
+                <th>Baugruppe</th>
+                <th>Status</th>
+                <th>Erstellt</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {printJobs.length === 0 && (
+                <tr>
+                  <td colSpan={4}>Keine Aufträge</td>
+                </tr>
+              )}
+              {printJobs.map((j) => (
+                <tr key={j.id}>
+                  <td>{j.baugruppe}</td>
+                  <td>{j.status}</td>
+                  <td>{formatDate(j.created_at)}</td>
+                  <td>
+                    <div className="adminActions">
+                      <button type="button" className="ghost" onClick={() => resetPrintJob(j.id).then(reloadPrintMeta)}>
+                        Zurücksetzen
+                      </button>
+                      {j.status !== "printed" && (
+                        <button type="button" className="ghost" onClick={() => adminCompletePrintJob(j.id).then(reloadPrintMeta)}>
+                          Erledigt
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div className="tabs noPrint">
         {FILTERS.map((f) => (
           <button
@@ -208,6 +351,7 @@ export default function UserAdminView({ onBack }) {
               <th>E-Mail</th>
               <th>Status</th>
               <th>Rolle</th>
+              <th>Vollzugriff</th>
               <th>Registriert am</th>
               <th>Freigegeben am</th>
               <th>Aktionen</th>
@@ -216,17 +360,20 @@ export default function UserAdminView({ onBack }) {
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7}>Keine Benutzer in diesem Filter.</td>
+                <td colSpan={8}>Keine Benutzer in diesem Filter.</td>
               </tr>
             )}
             {filtered.map((row) => {
               const busy = busyId === row.user_id;
+              const fullAccess =
+                row.role === "admin" || Boolean(row.full_module_access);
               return (
                 <tr key={row.user_id}>
                   <td>{row.display_name || "–"}</td>
                   <td>{row.email}</td>
                   <td>{statusLabel(row.status)}</td>
                   <td>{row.role === "admin" ? "Administrator" : "Benutzer"}</td>
+                  <td>{fullAccess ? "Ja" : "Nein"}</td>
                   <td>{formatDate(row.created_at)}</td>
                   <td>{formatDate(row.approved_at)}</td>
                   <td>
@@ -258,6 +405,18 @@ export default function UserAdminView({ onBack }) {
                               onClick={() => removeAdmin(row)}
                             >
                               Adminrechte entfernen
+                            </button>
+                          )}
+                          {row.role !== "admin" && (
+                            <button
+                              type="button"
+                              className="ghost"
+                              disabled={busy}
+                              onClick={() => toggleFullModuleAccess(row)}
+                            >
+                              {row.full_module_access
+                                ? "Vollzugriff entfernen"
+                                : "Vollzugriff auf TB und Prüfung"}
                             </button>
                           )}
                           <button

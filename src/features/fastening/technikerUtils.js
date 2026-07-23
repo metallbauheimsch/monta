@@ -22,24 +22,7 @@ export function allocatePositions(items, count) {
   return positions;
 }
 
-// Automatische Mitlaufartikel je erfasster Position.
-// Menge-Faktor bezieht sich auf 1 Stück der Hauptposition.
-const MITLAUFARTIKEL_REGELN = {
-  sechskantschraube: [
-    { bezeichnung: "U-Scheibe", faktor: 2 },
-    { bezeichnung: "Sechskantmutter", faktor: 1 },
-  ],
-  senkschraube: [
-    { bezeichnung: "U-Scheibe", faktor: 1 },
-    { bezeichnung: "Sechskantmutter", faktor: 1 },
-  ],
-  // Bolzenanker, Betonschraube: bewusst keine automatische Ergänzung
-};
-
-export function getMitlaufartikel(bezeichnung) {
-  const key = String(bezeichnung || "").trim().toLowerCase();
-  return MITLAUFARTIKEL_REGELN[key] || [];
-}
+export { getMitlaufForBezeichnung as getMitlaufartikel } from "./fasteningRules";
 
 // Ursprüngliche TB-Positionsnummern mehrerer zusammengefasster Positionen
 // als lesbare Liste: numerisch sortiert, ohne Duplikate, keine technischen

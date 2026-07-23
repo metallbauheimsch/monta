@@ -15,50 +15,47 @@ export default function ProjectView({
   structureRows,
   backToDetail,
   isNarrow,
+  fullModuleAccess,
   tab,
   setTab,
   addItem,
   updateItem,
   deleteItem,
+  setBaugruppeCompletion,
 }) {
-  const visibleTabs = visibleTabsFor(isNarrow);
+  const visibleTabs = visibleTabsFor(isNarrow, { fullAccess: fullModuleAccess });
 
-  // Wenn TB/Prüfung durch Viewport ausgeblendet werden: auf Lager wechseln.
   useEffect(() => {
-    if (!visibleTabs.includes(tab)) setTab("material");
+    if (!visibleTabs.includes(tab)) {
+      setTab(visibleTabs.includes("material") ? "material" : visibleTabs[0]);
+    }
   }, [visibleTabs, tab, setTab]);
 
   const isTbTab = tab === "tb";
   const tbStatus = baugruppeStatus(baugruppeItems);
-  const groupHint = (() => {
-    if (!structureRows || !baugruppe || !bauteil) return null;
-    const row = structureRows.find(
-      (r) =>
-        String(r.project_id) === String(project.id) &&
-        r.baugruppe === baugruppe &&
-        String(r.bauteil || "") === bauteil &&
-        r.bauteilgruppe
-    );
-    return row?.bauteilgruppe || null;
-  })();
 
   return (
     <>
-      <button className="ghost" onClick={backToDetail}>← Baugruppen &amp; Bauteile</button>
+      <button className="ghost" onClick={backToDetail}>
+        ← Baugruppen &amp; Bauteile
+      </button>
       {isTbTab ? (
         <p className="tbContext">
           {tbStatus.emoji} <b>Baugruppe: {baugruppe}</b>
-          {groupHint ? <> · <b>Gruppe: {groupHint}</b></> : null}
-          {" "}· <b>Bauteil: {bauteil}</b>
-          <span className="tbContextProject"> · {project.nr} {project.name}</span>
+          {" "}
+          · <b>Bauteil: {bauteil}</b>
+          <span className="tbContextProject">
+            {" "}
+            · {project.nr} {project.name}
+          </span>
         </p>
       ) : (
         <>
           <ProjectHeader project={project} status={projectStatus(project, allItems)} />
           <p className="breadcrumb">
             {baugruppe}
-            {groupHint ? <><span className="sep">›</span>{groupHint}</> : null}
-            <span className="sep">›</span>{bauteil}
+            <span className="sep">›</span>
+            {bauteil}
           </p>
         </>
       )}
@@ -81,6 +78,7 @@ export default function ProjectView({
         addItem={addItem}
         updateItem={updateItem}
         deleteItem={deleteItem}
+        setBaugruppeCompletion={setBaugruppeCompletion}
       />
     </>
   );

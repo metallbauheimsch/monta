@@ -3,47 +3,56 @@
 Interne Web-App für Metallbau Heimsch zur Verwaltung von Befestigungsmaterial
 je Projekt. Optimiert ausschließlich für diesen Betrieb, kein Standardprodukt.
 
-Statistiken sind grundsätzlich kein Bestandteil von MONTA.
-
 ## Zugang
 
-MONTA ist nicht öffentlich. Zugriff nur nach:
+Registrierung → E-Mail-Bestätigung → Admin-Freigabe (`active`). Details:
+`AUTH_SETUP.md`.
 
-1. Registrierung (E-Mail + Passwort + Anzeigename)
-2. E-Mail-Bestätigung
-3. Freigabe durch einen Administrator (`status = active`)
+Admin und Nutzer mit `full_module_access` sehen alle Reiter auch auf Tablet/Smartphone
+(Stöhr als Admin, Sautter über Vollzugriff). Checkbox „Angemeldet bleiben“ steuert
+die Session-Persistenz (siehe AUTH_SETUP.md).
 
-Rollen: `user` | `admin`. Status: `pending` | `active` | `blocked`.
-
-Erster Administrator: `stoehr@metallbau-heimsch.de` (manueller SQL-Bootstrap
-nach Registrierung, siehe `AUTH_SETUP.md`).
+Regalfächer werden dynamisch berechnet (`regalOrder.js`), nicht in der DB gespeichert.
 
 ## Datenmodell
 
-Projekt → Baugruppe → Bauteilgruppe (optional) → Bauteil → Materialposition
+Projekt → Baugruppe → Bauteil → Materialposition
 
-Zusätzlich: `user_profiles` (Supabase Auth + Freigabe/Rolle).
+(Baugruppe = artgleiche Bauteile, z. B. Stützen S1–S5.)
 
-- `projects`, `material_items`, `project_structure` nur für aktive Nutzer (RLS).
-- Bauteilgruppen: Spalte `bauteilgruppe` auf `project_structure`.
+Die Spalte `bauteilgruppe` kann in der DB noch existieren, wird in der UI
+nicht mehr genutzt und nicht migriert.
 
-## Funktionen (Ist-Stand nach Sicherheits-Sprint)
+Zusätzlich:
 
-- Anmeldung / Registrierung / Passwort vergessen / Abmelden
-- Warteseite (pending) und Sperrseite (blocked) ohne Projektdaten
-- Benutzerverwaltung für Administratoren (Freigeben, Sperren, Löschen, Rollen)
-- Freitextsuche, Bauteilgruppen, Mobile ≤1024 px (ohne TB/Prüfung)
-- Mehrgeräte-Sync nur nach erfolgreicher Freigabe
+- `user_profiles` (Auth/Freigabe, optional `full_module_access`)
+- `notification_events` (Workflow-Mails, Duplikatschutz)
+- `print_station_settings` / `print_station_config` / `print_jobs`
+- `material_items.important_note`
+- `project_structure.tb_pruefung_abgeschlossen` / `lager_abgeschlossen`
 
-## Speicherorte
+## Ansichten
 
-**Supabase:** Auth, Profile, Projekte, Struktur, Material.
+- **TB:** je Bauteil
+- **Prüfung / Lager / Warenkorb:** projektweit (Aggregation nur zur Anzeige)
+- **Druck:** nach Baugruppe → Bauteil getrennt, mit Suche
 
-**Lokal:** Session-Token nur über Supabase Auth; manuelle Lagerwerte und
-gelernte Bezeichnungen weiterhin lokal. Passwörter werden nicht lokal gespeichert.
+## Workflow
 
-## Bekannte Einschränkungen / offene Einrichtung
+- TB/Prüfung abgeschlossen → sautter@…
+- Lagerprüfung abgeschlossen → stoehr@…
+- Alle Positionen des **Projekts** bestellt → sautter@…
 
-- SQL-Patches und Dashboard-Auth manuell: siehe `AUTH_SETUP.md`
-- Edge Function `admin-users` manuell deployen
-- E-Mail-Fachbenachrichtigungen und Druckstation: Folgesprints
+## Befestigungsregeln (neu / bewusst bearbeitet)
+
+- HV-Garnitur: eine Position, kein Mitlauf, Drehmomente kurz („450 Nm“)
+- Hilti HIT / Verbundmörtel: Drehmomente nach Größe
+- Ankerstange: U-Scheibe + Sechskantmutter automatisch
+
+Bestehende Positionen werden nicht rückwirkend geändert.
+
+Lokal: dieselben Supabase-Variablen wie Vercel in `.env.local` (siehe AUTH_SETUP.md).
+
+## Sicherheit
+
+`MONTA_SAFETY.md` und `MONTA_PRINCIPLES.md` haben Vorrang.

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../auth/AuthContext";
 import { PASSWORD_RULES, passwordMismatch, validatePassword } from "../../auth/passwordRules";
+import { getRememberMePreference, setRememberMePreference } from "../../services/supabaseClient";
 
 function PasswordRules({ password }) {
   const p = String(password || "");
@@ -34,6 +35,7 @@ export default function AuthPage() {
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [rememberMe, setRememberMe] = useState(() => getRememberMePreference());
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -52,6 +54,8 @@ export default function AuthPage() {
     clearFeedback();
     setBusy(true);
     try {
+      // Präferenz vor signIn setzen, damit Auth-Storage den richtigen Speicher nutzt
+      setRememberMePreference(rememberMe);
       await signIn(email, password);
       setPassword("");
     } catch (err) {
@@ -165,6 +169,14 @@ export default function AuthPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
             />
+            <label className="checkboxLine">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+              Angemeldet bleiben
+            </label>
             <button type="submit" disabled={busy}>{busy ? "…" : "Anmelden"}</button>
             <div className="authLinks">
               <button type="button" className="linkBtn" onClick={() => { clearFeedback(); setMode("forgot"); }}>

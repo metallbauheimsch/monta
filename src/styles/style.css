@@ -35,7 +35,8 @@ button{background:#111;color:white;border:0;font-weight:800;cursor:pointer}.ghos
 .tabs{display:flex;gap:8px;overflow:auto;margin:12px 0}.tabs button{background:white;color:#111;border:1px solid #ccc;text-transform:capitalize;white-space:nowrap}.tabs .active{background:#111;color:white}
 .line{border-top:1px solid #eee;padding:10px 0}.tableWrap{overflow:auto}.editTable input{border:0;border-radius:8px;padding:8px;min-width:80px}
 .editTable .posCell{padding:8px;text-align:center;color:#666;font-weight:700}
-.entryGrid{display:grid;grid-template-columns:90px 1.5fr 90px 90px 1fr 1.5fr 120px;gap:8px;align-items:center}
+.entryGrid{display:grid;grid-template-columns:90px 1.5fr 90px 90px 1fr 1.2fr auto 120px;gap:8px;align-items:center}
+.entryImportantNote{margin:0;white-space:nowrap;font-size:13px}
 .stats{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.stats span{background:#f2f2f2;border-radius:999px;padding:6px 9px;font-size:14px}
 table{width:100%;border-collapse:collapse;background:white;font-size:14px}
 th,td{border:1px solid #d0d0d0;padding:8px;text-align:left}
@@ -47,6 +48,9 @@ th{background:#eee;font-weight:700}
 .rowDone{background:#eef8ee}
 .breadcrumb{color:#666;font-size:14px;margin:0 0 6px}.breadcrumb .sep{margin:0 4px}
 .checkboxLine{display:flex;align-items:center;gap:8px;font-size:14px;color:#444;margin-top:6px}.checkboxLine input{width:auto}
+.completionLine{margin:8px 0 12px;padding:6px 10px;border-radius:6px;width:fit-content;max-width:100%}
+.completionLine.completionDone{background:#eef8ee;color:#1a5c2e}
+.completionBadge{font-size:12px;font-weight:600;color:#1a5c2e;margin-left:4px}
 .chipRow{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
 .chip{width:auto;background:#f2f2f2;color:#111;border:1px solid #ddd;border-radius:999px;padding:10px 16px;font-weight:700}
 .chip:hover{background:#e6e6e6}
@@ -132,21 +136,54 @@ th{background:#eee;font-weight:700}
 .bauteilgruppeHead{display:flex;align-items:center;gap:8px;margin:0 0 4px}
 .bauteilgruppeHead h4{margin:0;font-size:14px;color:#444}
 .bauteilgruppeForm{margin-top:10px;padding-top:8px;border-top:1px solid #eee}
+.colHerkunft{min-width:140px;max-width:280px}
+.herkunftCell{max-width:280px}
+.herkunftNames{overflow-wrap:anywhere;word-break:break-word}
+.herkunftPos{margin-top:2px}
+.printFilterHint{font-size:12px;color:#555;margin:4px 0 8px}
+.printBaugruppeSection{margin-top:18px;page-break-inside:avoid}
 .printGruppeSection{margin:8px 0 6px}
 .printGruppeSection > h4{margin:0 0 4px;font-size:14px;color:#333}
 .printBauteilSection{margin:4px 0 10px}
 .printBauteilSection h4,.printBauteilSection h5{margin:0 0 4px;font-size:13px;color:#444}
 .editTable .suggestionCell,.editTable .bezeichnungCell{max-width:180px}
 .editTable .suggestionEllipsis,.editTable .bezeichnungEllipsis{text-overflow:ellipsis;overflow:hidden;white-space:nowrap;min-width:0}
+.importantNote{color:#b00000;font-weight:400}
+.importantNoteInput{color:#b00000;font-weight:400}
+.printFilterHint{font-size:12px;color:#555;margin:4px 0 8px}
+.printBaugruppeSection{margin-top:18px;page-break-inside:avoid}
+.finishHint{margin:8px 0}
+.bauteilContextMenu{position:fixed;z-index:10000;min-width:160px;padding:4px 0;background:#fff;border:1px solid #c8c8c8;box-shadow:2px 2px 8px rgba(0,0,0,.18);border-radius:2px}
+.bauteilContextMenu button{display:block;width:100%;text-align:left;background:transparent;border:0;border-radius:0;padding:8px 16px;font:inherit;font-weight:400;color:#111;cursor:default}
+.bauteilContextMenu button:hover,.bauteilContextMenu button:focus{background:#e8e8e8;outline:none}
+.bauteilContextMenu .dangerItem{color:#b00000}
+.bauteilContextMenu .dangerItem:hover{background:#f5e8e8}
+.bauteilDialogBackdrop{position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;padding:16px}
+.bauteilDialog{min-width:min(320px,100%);max-width:420px;margin:0}
+.radioLine{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:14px}
+.radioLine input{width:auto}
+.printStationBanner{background:#111;color:#fff;padding:8px 12px;font-size:13px;font-weight:700;margin:0 0 10px;border-radius:10px}
+.printStationPanel h3,.printStationPanel h4{margin:0 0 6px}
+.printMaterialTable{table-layout:fixed;width:100%;border-collapse:collapse}
+.printMaterialTable th,.printMaterialTable td{border:1px solid #d0d0d0;padding:6px 8px;vertical-align:top;word-wrap:break-word;overflow-wrap:anywhere}
+.printMaterialTable .colPos{width:7%}
+.printMaterialTable .colMenge{width:7%}
+.printMaterialTable .colBez{width:22%}
+.printMaterialTable .colGr{width:8%}
+.printMaterialTable .colLa{width:8%}
+.printMaterialTable .colAus{width:12%}
+.printMaterialTable .colRegal{width:10%}
+.printMaterialTable .colHinweis{width:26%}
 @media print{
-  header,button,.tabs,.hint,.ghost,.noPrint,.searchField{display:none!important}
+  header,button,.tabs,.hint,.ghost,.noPrint,.searchField,.printStationBanner,.printStationPanel{display:none!important}
   main{max-width:none;padding:0}
   .card{border:0;box-shadow:none;padding:0;margin:0}
   .printArea{display:block}
   h2,h3{margin:0 0 4px}
   .printArea p{margin:2px 0 8px}
-  table{font-size:12px;border-collapse:collapse}
-  th,td{padding:4px 6px;border:1px solid #ccc}
-  th{background:#eee}
+  .printMaterialTable{font-size:11px;table-layout:fixed;width:100%}
+  .printMaterialTable thead{display:table-header-group}
+  .printMaterialTable th,.printMaterialTable td{padding:3px 4px;border:1px solid #999}
+  .importantNote{color:#b00000;font-weight:400;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .rowDone{background:#eef8ee}
 }

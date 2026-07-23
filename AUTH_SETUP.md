@@ -54,6 +54,30 @@ Für Passwort-Reset und E-Mail-Bestätigung dieselben Origins.
 - Confirm signup / Reset password prüfen (Absender, Links)
 - In diesem Sprint **keine** zusätzlichen Fach-Benachrichtigungen (Baugruppe/Bestellung)
 
+Fach-Mails laufen über Edge Function `workflow-notifications` (siehe
+`supabase/functions/workflow-notifications/README.md`), nicht über Auth-Templates.
+
+Aktive Auslöser: TB/Prüfung abgeschlossen, Lagerprüfung abgeschlossen,
+vollständig bestellt. Keine Mail beim Anlegen einer Baugruppe.
+
+### Vollzugriff (Reiter mobil)
+
+Administratoren sehen alle Reiter auf allen Geräten.
+
+Zusätzliches Profilfeld `full_module_access` (Admin setzt in der
+Benutzerverwaltung als „Vollzugriff auf TB und Prüfung“): erlaubt TB und
+Prüfung auch auf Tablet/Smartphone für ausgewählte normale Nutzer (z. B. Sautter).
+
+Falls die Spalte in der Live-DB fehlt: vorhandenen Patch
+`supabase_patch_workflow_completion.sql` ausführen (nicht neu anlegen).
+
+Während das Profil noch lädt, werden TB/Prüfung nicht vorschnell ausgeblendet.
+
+### Angemeldet bleiben
+
+Auf der Anmeldeseite (Standard: aktiv). Steuert nur den Speicherort der
+Supabase-Session (localStorage vs. sessionStorage). Keine Passwortspeicherung.
+
 ### API Keys
 
 Im Frontend nur:
@@ -70,4 +94,17 @@ VITE_SUPABASE_URL=https://xxxx.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJ...
 ```
 
-Lokal: `.env` / `.env.local` (steht in `.gitignore`).
+Lokal: `.env.local` anlegen (Vorlage: `.env.example`, steht in `.gitignore`).
+
+**Wichtig:** Ohne `VITE_SUPABASE_URL` und `VITE_SUPABASE_ANON_KEY` verbindet
+die lokale App sich nicht mit Supabase. Dann fehlen die Live-Projektdaten
+(Vercel hat dieselben Variablen in den Project Settings).
+
+Schritte:
+
+1. In Vercel dieselben beiden Variablennamen notieren (Werte nicht ins Repo).
+2. Lokal `.env.local` mit denselben Werten füllen.
+3. Dev-Server neu starten (`npm run dev`).
+4. Mit demselben aktiven Benutzer anmelden.
+
+Niemals Keys in Changelog, Chat-Logs oder Git speichern.

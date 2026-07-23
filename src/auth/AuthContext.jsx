@@ -217,6 +217,9 @@ export function AuthProvider({ children }) {
       setRecoveryMode,
       isActive: profile?.status === "active",
       isAdmin: profile?.status === "active" && profile?.role === "admin",
+      hasFullModuleAccess:
+        profile?.status === "active" &&
+        (profile?.role === "admin" || Boolean(profile?.full_module_access)),
       isPending: profile?.status === "pending",
       isBlocked: profile?.status === "blocked",
       refreshProfile,

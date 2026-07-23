@@ -21,11 +21,16 @@ export const descriptions = [
   "Hilti HIT",
   "Verbundmörtel",
   "Ankerstange",
+  "HV-Garnitur",
   "Blindniete",
 ];
 
 // Ausführung ersetzt die bisherige "Oberfläche" (Festigkeit wird nicht verwendet).
+// "HV" bleibt als Ausführungswert für bestehende Daten; neue HV-Schrauben
+// werden über die Bezeichnung „HV-Garnitur“ erfasst.
 export const ausfuehrungen = ["galvanisch", "feuerverzinkt", "HV", "Edelstahl"];
 
-// Größenvorschläge M4 bis M20, freie Eingabe bleibt weiterhin möglich.
-export const groessen = ["M4", "M5", "M6", "M8", "M10", "M12", "M14", "M16", "M18", "M20"];
+// Größenvorschläge inkl. M22/M24 für HV-Drehmomente.
+export const groessen = [
+  "M4", "M5", "M6", "M8", "M10", "M12", "M14", "M16", "M18", "M20", "M22", "M24",
+];

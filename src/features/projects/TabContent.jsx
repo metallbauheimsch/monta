@@ -16,13 +16,13 @@ export default function TabContent({
   addItem,
   updateItem,
   deleteItem,
+  setBaugruppeCompletion,
 }) {
   if (tab === "tb") {
     return (
       <TechnikerEditor
         items={bauteilItems}
         allProjectItems={projectItems}
-        structureRows={structureRows}
         addItem={addItem}
         updateItem={updateItem}
         deleteItem={deleteItem}
@@ -35,10 +35,11 @@ export default function TabContent({
   if (tab === "pruefung")
     return (
       <Checks
-        items={baugruppeItems}
+        items={projectItems}
         baugruppe={baugruppe}
         project={project}
         structureRows={structureRows}
+        setBaugruppeCompletion={setBaugruppeCompletion}
       />
     );
   if (tab === "material")
@@ -48,6 +49,8 @@ export default function TabContent({
         updateItem={updateItem}
         project={project}
         structureRows={structureRows}
+        baugruppe={baugruppe}
+        setBaugruppeCompletion={setBaugruppeCompletion}
       />
     );
   if (tab === "bestellliste")
@@ -56,7 +59,6 @@ export default function TabContent({
         items={projectItems}
         project={project}
         updateItem={updateItem}
-        structureRows={structureRows}
       />
     );
   if (tab === "druck")
@@ -65,6 +67,7 @@ export default function TabContent({
         project={project}
         baugruppe={baugruppe}
         items={baugruppeItems}
+        projectItems={projectItems}
         structureRows={structureRows}
       />
     );

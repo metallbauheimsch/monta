@@ -10,8 +10,17 @@ import AuthPage from "./features/auth/AuthPage";
 import AccessPending from "./features/auth/AccessPending";
 import AccessBlocked from "./features/auth/AccessBlocked";
 import UserAdminView from "./features/admin/UserAdminView";
+import PrintStationWorker from "./features/print/PrintStationWorker";
+import PrintStationPanel from "./features/print/PrintStationPanel";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { supabase } from "./services/supabaseClient";
+import { useWorkflowWatchers } from "./services/useWorkflowWatchers";
+import {
+  notifyTbPruefungCompleted,
+  notifyLagerCompleted,
+  nextEventCycle,
+} from "./services/workflowNotifications";
+import { loadPrintStationSettings } from "./services/printStation";
 import { isMobileLike, useIsNarrow } from "./utils/helpers";
 import {
   parseEinbauort,
@@ -20,17 +29,15 @@ import {
   hasStructureRow,
   structureRowKey,
   markStructureMigrated,
-  readLocalStructureRows,
-  writeLocalStructureRows,
   addBaugruppeToRegistry,
   addBauteilToRegistry,
   removeBaugruppeFromRegistry,
   removeBauteilFromRegistry,
   renameBaugruppeInRegistry,
   renameBauteilInRegistry,
+  isBaugruppeRow,
 } from "./utils/structure";
-import { defaultTabFor } from "./utils/tabs";
-import { demoProjects, demoItems } from "./utils/demoData";
+import { defaultTabFor, resolveTabFullAccess } from "./utils/tabs";
 import { renameBaugruppeInManualValues } from "./features/fastening/stock";
 
 const SYNC_POLL_MS = 20000;
@@ -49,6 +56,7 @@ function App() {
     recoveryMode,
     signOut,
     refreshProfile,
+    hasFullModuleAccess,
   } = auth;
 
   const [projects, setProjects] = useState([]);
@@ -60,10 +68,13 @@ function App() {
   const [selectedBauteil, setSelectedBauteil] = useState(null);
 
   const isNarrow = useIsNarrow();
-  const [tab, setTab] = useState(() => defaultTabFor(isMobileLike()));
+  const [tab, setTab] = useState(() =>
+    defaultTabFor(isMobileLike(), { fullAccess: false })
+  );
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [printStationUserId, setPrintStationUserId] = useState(null);
 
   // Verhindert, dass ein älterer (noch laufender) load() neuere lokale
   // Inserts oder frischere Serverdaten überschreibt.
@@ -83,6 +94,24 @@ function App() {
   );
 
   const visibleProjects = showArchived ? projects : projects.filter((p) => !p.archived);
+
+  useWorkflowWatchers({
+    enabled: Boolean(isActive && supabaseConfigured),
+    projects,
+    items,
+    userId: session?.user?.id,
+  });
+
+  useEffect(() => {
+    if (!isActive || !supabase) return undefined;
+    let cancelled = false;
+    loadPrintStationSettings().then((s) => {
+      if (!cancelled) setPrintStationUserId(s?.user_id || null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isActive, view]);
 
   function clearMontaState() {
     loadGeneration.current += 1;
@@ -153,28 +182,17 @@ function App() {
     }
     try {
       if (!supabase) {
-        const rawP = localStorage.getItem("monta_projects_v04");
-        const rawI = localStorage.getItem("monta_items_v04");
-        const parsedP = rawP ? JSON.parse(rawP) : null;
-        const parsedI = rawI ? JSON.parse(rawI) : null;
-        const p = parsedP !== null ? parsedP : demoProjects;
-        const i = parsedI !== null ? parsedI : demoItems;
-        let rows = readLocalStructureRows();
-        if (!rows) {
-          const candidates = collectStructureCandidates(p, i);
-          rows = candidates.map((c) => ({
-            id: crypto.randomUUID(),
-            project_id: c.project_id,
-            baugruppe: c.baugruppe,
-            bauteil: c.bauteil,
-            sort_order: null,
-          }));
-          writeLocalStructureRows(rows);
-        }
+        // Keine stillen Demo-/localStorage-Daten: gleiche Quelle wie Vercel erfordert Supabase-Env.
         if (myGen !== loadGeneration.current) return;
-        setProjects(p);
-        setItems(i);
-        setStructureRows(rows);
+        setProjects([]);
+        setItems([]);
+        setStructureRows([]);
+        setLoadError(
+          "Supabase ist lokal nicht konfiguriert. Bitte `.env.local` mit denselben " +
+            "VITE_SUPABASE_URL und VITE_SUPABASE_ANON_KEY wie in Vercel anlegen " +
+            "(siehe .env.example und AUTH_SETUP.md) und den Dev-Server neu starten. " +
+            "Ohne diese Verbindung werden keine Live-Projektdaten geladen."
+        );
         return;
       }
 
@@ -280,14 +298,6 @@ function App() {
       clearInterval(pollId);
     };
   }, [load, isActive, supabaseConfigured, refreshProfile]);
-
-  useEffect(() => {
-    if (!loading && !supabase) {
-      localStorage.setItem("monta_projects_v04", JSON.stringify(projects));
-      localStorage.setItem("monta_items_v04", JSON.stringify(items));
-      writeLocalStructureRows(structureRows);
-    }
-  }, [projects, items, structureRows, loading]);
 
   function resetSelectionToOverview() {
     setProjectId(null);
@@ -589,143 +599,203 @@ function App() {
     }
   }
 
-  // Bauteilgruppe: setzt bauteilgruppe auf mehreren Bauteil-Zeilen derselben Baugruppe.
-  // Materialpositionen und Mengen bleiben unverändert.
-  async function groupBauteile(pid, baugruppeName, bauteilNames, groupName) {
-    const cleanGroup = String(groupName || "").trim();
-    const list = (bauteilNames || []).map((b) => String(b || "").trim()).filter(Boolean);
-    if (!cleanGroup) {
-      alert("Bitte einen Namen für die Bauteilgruppe eingeben.");
-      return;
+  /**
+   * Bauteil duplizieren: neue UUIDs, Lager/Bestell zurückgesetzt.
+   * Bei Fehler: neu angelegte Zeilen entfernen, Original unverändert.
+   */
+  async function duplicateBauteil(pid, baugruppeName, sourceBauteil, newBauteilName) {
+    const bg = String(baugruppeName || "").trim();
+    const src = String(sourceBauteil || "").trim();
+    const clean = String(newBauteilName || "").trim();
+    if (!bg || !src || !clean) return;
+    if (src === clean) {
+      alert("Der neue Name muss sich vom Original unterscheiden.");
+      throw new Error("duplicate same name");
     }
-    if (list.length < 2) {
-      alert("Bitte mindestens zwei Bauteile auswählen.");
-      return;
-    }
-    const existingNames = new Set(
-      structureRowsRef.current
-        .filter(
-          (r) =>
-            String(r.project_id) === String(pid) &&
-            r.baugruppe === baugruppeName &&
-            r.bauteil &&
-            r.bauteilgruppe
-        )
-        .map((r) => String(r.bauteilgruppe).trim())
-    );
-    if (existingNames.has(cleanGroup)) {
-      alert("Dieser Gruppenname existiert in dieser Baugruppe bereits.");
-      return;
-    }
-    const sortOrder = Date.now();
-    await patchBauteilgruppe(pid, baugruppeName, list, cleanGroup, sortOrder);
-  }
-
-  async function renameBauteilgruppe(pid, baugruppeName, oldGroupName, newGroupName) {
-    const clean = String(newGroupName || "").trim();
-    if (!clean || clean === oldGroupName) return;
     const clash = structureRowsRef.current.some(
       (r) =>
         String(r.project_id) === String(pid) &&
-        r.baugruppe === baugruppeName &&
-        String(r.bauteilgruppe || "").trim() === clean
+        r.baugruppe === bg &&
+        String(r.bauteil || "") === clean
     );
     if (clash) {
-      alert("Dieser Gruppenname existiert in dieser Baugruppe bereits.");
-      return;
+      alert("Dieser Bauteilname existiert in der Baugruppe bereits.");
+      throw new Error("duplicate name clash");
     }
-    const bauteile = structureRowsRef.current
-      .filter(
-        (r) =>
-          String(r.project_id) === String(pid) &&
-          r.baugruppe === baugruppeName &&
-          String(r.bauteilgruppe || "").trim() === oldGroupName
-      )
-      .map((r) => String(r.bauteil));
-    await patchBauteilgruppe(pid, baugruppeName, bauteile, clean, null);
-  }
 
-  async function setBauteileInGruppe(pid, baugruppeName, groupName, bauteilNames) {
-    const cleanGroup = String(groupName || "").trim();
-    const want = new Set((bauteilNames || []).map((b) => String(b).trim()).filter(Boolean));
-    const inGroup = structureRowsRef.current.filter(
+    const proj = projects.find((p) => String(p.id) === String(pid));
+    const srcItems = items.filter((i) => {
+      if (String(i.project_id) !== String(pid)) return false;
+      const parsed = parseEinbauort(i.einbauort, proj?.baugruppe);
+      return parsed.baugruppe === bg && parsed.bauteil === src;
+    });
+
+    const srcRow = structureRowsRef.current.find(
       (r) =>
         String(r.project_id) === String(pid) &&
-        r.baugruppe === baugruppeName &&
-        String(r.bauteilgruppe || "").trim() === cleanGroup
+        r.baugruppe === bg &&
+        String(r.bauteil || "") === src
     );
+    const sortN = Number(srcRow?.sort_order);
     const sortOrder =
-      inGroup.find((r) => r.sort_order != null)?.sort_order ?? Date.now();
-    const toAdd = [...want].filter(
-      (bt) =>
-        !inGroup.some((r) => String(r.bauteil) === bt)
-    );
-    const toRemove = inGroup
-      .map((r) => String(r.bauteil))
-      .filter((bt) => !want.has(bt));
-    if (toAdd.length) await patchBauteilgruppe(pid, baugruppeName, toAdd, cleanGroup, sortOrder);
-    if (toRemove.length) await patchBauteilgruppe(pid, baugruppeName, toRemove, null, null);
-  }
+      Number.isFinite(sortN) && sortN >= 0 && sortN <= 2147483647
+        ? Math.floor(sortN)
+        : null;
 
-  async function dissolveBauteilgruppe(pid, baugruppeName, groupName) {
-    const bauteile = structureRowsRef.current
-      .filter(
-        (r) =>
-          String(r.project_id) === String(pid) &&
-          r.baugruppe === baugruppeName &&
-          String(r.bauteilgruppe || "").trim() === groupName
-      )
-      .map((r) => String(r.bauteil));
-    await patchBauteilgruppe(pid, baugruppeName, bauteile, null, null);
-  }
-
-  async function patchBauteilgruppe(pid, baugruppeName, bauteilNames, groupName, sortOrder) {
-    const list = (bauteilNames || []).map((b) => String(b || "").trim()).filter(Boolean);
-    if (!list.length) return;
-    const patch = {
-      bauteilgruppe: groupName,
+    const newStructureRow = {
+      id: crypto.randomUUID(),
+      project_id: String(pid),
+      baugruppe: bg,
+      bauteil: clean,
+      bauteilgruppe: srcRow?.bauteilgruppe ?? null,
+      sort_order: sortOrder,
     };
-    if (sortOrder != null) patch.sort_order = sortOrder;
+
+    const newItems = srcItems.map((i) => ({
+      id: crypto.randomUUID(),
+      project_id: String(pid),
+      pos: i.pos,
+      einbauort: formatEinbauort(bg, clean),
+      menge: Number(i.menge || 0),
+      bezeichnung: i.bezeichnung,
+      groesse: i.groesse,
+      laenge: i.laenge,
+      oberflaeche: i.oberflaeche,
+      hinweis: i.hinweis,
+      important_note: Boolean(i.important_note),
+      bereit: 0,
+      bestellt: false,
+      geliefert: false,
+    }));
+
+    const createdStructureIds = [newStructureRow.id];
+    const createdItemIds = newItems.map((r) => r.id);
+
+    async function rollback() {
+      if (supabase) {
+        if (createdItemIds.length) {
+          await supabase.from("material_items").delete().in("id", createdItemIds);
+        }
+        await supabase.from("project_structure").delete().in("id", createdStructureIds);
+      }
+      setItems((prev) => prev.filter((i) => !createdItemIds.includes(i.id)));
+      setStructureRows((prev) => prev.filter((r) => !createdStructureIds.includes(r.id)));
+    }
+
+    try {
+      if (supabase) {
+        // Baugruppenzeile sicherstellen (ohne Abschlussflags zu ändern)
+        await insertStructureRow({ project_id: pid, baugruppe: bg, bauteil: null });
+        const { error: sErr } = await supabase.from("project_structure").insert(newStructureRow);
+        if (sErr) throw sErr;
+        if (newItems.length) {
+          const { error: iErr } = await supabase.from("material_items").insert(newItems);
+          if (iErr) throw iErr;
+        }
+      } else {
+        addBauteilToRegistry(pid, bg, clean);
+      }
+
+      loadGeneration.current += 1;
+      setStructureRows((prev) =>
+        hasStructureRow(prev, pid, bg, clean) ? prev : [...prev, newStructureRow]
+      );
+      if (newItems.length) setItems((prev) => [...prev, ...newItems]);
+    } catch (err) {
+      console.error("MONTA: Bauteil duplizieren fehlgeschlagen.", err);
+      await rollback();
+      alert(
+        `Duplizieren fehlgeschlagen: ${err?.message || "unbekannter Fehler"}. Das Original wurde nicht verändert.`
+      );
+      throw err;
+    }
+  }
+
+  /**
+   * Bewusste Abschlussfreigabe an der Baugruppenzeile (bauteil IS NULL).
+   * Mail nur bei false → true; Deaktivieren ohne Mail; erneutes Abschließen = neuer Zyklus.
+   */
+  async function setBaugruppeCompletion(pid, baugruppeName, field, value) {
+    const allowed = ["tb_pruefung_abgeschlossen", "lager_abgeschlossen"];
+    if (!allowed.includes(field)) return;
+    const bg = String(baugruppeName || "").trim();
+    if (!bg) return;
+    const nextVal = Boolean(value);
+
+    let row = structureRowsRef.current.find(
+      (r) =>
+        String(r.project_id) === String(pid) &&
+        r.baugruppe === bg &&
+        isBaugruppeRow(r)
+    );
+    if (!row) {
+      const created = await insertStructureRow({
+        project_id: pid,
+        baugruppe: bg,
+        bauteil: null,
+      });
+      row =
+        created ||
+        structureRowsRef.current.find(
+          (r) =>
+            String(r.project_id) === String(pid) &&
+            r.baugruppe === bg &&
+            isBaugruppeRow(r)
+        );
+    }
+    if (!row) {
+      alert("Baugruppe konnte nicht gefunden werden.");
+      throw new Error("baugruppe row missing");
+    }
+
+    const prevVal = Boolean(row[field]);
+    if (prevVal === nextVal) return;
 
     if (supabase) {
-      for (const bt of list) {
-        const { error } = await supabase
-          .from("project_structure")
-          .update(patch)
-          .eq("project_id", pid)
-          .eq("baugruppe", baugruppeName)
-          .eq("bauteil", bt);
-        if (error) {
-          console.error("MONTA: Bauteilgruppe speichern fehlgeschlagen.", error);
-          alert(`Bauteilgruppe konnte nicht gespeichert werden: ${error.message || "unbekannter Fehler"}`);
-          throw error;
-        }
+      const { error } = await supabase
+        .from("project_structure")
+        .update({ [field]: nextVal })
+        .eq("id", row.id);
+      if (error) {
+        console.error("MONTA: Abschlussstatus speichern fehlgeschlagen.", error);
+        alert(`Abschlussstatus konnte nicht gespeichert werden: ${error.message || "unbekannter Fehler"}`);
+        throw error;
       }
     }
 
     loadGeneration.current += 1;
     setStructureRows((prev) =>
-      prev.map((r) => {
-        if (
-          String(r.project_id) !== String(pid) ||
-          r.baugruppe !== baugruppeName ||
-          !list.includes(String(r.bauteil || ""))
-        ) {
-          return r;
-        }
-        return {
-          ...r,
-          bauteilgruppe: groupName,
-          ...(sortOrder != null ? { sort_order: sortOrder } : {}),
-        };
-      })
+      prev.map((r) => (r.id === row.id ? { ...r, [field]: nextVal } : r))
     );
+
+    if (nextVal && !prevVal && supabase) {
+      const proj = projects.find((p) => String(p.id) === String(pid));
+      if (!proj) return;
+      try {
+        if (field === "tb_pruefung_abgeschlossen") {
+          const cycle = await nextEventCycle("tb_pruefung_completed", pid, bg);
+          await notifyTbPruefungCompleted({ project: proj, baugruppe: bg, cycle });
+        } else if (field === "lager_abgeschlossen") {
+          const cycle = await nextEventCycle("lager_completed", pid, bg);
+          await notifyLagerCompleted({ project: proj, baugruppe: bg, cycle });
+        }
+      } catch (err) {
+        console.error("MONTA: Abschluss-Mail:", err?.message || err);
+      }
+    }
   }
+
+  const tabFullAccess = resolveTabFullAccess({
+    hasFullModuleAccess,
+    session,
+    profile,
+    authLoading,
+  });
 
   function openBauteil(baugruppeName, bauteilName) {
     setSelectedBaugruppe(baugruppeName);
     setSelectedBauteil(bauteilName);
-    setTab(defaultTabFor(isNarrow));
+    setTab(defaultTabFor(isNarrow, { fullAccess: tabFullAccess }));
     setView("project");
   }
 
@@ -741,6 +811,7 @@ function App() {
       laenge: item.laenge || "",
       oberflaeche: item.oberflaeche || "",
       hinweis: item.hinweis || "",
+      important_note: Boolean(item.important_note),
       bereit: 0,
       bestellt: false,
       geliefert: false,
@@ -836,10 +907,21 @@ function App() {
     onLogout: handleLogout,
   };
 
+  function handleOpenPrintJob({ projectId: pid, baugruppe: bg }) {
+    setProjectId(pid);
+    setSelectedBaugruppe(bg);
+    setSelectedBauteil(null);
+    setTab("druck");
+    setView("project");
+  }
+
   if (view === "adminUsers" && isAdmin) {
     return (
       <Shell {...shellUser}>
-        <UserAdminView onBack={() => setView("projects")} />
+        <UserAdminView
+          onBack={() => setView("projects")}
+          onPrintStationUserChanged={(uid) => setPrintStationUserId(uid)}
+        />
       </Shell>
     );
   }
@@ -866,6 +948,11 @@ function App() {
 
   return (
     <Shell {...shellUser}>
+      <PrintStationWorker
+        enabled={Boolean(isActive && printStationUserId && printStationUserId === session?.user?.id)}
+        projects={projects}
+        onOpenPrintJob={handleOpenPrintJob}
+      />
       {view === "projects" && (
         <div>
           <ProjectsList
@@ -880,6 +967,10 @@ function App() {
               {showArchived ? "Archiv ausblenden" : "Archiv anzeigen"}
             </button>
           )}
+          <PrintStationPanel
+            userId={session?.user?.id}
+            isAssignedUser={printStationUserId === session?.user?.id}
+          />
         </div>
       )}
 
@@ -902,10 +993,7 @@ function App() {
           deleteBauteil={deleteBauteil}
           renameBaugruppe={renameBaugruppe}
           renameBauteil={renameBauteil}
-          groupBauteile={groupBauteile}
-          renameBauteilgruppe={renameBauteilgruppe}
-          setBauteileInGruppe={setBauteileInGruppe}
-          dissolveBauteilgruppe={dissolveBauteilgruppe}
+          duplicateBauteil={duplicateBauteil}
         />
       )}
 
@@ -921,11 +1009,13 @@ function App() {
           structureRows={structureRows}
           backToDetail={() => setView("projectDetail")}
           isNarrow={isNarrow}
+          fullModuleAccess={Boolean(tabFullAccess)}
           tab={tab}
           setTab={setTab}
           addItem={addItem}
           updateItem={updateItem}
           deleteItem={deleteItem}
+          setBaugruppeCompletion={setBaugruppeCompletion}
         />
       )}
     </Shell>

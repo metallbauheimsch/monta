@@ -1,4 +1,4 @@
--- MONTA Supabase Tabellenstruktur (inkl. Auth / user_profiles)
+-- MONTA Supabase Tabellenstruktur (inkl. Auth, Workflow, Druckstation)
 -- Referenzschema. Live-Änderungen über supabase_patch_*.sql ausführen.
 
 create table if not exists projects (
@@ -21,6 +21,7 @@ create table if not exists material_items (
   laenge text,
   oberflaeche text,
   hinweis text,
+  important_note boolean not null default false,
   bereit numeric default 0,
   bestellt boolean default false,
   geliefert boolean default false,
@@ -34,7 +35,9 @@ create table if not exists project_structure (
   bauteil text,
   bauteilgruppe text,
   created_at timestamptz default now(),
-  sort_order integer
+  sort_order integer,
+  tb_pruefung_abgeschlossen boolean not null default false,
+  lager_abgeschlossen boolean not null default false
 );
 
 create unique index if not exists project_structure_unique
@@ -48,6 +51,7 @@ create table if not exists public.user_profiles (
     check (status in ('pending', 'active', 'blocked')),
   role text not null default 'user'
     check (role in ('user', 'admin')),
+  full_module_access boolean not null default false,
   created_at timestamptz not null default now(),
   approved_at timestamptz,
   approved_by uuid references auth.users(id),
@@ -55,25 +59,16 @@ create table if not exists public.user_profiles (
   blocked_by uuid references auth.users(id)
 );
 
+-- Workflow / Druckstation: siehe
+--   supabase_patch_workflow_notifications.sql
+--   supabase_patch_print_station.sql
+--   supabase_patch_workflow_completion.sql
+-- (notification_events, print_station_*, print_jobs, Abschlussstatus)
+
 alter table projects enable row level security;
 alter table material_items enable row level security;
 alter table project_structure enable row level security;
 alter table public.user_profiles enable row level security;
 
--- Hilfsfunktionen und Policies: siehe
---   supabase_patch_auth_foundation.sql
---   supabase_patch_auth_lockdown.sql
---
--- Nach Lockdown gilt für projects / material_items / project_structure:
---   nur authenticated + is_active_user()
--- Für user_profiles:
---   eigenes Profil lesen/aktualisieren (sensible Felder per Trigger geschützt)
---   Admins: alle Profile lesen/aktualisieren
---
--- Keine öffentlichen using (true) / with check (true) Policies mehr.
--- Service-Role-Schlüssel niemals im Frontend verwenden.
---
--- Realtime (falls noch nicht in der Publication):
--- alter publication supabase_realtime add table projects;
--- alter publication supabase_realtime add table material_items;
--- alter publication supabase_realtime add table project_structure;
+-- Auth-Policies: supabase_patch_auth_foundation.sql + auth_lockdown.sql
+-- Service-Role niemals im Frontend.

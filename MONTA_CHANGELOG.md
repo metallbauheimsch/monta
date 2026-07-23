@@ -563,6 +563,169 @@ E-Mail-Fachbenachrichtigungen und Druckstation bewusst zurückgestellt.
 
 ---
 
+# Workflow-Sprint: Benachrichtigungen, Hinweise und Druckstation
+
+## Benachrichtigungen
+
+- Neue Baugruppe → Mail an sautter@metallbau-heimsch.de
+- Neue offene Warenkorbpositionen → Mail an stoehr@metallbau-heimsch.de
+- Alle Positionen bestellt → Mail an sautter@metallbau-heimsch.de
+- Duplikatschutz über `notification_events.event_key`
+- Versand über Edge Function `workflow-notifications` (kein Browser-SMTP)
+
+## Hinweise und Tabellen
+
+- Checkbox „Wichtiger Hinweis“ in der TB-Erfassung (`important_note`)
+- Anzeige rot und fett in TB, Prüfung, Lager und Druck
+- Lager: Herkunft sortierbar
+- Druck: einheitliche Spaltenbreiten (`table-layout: fixed`)
+
+## Druckstation
+
+- Admin wählt Druckstations-Benutzer (ein Nutzer)
+- Nutzer aktiviert konkretes PC-Gerät
+- Bei 100 % montagebereit: ein Druckauftrag
+- Standard: Druckdialog + Bestätigung; Silent nur nach lokaler Einrichtung
+
+Keine allgemeine Bestellverwaltung. Keine Änderungshistorie.
+
+SQL: `supabase_patch_workflow_notifications.sql`, `supabase_patch_print_station.sql`.
+
+---
+
+# Workflow-Korrektursprint: Abschlussfreigaben, Herkunft, Gruppierung
+
+## Benachrichtigungen
+
+- Keine automatische Mail mehr beim Anlegen einer Baugruppe
+- Keine automatische Mail mehr bei neuen Warenkorbpositionen
+- Stattdessen bewusste Abschluss-Checkboxen:
+  - „TB / Prüfung abgeschlossen“ → Mail an sautter@…
+  - „Lagerprüfung abgeschlossen“ → Mail an stoehr@…
+- „Alle Positionen bestellt“ bleibt (Mail an sautter@…)
+- Mail nur bei Übergang false→true bzw. erneut nach Zurücksetzen; Reload ohne Doppelmail
+
+## Warenkorb
+
+- „Anfrage per Mail“ enthält keine bereits bestellten und keine vollständig gelieferten Positionen
+
+## Rechte / Reiter
+
+- Admin und Nutzer mit `full_module_access` sehen TB und Prüfung auch mobil (≤1024 px)
+- Übrige Nutzer: mobil weiter nur Lager / Warenkorb / Druck
+
+## Herkunft
+
+- Sortierung über stabilen Sortierwert (Baugruppe → Bauteilgruppe → Bauteil → Pos.)
+- Suche erfasst alle Herkunftseinträge inkl. Positionsvarianten und Hinweise
+
+## Gruppierung
+
+- Ursache Integer-Fehler: `Date.now()` in `sort_order` (PostgreSQL integer zu klein)
+- Korrektur: kleine Reihenfolgenummern (`max + 1`), kein Zeitstempel
+
+SQL: `supabase_patch_workflow_completion.sql`.
+
+---
+
+# Projektlogik-Sprint: projektweite Auswertung, Duplizieren, Befestigungsregeln
+
+## Struktur
+
+- „Bauteile gruppieren“ vollständig aus der UI entfernt (`bauteilgruppe` in DB bleibt)
+- „Baugruppe duplizieren“ mit neuen UUIDs; Lager/Bestell/Abschluss zurückgesetzt
+- Bei Fehler: Rollback der Kopie, Original unverändert
+
+## Ansichten
+
+- Prüfung, Lager, Warenkorb: projektweite Aggregation nur zur Anzeige
+- Druck: Baugruppe → Bauteil, mit Suche und Hinweis „Druckausgabe gefiltert“
+- Herkunft: nur Bauteilnamen; Positionsnummern nur bei passender Suche
+
+## Befestigung
+
+- HV-Garnitur ohne Mitlaufartikel; Drehmomente M12–M24
+- Hilti HIT / Verbundmörtel: Drehmomente M8–M16
+- Ankerstange: U-Scheibe + Sechskantmutter
+- Nur neu / bewusst bearbeitet; keine Rückwirkung auf Echtdaten
+
+## Workflow
+
+- „Alle bestellt“-Mail gilt projektweit
+
+Keine automatische Datenmigration. Kein Commit in diesem Schritt.
+
+---
+
+# Korrektursprint: lokale Echtdaten, Bauteilbedienung, Hinweise
+
+- Ursache fehlender lokaler Daten: keine `.env.local` → kein Supabase-Client
+- Stiller Demo-/localStorage-Fallback entfernt; sichtbare Konfigurationsmeldung
+- Drehmoment-Hinweis kurz: „450 Nm“
+- Wichtiger Hinweis: rot, normale Schriftstärke
+- Mitlauf-Checkbox: „U-Scheibe/Mutter automatisch ergänzen“
+- Baugruppe duplizieren entfernt; Bauteil duplizieren ergänzt
+- Umbenennen/Duplizieren/Löschen zentral nach Bauteilauswahl
+- „Automatisch ergänzt“ in Lager/Warenkorb nur Anzeige gefiltert
+
+---
+
+# Korrektursprint: Hinweise, HV, Druckreihenfolge
+
+- TB: „Wichtiger Hinweis“ nur noch in der Eingabezeile (Doppel unter dem Formular entfernt)
+- HV-Garnituren vollständig aus der Längenähnlichkeits-Prüfung ausgeschlossen
+- Identische Hinweistexte pro Position nur einmal (Anzeige / bewusste Bearbeitung; keine DB-Massenänderung)
+- Druckreihenfolge = Projektstruktur (Baugruppe → Bauteil), wie in der Projektübersicht
+
+Keine SQL. Keine Migration. Keine Mengenänderungen.
+
+---
+
+# UI-Korrektursprint: Bauteilbedienung (Explorer)
+
+- Linksklick / Tippen öffnet Bauteil (TB) sofort
+- Rechtsklick / Long Press öffnet Kontextmenü: Umbenennen, Duplizieren, Löschen
+- Separate Aktionsbuttons und Auswahllogik entfernt
+- Baugruppenfunktionen unverändert
+
+Nur UI. Keine Datenänderung.
+
+---
+
+# Korrektursprint: Wichtig, Hinweis-Deduplizierung, Größensuche
+
+- Spaltenüberschrift „W!“ → „Wichtig“ (Feld `important_note` unverändert)
+- Checkbox „Wichtig“ ändert nur den Status; Tabellenreihenfolge bleibt stabil (Sortierung inkl. Tie-Break)
+- Lager/Warenkorb: fachlich gleiche Hinweise nur einmal (Anzeige; Originaltexte in der DB bleiben)
+- Suche: kompakte Größe+Länge (z. B. `1030` findet M10×30) in TB, Prüfung, Lager, Warenkorb, Druck
+
+Keine SQL. Keine Migration. Keine Mengenänderungen.
+
+---
+
+# Korrektursprint: Anmeldung, Paternoster, mobiler Vollzugriff
+
+- Checkbox „Angemeldet bleiben“ (Standard an): localStorage vs. sessionStorage für Supabase-Session
+- Paternoster: Keilscheiben→26, Hilti HAS→2, Gitterrost→10, Edelstahl M8–M20→5, Edelstahl-Bolzenanker→4
+- Edelstahl-Erkennung auch über A2/A4/VA/rostfrei; automatisierte Tests (`npm test`)
+- Fachzuordnung nur Anzeige/Logik – keine DB-Fachspalte, keine Migration
+- Mobiler Vollzugriff: Admin / `full_module_access`; Profil-Ladephase blendet TB/Prüfung nicht vorzeitig aus
+- Benutzerverwaltung: „Vollzugriff auf TB und Prüfung“
+
+Erforderlicher vorhandener Patch falls Spalte fehlt: `supabase_patch_workflow_completion.sql` (`full_module_access`).
+
+---
+
+# Architektur: Paternoster-Familienlogik
+
+- Normale Befestigungsmittel: Familie → Werkstoff → Größe → Fach (nicht mehr je Einzelbezeichnung)
+- Edelstahl M8/10/12/16/20 → Fach 5; galvanisch M8/10 → 27, M12/16/20 → 26; feuerverzinkt → 9
+- Sonderregeln (Keilscheibe, HAS, Gitterrost, Edelstahl-Bolzenanker, HV) behalten Vorrang
+- Neue Schrauben-/Scheibenarten mit „schraube“/„mutter“/„scheibe“ folgen automatisch
+- Weiterhin nur Anzeigelogik; keine DB-Migration
+
+---
+
 # Regeln
 
 Nach jedem abgeschlossenen Sprint werden hier ergänzt:

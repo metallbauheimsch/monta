@@ -1,77 +1,57 @@
-// Feste Paternoster-/Regal-Zuordnung, fachlich vom Betrieb vorgegeben.
-// Sprint 7 - Korrekturen aus Praxistest: vollständig neu aufgebaut, mit der
-// tatsächlichen, vom Betrieb bestätigten Fachliste (vorher Sprint 6/7 nur
-// eine grobe Annahme, siehe MONTA_BACKLOG.md). Bewusst weiterhin ohne
-// Einstellungs-/Pflegeoberfläche und ohne Datenbanktabelle - die Zuordnung
-// ändert sich nicht über die Bedienung, sondern ausschließlich durch
-// Anpassung dieser einen Datei (siehe MONTA_DECISIONS.md).
+// Paternoster-Fachzuordnung (Anzeige / neue bzw. bewusst bearbeitete Positionen).
+// Keine DB-Spalte, keine Migration bestehender Echtdaten.
 //
-// Verbindliche Zuordnung (Stand Sprint 7 - Korrekturen):
-// Fach 1:  galvanisch verzinkte Schrauben M3-M6, Wurmschrauben, Blechmuttern
-// Fach 2:  Ankerstangen, chemische Dübel, RECA Verbundmörtel
-// Fach 3:  Hilti HIT, Siebhülsen
-// Fach 4:  Edelstahl/VA Bolzenanker, Rahmendübel, Betonschrauben
-// Fach 5:  Edelstahl/VA Schrauben M8-M16
-// Fach 6:  Edelstahl/VA Schrauben M4-M6, Schlossschrauben, Ringmuttern,
-//          Gewindehülsen, Senkscheiben
-// Fach 7:  Edelstahl/VA Nieten, Einnietmuttern, Holzschrauben, Bohrschrauben,
-//          Trespa-Befestigungen
-// Fach 9:  alle feuerverzinkten Schrauben (alle Größen)
-// Fach 24: galvanisch verzinkte Bohrschrauben, Nägel, SPAX verzinkt,
-//          Seilklemmen, Ringösen, Rohrschellen
-// Fach 25: verzinkte (galvanisch ODER feuerverzinkt) Bolzenanker,
-//          Betonschrauben, Dübel, Rahmendübel
-// Fach 26: galvanisch verzinkte Schrauben M12-M20, alle HV-Schrauben
-// Fach 27: galvanisch verzinkte Schrauben M8-M10
-// Fach 8 und Fach 10-23 sind für MONTA nicht relevant, keine Zuordnung.
+// Architektur:
+//   Sonderartikel / HV  →  dann Materialfamilie → Werkstoff → Größe → Fach
 //
-// U-Scheiben und Sechskantmuttern (auch automatisch ergänzte Mitlaufartikel)
-// liegen jeweils bei den Schrauben gleicher Größe und Ausführung und
-// bekommen deshalb dasselbe Regalfach (siehe Regeln unten). Ob die Position
-// manuell oder automatisch angelegt wurde, spielt keine Rolle.
+// Normale Befestigungsmittel (Schrauben, Muttern, Hutmuttern, Scheiben, …)
+// teilen dieselbe Logik – neue Bauformen mit „schraube“/„mutter“/„scheibe“
+// in der Bezeichnung folgen automatisch, ohne neuen Code.
 //
-// Grundregeln:
-// - "verzinkt" bedeutet galvanisch verzinkt, außer bei Fach 25 (dort
-//   ausdrücklich sowohl galvanisch verzinkt als auch feuerverzinkt).
-// - "VA" bedeutet Edelstahl.
-// - Fehlt eine Größenangabe in der Fachbeschreibung, gelten automatisch
-//   alle Größen dieser Artikelgruppe. Nur ein ausdrücklich genannter
-//   Größenbereich schränkt die Zuordnung auf diesen Bereich ein.
-// - Keine Größen oder Werkstoffe erraten: Artikel, die sich nicht anhand
-//   von Bezeichnung + Ausführung (+ Größe) eindeutig einer dieser Regeln
-//   zuordnen lassen (z. B. unbekannte/freie Ausführungstexte wie "A2-70"
-//   statt "Edelstahl"/"VA", oder Größen außerhalb der genannten Bereiche),
-//   bekommen bewusst KEIN erfundenes Fach und gelten als
-//   "Ohne Fachzuordnung".
+// Familie + Edelstahl M4–M6 → 6; M8/M10/M12/M16/M20 → 5
+// Familie + galvanisch M3–M6 → 1; M8/M10 → 27; M12/M16/M20 → 26
+// Familie + feuerverzinkt (jede Größe) → Fach 9
 //
-// Paternoster-Standard-Laufweg (vom Betrieb verbindlich vorgegeben, kleinerer
-// sortIndex = weiter vorne im Laufweg): 27 -> 26 -> 25 -> 24 -> 9 -> 7 -> 6 ->
-// 5 -> 4 -> 3 -> 2 -> 1 -> danach wieder 27.
+// Sonderregeln (Vorrang): GiRo→10, Keilscheiben→26, Hilti HAS→2,
+// Dübelfamilie (Edelstahl→4, verzinkt/feuerverzinkt→25), HV→26, …
+//
+// Laufweg: 27 → 26 → 25 → 24 → 10 → 9 → 7 → 6 → 5 → 4 → 3 → 2 → 1
+
 const FACH_SORT_INDEX = {
   27: 0,
   26: 1,
   25: 2,
   24: 3,
-  9: 4,
-  7: 5,
-  6: 6,
-  5: 7,
-  4: 8,
-  3: 9,
-  2: 10,
-  1: 11,
+  10: 4,
+  9: 5,
+  7: 6,
+  6: 7,
+  5: 8,
+  4: 9,
+  3: 10,
+  2: 11,
+  1: 12,
 };
 
+/** Verbindliche metrische Größen der Familienregeln. */
+const FAMILY_SIZES_GALV_SMALL = [3, 4, 5, 6];
+const FAMILY_SIZES_EDEL_SMALL = [4, 5, 6];
+const FAMILY_SIZES_EDELSTAHL = [8, 10, 12, 16, 20];
+const FAMILY_SIZES_GALV_27 = [8, 10];
+const FAMILY_SIZES_GALV_26 = [12, 16, 20];
+
 function normalize(value) {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\u00a0]/g, " ")
+    .replace(/\s+/g, " ");
 }
 
 function containsAny(text, keywords) {
   return keywords.some((kw) => text.includes(kw));
 }
 
-// Erkennt metrische Größenangaben wie "M12" oder "M 8". Kein Match ->
-// null (dann greift nie ein größenabhängiges Fach, statt zu raten).
 function parseMetricSize(groesse) {
   const match = String(groesse || "")
     .trim()
@@ -79,120 +59,209 @@ function parseMetricSize(groesse) {
   return match ? parseFloat(match[1].replace(",", ".")) : null;
 }
 
-function sizeInRange(groesse, min, max) {
+function sizeInList(groesse, list) {
   const n = parseMetricSize(groesse);
-  return n !== null && n >= min && n <= max;
+  return n !== null && list.includes(n);
 }
 
-// "verzinkt" bedeutet laut Betrieb galvanisch verzinkt (außer bei Fach 25,
-// siehe unten) - deshalb als Alias für "galvanisch" behandelt.
-const IS_GALVANISCH = (ausf) => ausf === "galvanisch" || ausf === "verzinkt";
-const IS_FEUERVERZINKT = (ausf) => ausf === "feuerverzinkt";
-// Sonderfall Fach 25: "verzinkt" umfasst hier ausdrücklich sowohl
-// galvanisch verzinkt als auch feuerverzinkt.
-const IS_VERZINKT_FACH25 = (ausf) =>
-  ausf === "galvanisch" || ausf === "feuerverzinkt" || ausf === "verzinkt";
-const IS_EDELSTAHL = (ausf) => ausf === "edelstahl" || ausf === "va";
-const IS_HV = (ausf) => ausf === "hv";
-
-// Reihenfolge der Regeln ist bewusst gewählt: spezifischere Regeln (z. B.
-// "Betonschraube" für Fach 25, "Bohrschraube" für Fach 24, Edelstahl-
-// Spezialartikel für Fach 6/7) werden vor den allgemeinen "Schrauben nach
-// Größe"-Regeln (Fach 1/5/6/9/26/27) geprüft. Sonst würde z. B. eine
-// feuerverzinkte Betonschraube fälschlich als allgemeine feuerverzinkte
-// Schraube (Fach 9) statt als Fach 25 erkannt werden. Die erste zutreffende
-// Regel gewinnt.
-const RULES = [
-  // Edelstahl/VA - einzelne, ausdrücklich benannte Artikel (alle Größen)
-  { bez: ["bolzenanker", "rahmendübel", "betonschraube"], ausf: IS_EDELSTAHL, fach: 4 },
-  { bez: ["schlossschraube", "ringmutter", "gewindehülse", "senkscheibe"], ausf: IS_EDELSTAHL, fach: 6 },
-  { bez: ["niete", "einnietmutter", "holzschraube", "bohrschraube"], ausf: IS_EDELSTAHL, fach: 7 },
-  { bez: ["trespa"], fach: 7 }, // kein Werkstoff genannt -> keine Einschränkung
-
-  // Chemische Befestigungen (kein Werkstoff/keine Größe genannt)
-  { bez: ["ankerstange"], fach: 2 },
-  { bez: ["chemisch"], fach: 2 }, // "chemischer/chemische Dübel"
-  { bez: ["reca", "verbundmörtel"], fach: 2 },
-  { bez: ["hilti hit"], fach: 3 },
-  { bez: ["siebhülse"], fach: 3 },
-
-  // Verzinkte Anker/Dübel (galvanisch ODER feuerverzinkt, alle Größen)
-  { bez: ["bolzenanker", "betonschraube", "rahmendübel", "dübel"], ausf: IS_VERZINKT_FACH25, fach: 25 },
-
-  // Fach 24 - einzelne, ausdrücklich benannte Artikel
-  { bez: ["bohrschraube"], ausf: IS_GALVANISCH, fach: 24 },
-  { bez: ["spax"], ausf: IS_GALVANISCH, fach: 24 },
-  { bez: ["nagel", "nägel"], fach: 24 },
-  { bez: ["seilklemme"], fach: 24 },
-  { bez: ["ringöse"], fach: 24 },
-  { bez: ["rohrschelle"], fach: 24 },
-
-  // Fach 1 - sonstige, ausdrücklich benannte Artikel (kein Werkstoff genannt)
-  { bez: ["wurmschraube"], fach: 1 },
-  { bez: ["blechmutter"], fach: 1 },
-
-  // Edelstahl/VA Schrauben nach Größe
-  { bez: ["schraube"], ausf: IS_EDELSTAHL, groesse: [4, 6], fach: 6 },
-  { bez: ["schraube"], ausf: IS_EDELSTAHL, groesse: [8, 16], fach: 5 },
-
-  // Galvanisch verzinkte Schrauben nach Größe
-  { bez: ["schraube"], ausf: IS_GALVANISCH, groesse: [3, 6], fach: 1 },
-  { bez: ["schraube"], ausf: IS_GALVANISCH, groesse: [8, 10], fach: 27 },
-  { bez: ["schraube"], ausf: IS_GALVANISCH, groesse: [12, 20], fach: 26 },
-
-  // HV-Schrauben, unabhängig von der Größe
-  { bez: ["schraube"], ausf: IS_HV, fach: 26 },
-
-  // Feuerverzinkte Schrauben, unabhängig von der Größe
-  { bez: ["schraube"], ausf: IS_FEUERVERZINKT, fach: 9 },
-
-  // U-Scheiben / Sechskantmuttern (auch automatisch ergänzte Mitlaufartikel):
-  // liegen fachlich bei den Schrauben gleicher Größe und Ausführung -
-  // deshalb dieselben Größen-/Ausführungsregeln wie bei Schrauben.
-  // Bezeichnungen bewusst eng gehalten (nicht pauschal "mutter"/"scheibe"),
-  // damit speziellere Artikel (Blechmutter, Ringmutter, Senkscheibe usw.)
-  // weiter über die Regeln oben greifen.
-  { bez: ["u-scheibe", "unterlegscheibe", "sechskantmutter"], ausf: IS_EDELSTAHL, groesse: [4, 6], fach: 6 },
-  { bez: ["u-scheibe", "unterlegscheibe", "sechskantmutter"], ausf: IS_EDELSTAHL, groesse: [8, 16], fach: 5 },
-  { bez: ["u-scheibe", "unterlegscheibe", "sechskantmutter"], ausf: IS_GALVANISCH, groesse: [3, 6], fach: 1 },
-  { bez: ["u-scheibe", "unterlegscheibe", "sechskantmutter"], ausf: IS_GALVANISCH, groesse: [8, 10], fach: 27 },
-  { bez: ["u-scheibe", "unterlegscheibe", "sechskantmutter"], ausf: IS_GALVANISCH, groesse: [12, 20], fach: 26 },
-  { bez: ["u-scheibe", "unterlegscheibe", "sechskantmutter"], ausf: IS_HV, fach: 26 },
-  { bez: ["u-scheibe", "unterlegscheibe", "sechskantmutter"], ausf: IS_FEUERVERZINKT, fach: 9 },
-];
-
-function matchesRule(rule, bez, ausf, groesse) {
-  if (!containsAny(bez, rule.bez)) return false;
-  if (rule.ausf && !rule.ausf(ausf)) return false;
-  if (rule.groesse && !sizeInRange(groesse, rule.groesse[0], rule.groesse[1])) return false;
-  return true;
+/** Edelstahl/VA/A2/A4/rostfrei in der Ausführung. */
+export function isEdelstahlAusfuehrung(oberflaeche) {
+  const a = normalize(oberflaeche);
+  if (!a) return false;
+  if (a === "edelstahl" || a === "va" || a === "rostfrei") return true;
+  if (a.includes("edelstahl") || a.includes("rostfrei")) return true;
+  if (/\bva\b/.test(a)) return true;
+  if (/\ba2(?:-\d+)?\b/.test(a) || /\ba4(?:-\d+)?\b/.test(a)) return true;
+  return false;
 }
 
-// Ermittelt Fach + Sortier-Index für eine Position (Bezeichnung + Ausführung
-// + Größe). Gibt null zurück, wenn keine der verbindlichen Regeln eindeutig
-// zutrifft - dann gibt es bewusst kein erfundenes Fach.
-function resolveFach(bezeichnung, oberflaeche, groesse) {
+function bezSuggestsEdelstahl(bez) {
+  return (
+    /\bedelstahl\b/.test(bez) ||
+    /\brostfrei\b/.test(bez) ||
+    /\bva[\s-]/.test(bez) ||
+    /^va-/.test(bez) ||
+    /\ba2(?:-\d+)?\b/.test(bez) ||
+    /\ba4(?:-\d+)?\b/.test(bez)
+  );
+}
+
+function isGalvanisch(ausf) {
+  const a = normalize(ausf);
+  if (!a) return false;
+  if (a.includes("feuerverzinkt")) return false; // nicht mit „verzinkt“ verwechseln
+  if (a === "galvanisch" || a === "verzinkt" || a === "galv" || a === "galv.") return true;
+  if (a.includes("galvanisch")) return true;
+  if (/\bgalv\.?\b/.test(a)) return true;
+  // z. B. „8.8/verzinkt“, „8/verzinkt“
+  if (/verzinkt/.test(a)) return true;
+  return false;
+}
+
+function isFeuerverzinkt(ausf) {
+  return normalize(ausf) === "feuerverzinkt";
+}
+
+function isVerzinktFach25(ausf) {
+  return isGalvanisch(ausf) || isFeuerverzinkt(ausf);
+}
+
+function isHvAusf(ausf) {
+  return normalize(ausf) === "hv";
+}
+
+function isKeilscheibe(bez) {
+  if (/keil\s*scheibe/.test(bez)) return true;
+  if (/din\s*6917/.test(bez) || /din\s*6918/.test(bez)) return true;
+  return false;
+}
+
+function isHiltiHas(bez) {
+  if (/hilti\s*has/.test(bez)) return true;
+  if (/\bhas[\s-]*u\b/.test(bez)) return true;
+  if (/\bhas\b/.test(bez) && /(anker|gewinde)/.test(bez)) return true;
+  return false;
+}
+
+/**
+ * Dübelfamilie / mechanische Verankerungssysteme (nicht Ankerstange, nicht Hilti HAS/HIT).
+ * Zuordnung nur nach Werkstoff: Edelstahl→4, verzinkt/feuerverzinkt→25.
+ */
+export function isDuebelFamilie(bezeichnung) {
+  const bez = normalize(bezeichnung);
+  if (!bez) return false;
+  if (isHiltiHas(bez)) return false;
+  if (/ankerstange/.test(bez)) return false;
+  if (/hilti\s*hit|siebhülse|verbundmörtel|chemisch/.test(bez)) return false;
+  if (/reca/.test(bez) && /verbund|mörtel|moertel/.test(bez)) return false;
+
+  if (
+    /bolzenanker|fixanker|einschlaganker|rahmendübel|betonschraube|schwerlastanker|ankerbolzen|spreizanker|durchsteckanker|verbundanker/.test(
+      bez
+    )
+  ) {
+    return true;
+  }
+  if (/dübel/.test(bez)) return true;
+  return false;
+}
+
+/**
+ * GiRo- / Gitterrost-Klammern → Fach 10 (Sonderregel vor Familienlogik).
+ * „MW30/10“ allein reicht nicht – nur mit giro / gitterrost / Klammer-Kontext.
+ */
+export function isGitterrostHalter(bezeichnung) {
+  const bez = normalize(bezeichnung);
+  if (!bez) return false;
+  const compact = bez.replace(/[\s/-]+/g, "");
+
+  if (bez.includes("giro") || compact.includes("giro")) return true;
+  if (bez.includes("gitterrost") || compact.includes("gitterrost")) return true;
+
+  const hasMw30 = /mw\s*30(?:\s*\/\s*10)?/.test(bez) || /mw30(?:10)?/.test(compact);
+  const isKlammerArt =
+    /halteklammer|klemmhalter|\bklammer\b/.test(bez) ||
+    /halteklammer|klemmhalter|klammer/.test(compact);
+  if (hasMw30 && isKlammerArt) return true;
+
+  return false;
+}
+
+function isHvGarnitur(bez) {
+  return /hv[\s-]*garnitur/.test(bez) || bez === "hv";
+}
+
+/**
+ * Normale Befestigungsmittel-Familie (Bauform egal).
+ * Erkennung über Wortstämme – neue Schrauben-/Scheibenarten ohne Codeänderung.
+ */
+export function isBefestigungsFamilie(bezeichnung) {
+  const bez = normalize(bezeichnung);
+  if (!bez) return false;
+  // Explizit keine Familie (Sonder-/Systemartikel)
+  if (isKeilscheibe(bez) || isHiltiHas(bez) || isGitterrostHalter(bez)) return false;
+  if (isDuebelFamilie(bez)) return false;
+  if (isHvGarnitur(bez)) return false;
+  if (/ankerstange|hilti\s*hit|siebhülse|verbundmörtel|chemisch/.test(bez)) return false;
+  if (/niete|nagel|nägel|seilklemme|ringöse|rohrschelle|spax|trespa|gewindehülse/.test(bez)) {
+    return false;
+  }
+  if (/reca/.test(bez) && /verbund|mörtel|moertel/.test(bez)) return false;
+
+  if (/schraube/.test(bez)) return true;
+  if (/mutter/.test(bez)) return true;
+  if (/scheibe/.test(bez)) return true;
+  return false;
+}
+
+function fachResult(fach) {
+  return { fach, sortIndex: FACH_SORT_INDEX[fach] };
+}
+
+/**
+ * @returns {{ fach: number, sortIndex: number } | null}
+ */
+export function resolveFach(bezeichnung, oberflaeche, groesse) {
   const bez = normalize(bezeichnung);
   const ausf = normalize(oberflaeche);
   if (!bez) return null;
-  for (const rule of RULES) {
-    if (matchesRule(rule, bez, ausf, groesse)) {
-      return { fach: rule.fach, sortIndex: FACH_SORT_INDEX[rule.fach] };
+
+  // Priorität: GiRo → Keilscheiben → Hilti HAS → Dübelfamilie → … → HV → Normfamilie
+  if (isGitterrostHalter(bez)) return fachResult(10);
+  if (isKeilscheibe(bez)) return fachResult(26);
+  if (isHiltiHas(bez)) return fachResult(2);
+
+  if (isDuebelFamilie(bez)) {
+    if (isEdelstahlAusfuehrung(ausf) || bezSuggestsEdelstahl(bez)) return fachResult(4);
+    if (isVerzinktFach25(ausf)) return fachResult(25);
+    return null;
+  }
+
+  if (containsAny(bez, ["ankerstange"])) return fachResult(2);
+  if (containsAny(bez, ["chemisch"])) return fachResult(2);
+  if (containsAny(bez, ["reca", "verbundmörtel"])) return fachResult(2);
+  if (containsAny(bez, ["hilti hit"])) return fachResult(3);
+  if (containsAny(bez, ["siebhülse"])) return fachResult(3);
+
+  if (containsAny(bez, ["nagel", "nägel"])) return fachResult(24);
+  if (containsAny(bez, ["seilklemme"])) return fachResult(24);
+  if (containsAny(bez, ["ringöse"])) return fachResult(24);
+  if (containsAny(bez, ["rohrschelle"])) return fachResult(24);
+  if (containsAny(bez, ["spax"]) && isGalvanisch(ausf)) return fachResult(24);
+  if (containsAny(bez, ["trespa"])) return fachResult(7);
+  if (containsAny(bez, ["niete"]) && isEdelstahlAusfuehrung(ausf)) return fachResult(7);
+
+  // HV-Garnitur / HV-Ausführung
+  if (isHvGarnitur(bez)) return fachResult(26);
+  if (isBefestigungsFamilie(bez) && isHvAusf(ausf)) return fachResult(26);
+
+  // Normale Befestigungsmittelfamilie → Werkstoff → Größe
+  if (isBefestigungsFamilie(bez)) {
+    if (isFeuerverzinkt(ausf)) return fachResult(9);
+
+    if (isEdelstahlAusfuehrung(ausf) && sizeInList(groesse, FAMILY_SIZES_EDEL_SMALL)) {
+      return fachResult(6);
+    }
+    if (isGalvanisch(ausf) && sizeInList(groesse, FAMILY_SIZES_GALV_SMALL)) {
+      return fachResult(1);
+    }
+    if (isEdelstahlAusfuehrung(ausf) && sizeInList(groesse, FAMILY_SIZES_EDELSTAHL)) {
+      return fachResult(5);
+    }
+    if (isGalvanisch(ausf)) {
+      if (sizeInList(groesse, FAMILY_SIZES_GALV_27)) return fachResult(27);
+      if (sizeInList(groesse, FAMILY_SIZES_GALV_26)) return fachResult(26);
     }
   }
+
   return null;
 }
 
-// Sortier-Reihenfolge im Paternoster (kleiner = weiter vorne). Positionen
-// ohne eindeutige Zuordnung landen beim Sortieren immer am Ende.
 export function regalOrderIndex(item) {
   const resolved = resolveFach(item?.bezeichnung, item?.oberflaeche, item?.groesse);
   return resolved ? resolved.sortIndex : Infinity;
 }
 
-// Menschlich lesbarer Regalfach-Text für Lager/Druck, oder
-// "Ohne Fachzuordnung", wenn nicht eindeutig bestimmbar (siehe oben - kein
-// erfundener Wert).
 export function getRegalPlatz(item) {
   const resolved = resolveFach(item?.bezeichnung, item?.oberflaeche, item?.groesse);
   return resolved ? `Fach ${resolved.fach}` : "Ohne Fachzuordnung";

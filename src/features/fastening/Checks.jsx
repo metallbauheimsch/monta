@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { groupBy, baugruppeStatus } from "../../utils/helpers";
-import { parseEinbauort, getBauteilgruppe } from "../../utils/structure";
-import { filterBySearch } from "../../utils/textSearch";
+import { parseEinbauort, isBaugruppeRow } from "../../utils/structure";
+import { filterBySearch, sizeLengthSearchParts } from "../../utils/textSearch";
+import { isHvGarnitur } from "./fasteningRules";
 import SearchField from "../../components/SearchField";
+import CompletionCheckbox from "../../components/CompletionCheckbox";
 
 const LENGTH_TOLERANCE_MM = 20;
 const AUTO_HINWEIS = "Automatisch ergänzt";
@@ -18,7 +20,16 @@ function lengthsAreSimilar(a, b) {
 }
 
 function isCheckable(item) {
-  return Boolean(item.bezeichnung) && Boolean(item.groesse) && item._laenge !== null && item.hinweis !== AUTO_HINWEIS;
+  // HV-Garnituren und HV-Ausführung: vollständig außerhalb der Längenprüfung
+  if (isHvGarnitur(item.bezeichnung)) return false;
+  const ausf = String(item.oberflaeche || "").trim().toLowerCase();
+  if (ausf === "hv") return false;
+  return (
+    Boolean(item.bezeichnung) &&
+    Boolean(item.groesse) &&
+    item._laenge !== null &&
+    item.hinweis !== AUTO_HINWEIS
+  );
 }
 
 function groupKey(item) {
@@ -30,10 +41,13 @@ function findSimilarPairs(items) {
   const groups = groupBy(items, groupKey);
   const pairs = [];
   Object.values(groups).forEach((arr) => {
-    for (let i = 0; i < arr.length; i += 1) {
-      for (let j = i + 1; j < arr.length; j += 1) {
-        if (lengthsAreSimilar(arr[i]._laenge, arr[j]._laenge)) {
-          const pair = [arr[i], arr[j]].sort((a, b) => a._laenge - b._laenge);
+    const list = arr.filter(
+      (i) => !isHvGarnitur(i.bezeichnung) && String(i.oberflaeche || "").trim().toLowerCase() !== "hv"
+    );
+    for (let i = 0; i < list.length; i += 1) {
+      for (let j = i + 1; j < list.length; j += 1) {
+        if (lengthsAreSimilar(list[i]._laenge, list[j]._laenge)) {
+          const pair = [list[i], list[j]].sort((a, b) => a._laenge - b._laenge);
           pairs.push(pair);
         }
       }
@@ -42,7 +56,13 @@ function findSimilarPairs(items) {
   return pairs;
 }
 
-export default function Checks({ items, baugruppe, project, structureRows }) {
+export default function Checks({
+  items,
+  baugruppe,
+  project,
+  structureRows,
+  setBaugruppeCompletion,
+}) {
   const [search, setSearch] = useState("");
 
   const candidates = useMemo(() => {
@@ -52,37 +72,64 @@ export default function Checks({ items, baugruppe, project, structureRows }) {
         return {
           ...i,
           ...parsed,
-          bauteilgruppe: getBauteilgruppe(structureRows, project?.id, parsed.baugruppe, parsed.bauteil),
           _laenge: parseLength(i.laenge),
         };
       })
       .filter(isCheckable);
     return filterBySearch(base, search, (i) => [
+      project?.nr,
+      project?.name,
       i.pos,
       i.baugruppe,
-      i.bauteilgruppe,
       i.bauteil,
       i.bezeichnung,
       i.groesse,
       i.laenge,
       i.oberflaeche,
       i.hinweis,
+      i.important_note ? "wichtig" : "",
+      `Pos ${i.pos}`,
+      `Pos. ${i.pos}`,
+      ...sizeLengthSearchParts(i.groesse, i.laenge),
     ]);
-  }, [items, project, structureRows, search]);
+  }, [items, project, search]);
 
   const warnings = findSimilarPairs(candidates);
   const status = baugruppeStatus(items);
 
+  const bgRow = baugruppe
+    ? (structureRows || []).find(
+        (r) =>
+          String(r.project_id) === String(project?.id) &&
+          r.baugruppe === baugruppe &&
+          isBaugruppeRow(r)
+      )
+    : null;
+  const tbDone = Boolean(bgRow?.tb_pruefung_abgeschlossen);
+
   return (
     <div className="card">
       <h2>
-        Prüfung{baugruppe ? ` · ${baugruppe}` : ""}
-        {baugruppe && <span className="statusPill" title={status.label}> {status.emoji} {status.label}</span>}
+        Prüfung · gesamtes Projekt
+        <span className="statusPill" title={status.label}>
+          {" "}
+          {status.emoji} {status.label}
+        </span>
       </h2>
+      {baugruppe && setBaugruppeCompletion && (
+        <CompletionCheckbox
+          label={`TB / Prüfung abgeschlossen · ${baugruppe}`}
+          checked={tbDone}
+          onToggle={(next) =>
+            setBaugruppeCompletion(project.id, baugruppe, "tb_pruefung_abgeschlossen", next)
+          }
+          confirmMessage="TB und Prüfung für diese Baugruppe als abgeschlossen markieren?"
+        />
+      )}
       <SearchField value={search} onChange={setSearch} />
       <p className="hint">
-        Findet Befestigungsmittel mit gleicher Bezeichnung, Größe und Ausführung, deren Länge um maximal 20 mm abweicht.
-        Automatisch ergänzte Positionen werden nicht berücksichtigt.
+        Projektweite Prüfung: gleiche Bezeichnung, Größe und Ausführung mit Längenabweichung bis 20 mm.
+        HV-Garnituren und automatisch ergänzte Positionen werden nicht geprüft.
       </p>
       {warnings.length === 0 ? (
         <p>Keine Auffälligkeiten gefunden.</p>
@@ -93,7 +140,13 @@ export default function Checks({ items, baugruppe, project, structureRows }) {
             {pair.map((i) => (
               <p key={i.id}>
                 Pos. {i.pos} · {i.menge} × {i.bezeichnung} {i.groesse}×{i.laenge}
-                {i.bauteilgruppe ? ` · ${i.bauteilgruppe}` : ""} · {i.bauteil}
+                {i.baugruppe ? ` · ${i.baugruppe}` : ""} · {i.bauteil}
+                {i.hinweis ? (
+                  <>
+                    {" · "}
+                    <span className={i.important_note ? "importantNote" : undefined}>{i.hinweis}</span>
+                  </>
+                ) : null}
               </p>
             ))}
           </div>
