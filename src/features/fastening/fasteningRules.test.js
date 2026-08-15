@@ -9,6 +9,7 @@ import {
   getMitlaufForBezeichnung,
   getUnavailableFinishHint,
   isHvGarnitur,
+  normalizeHvOberflaeche,
 } from "./fasteningRules.js";
 
 describe("Nicht verfügbare Kombinationen (nur Hinweis)", () => {
@@ -104,5 +105,21 @@ describe("Mitlauf übernimmt Werkstoff des Hauptartikels", () => {
     assert.equal(rows[0].menge, 3);
     assert.equal(rows[1].menge, 3);
     assert.ok(rows.every((r) => r.oberflaeche === "Edelstahl"));
+  });
+});
+
+describe("HV-Garnitur ist fachlich immer feuerverzinkt", () => {
+  it("HV-Garnitur mit galvanisch → feuerverzinkt", () => {
+    assert.equal(normalizeHvOberflaeche("HV-Garnitur", "galvanisch"), "feuerverzinkt");
+  });
+  it("HV-Garnitur mit HV → feuerverzinkt", () => {
+    assert.equal(normalizeHvOberflaeche("HV-Garnitur", "HV"), "feuerverzinkt");
+  });
+  it("HV-Schraube (historische Schreibweise) → feuerverzinkt", () => {
+    assert.equal(normalizeHvOberflaeche("HV-Schraube", "Edelstahl"), "feuerverzinkt");
+  });
+  it("keine HV-Garnitur → Ausführung unverändert", () => {
+    assert.equal(normalizeHvOberflaeche("Sechskantschraube", "galvanisch"), "galvanisch");
+    assert.equal(normalizeHvOberflaeche("Sechskantschraube", "Edelstahl"), "Edelstahl");
   });
 });

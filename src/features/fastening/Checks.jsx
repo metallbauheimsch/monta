@@ -123,7 +123,7 @@ export default function Checks({
           onToggle={(next) =>
             setBaugruppeCompletion(project.id, baugruppe, "tb_pruefung_abgeschlossen", next)
           }
-          confirmMessage="TB und Prüfung für diese Baugruppe als abgeschlossen markieren?"
+          confirmMessage="TB / Prüfung für dieses Projekt wirklich als abgeschlossen markieren?"
         />
       )}
       <SearchField value={search} onChange={setSearch} />

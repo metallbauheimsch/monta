@@ -35,6 +35,18 @@ export function normalizeHvDesignation(bezeichnung) {
   return HV_STANDARD_NAME;
 }
 
+/** HV-Garnituren sind fachlich immer feuerverzinkt. */
+export const HV_STANDARD_OBERFLAECHE = "feuerverzinkt";
+
+/**
+ * Ausführung für neue / bewusst bearbeitete HV-Garnitur-Positionen.
+ * Keine rückwirkende Änderung bestehender, nicht bearbeiteter Positionen.
+ */
+export function normalizeHvOberflaeche(bezeichnung, oberflaeche) {
+  if (!isHvGarnitur(bezeichnung)) return oberflaeche;
+  return HV_STANDARD_OBERFLAECHE;
+}
+
 export function isHiltiHitOrVerbund(bezeichnung) {
   const s = String(bezeichnung || "").toLowerCase();
   if (!s) return false;

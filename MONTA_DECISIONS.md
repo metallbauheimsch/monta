@@ -182,7 +182,10 @@ Es gibt keinen eigenen Montage-Reiter.
 
 Die Druckansicht dient als Montageunterlage.
 
-Die Druckansicht zeigt ausschließlich die aktuell geöffnete Baugruppe.
+Die Druckansicht zeigt projektweit alle Baugruppen, gegliedert nach
+Baugruppe → Bauteil, in derselben Baugruppen-Reihenfolge wie die
+Projekt-Gesamtübersicht (nicht auf die aktuell geöffnete Baugruppe
+beschränkt).
 
 Die Materialzuordnung erfolgt nach:
 

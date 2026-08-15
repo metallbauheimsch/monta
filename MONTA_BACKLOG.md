@@ -14,8 +14,10 @@ Siehe `AUTH_SETUP.md`, `MONTA_NEXT_SPRINT.md`, `PRINT_STATION_SETUP.md`:
 2. `supabase_patch_workflow_notifications.sql`
 3. `supabase_patch_print_station.sql`
 4. `supabase_patch_workflow_completion.sql`
-5. Edge Functions deployen: `admin-users`, `workflow-notifications`
-6. Mail-Secrets (Resend o. ä.) setzen
+5. Edge Function `admin-users` deployen
+   (`workflow-notifications` ist bereits live deployed, Mail funktioniert)
+6. ~~Mail-Secrets (Resend o. ä.) setzen~~ – erledigt: Resend eingerichtet,
+   Domain `mail.metallbau-heimsch.de` verifiziert, Testmail erfolgreich zugestellt
 7. Druckstations-Benutzer zuweisen und PC einrichten
 8. Sautter: `full_module_access` in der Benutzerverwaltung setzen
    („Vollzugriff auf TB und Prüfung“; Spalte aus `supabase_patch_workflow_completion.sql`)
@@ -55,6 +57,6 @@ Vor jeder Umsetzung: einfachste sinnvolle Lösung für Metallbau Heimsch?
 # Aktueller Fokus
 
 1. Auth- und Workflow-Patches live anwenden
-2. Mailanbieter + Edge Functions
+2. Edge Function `admin-users` deployen (Mailanbieter + `workflow-notifications` bereits erledigt)
 3. Druckstation am Büro-PC testen
 4. Danach PWA

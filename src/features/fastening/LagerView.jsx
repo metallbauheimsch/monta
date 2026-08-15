@@ -160,7 +160,7 @@ export default function LagerView({
           onToggle={(next) =>
             setBaugruppeCompletion(project.id, baugruppe, "lager_abgeschlossen", next)
           }
-          confirmMessage="Lagerprüfung für diese Baugruppe als abgeschlossen markieren?"
+          confirmMessage="Lagerprüfung für dieses Projekt wirklich als abgeschlossen markieren?"
         />
       )}
       <SearchField value={search} onChange={setSearch} />

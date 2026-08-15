@@ -9,6 +9,7 @@
 
 ## Manuell / Live offen
 
-- Auth-Patches / Edge laut AUTH_SETUP
+- Auth-Patches / Edge Function `admin-users` laut AUTH_SETUP
+  (`workflow-notifications` bereits deployed, Mail-Secrets eingerichtet)
 - Sautter `full_module_access`
 - PWA

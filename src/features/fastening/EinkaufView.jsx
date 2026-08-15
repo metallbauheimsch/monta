@@ -53,10 +53,13 @@ function buildMailRows(rows) {
   }));
 }
 
+const ALL_BESTELLT_CONFIRM = "Alle offenen Positionen dieses Projekts wirklich als bestellt markieren?";
+
 export default function EinkaufView({ items, project, updateItem }) {
   const [mailError, setMailError] = useState(null);
   const [manualValues, setManualValues] = useState(readManualValues);
   const [search, setSearch] = useState("");
+  const [pendingAllBestellt, setPendingAllBestellt] = useState(false);
   const { sortKey, sortDir, toggleSort, arrow } = useSortableColumns(null);
 
   const enriched = items.map((i) => {
@@ -112,8 +115,25 @@ export default function EinkaufView({ items, project, updateItem }) {
     row.items.forEach((i) => updateItem(i.id, { bestellt: checked }));
   }
 
-  function handleAllBestelltChange(rowsList, checked) {
+  function applyAllBestellt(rowsList, checked) {
     rowsList.forEach((row) => row.items.forEach((i) => updateItem(i.id, { bestellt: checked })));
+  }
+
+  function handleAllBestelltChange(rowsList, checked) {
+    if (checked) {
+      setPendingAllBestellt(true);
+      return;
+    }
+    applyAllBestellt(rowsList, false);
+  }
+
+  function confirmAllBestellt(rowsList) {
+    setPendingAllBestellt(false);
+    applyAllBestellt(rowsList, true);
+  }
+
+  function cancelAllBestellt() {
+    setPendingAllBestellt(false);
   }
 
   function rememberManualValue(rowKey, value) {
@@ -177,14 +197,30 @@ export default function EinkaufView({ items, project, updateItem }) {
       <SearchField value={search} onChange={setSearch} />
       {allRows.length === 0 && <p>Keine Positionen im Warenkorb.</p>}
       {allRows.length > 0 && (
-        <label className="checkboxLine allBestelltLine">
-          <input
-            type="checkbox"
-            checked={allRows.length > 0 && allRows.every((r) => r.bestellt)}
-            onChange={(e) => handleAllBestelltChange(allRows, e.target.checked)}
-          />
-          Alle Positionen bestellt
-        </label>
+        <div className="completionWrap">
+          <label className="checkboxLine allBestelltLine">
+            <input
+              type="checkbox"
+              checked={allRows.length > 0 && allRows.every((r) => r.bestellt)}
+              disabled={pendingAllBestellt}
+              onChange={(e) => handleAllBestelltChange(allRows, e.target.checked)}
+            />
+            Alle Positionen bestellt
+          </label>
+          {pendingAllBestellt && (
+            <div className="completionConfirm">
+              <span>{ALL_BESTELLT_CONFIRM}</span>
+              <div className="completionConfirmButtons">
+                <button type="button" className="ghost" onClick={cancelAllBestellt}>
+                  Abbrechen
+                </button>
+                <button type="button" onClick={() => confirmAllBestellt(allRows)}>
+                  Bestätigen
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
       {allRows.length > 0 && (
         <div className="tableWrap">

@@ -4,15 +4,6 @@ function isPcViewport() {
   return window.matchMedia("(min-width: 1025px)").matches;
 }
 
-function focusNextField(current) {
-  const row = current.closest("tr");
-  const scope = row || current.closest("form");
-  if (!scope) return;
-  const fields = [...scope.querySelectorAll("input:not([type=hidden]), select, textarea, button")];
-  const idx = fields.indexOf(current);
-  if (idx >= 0 && idx < fields.length - 1) fields[idx + 1].focus();
-}
-
 const SuggestionAutocomplete = forwardRef(function SuggestionAutocomplete({
   value,
   onChange,
@@ -134,17 +125,13 @@ const SuggestionAutocomplete = forwardRef(function SuggestionAutocomplete({
       setHighlight((h) => Math.max(h - 1, 0));
       return;
     }
-    if (e.key === "Tab" && !e.shiftKey && open && suggestions.length) {
-      const pick = bestSuggestion();
-      if (pick) {
-        if (pick !== value) {
-          e.preventDefault();
-          accept(pick);
-          focusNextField(inputRef.current);
-          return;
-        }
-        setOpen(false);
-      }
+    if (e.key === "Tab") {
+      // TAB wechselt nur das Feld – der getippte Wert bleibt unverändert,
+      // niemals automatische Übernahme eines Vorschlags (auch nicht des
+      // optisch markierten ersten Eintrags).
+      setOpen(false);
+      setNavActive(false);
+      return;
     }
     if (e.key === "Enter" && open && suggestions.length) {
       const pick = bestSuggestion();

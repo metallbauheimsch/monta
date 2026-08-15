@@ -6,6 +6,7 @@ import {
   applyAutoTorqueHinweis,
   isHvGarnitur,
   normalizeHvDesignation,
+  normalizeHvOberflaeche,
   dedupeHinweisText,
   buildMitlaufItems,
   getUnavailableFinishHint,
@@ -16,12 +17,14 @@ import { filterBySearch, sizeLengthSearchParts } from "../../utils/textSearch";
 import SearchField from "../../components/SearchField";
 import SuggestionAutocomplete from "./SuggestionAutocomplete";
 
+// Neue, normale Position: Ausführung bewusst leer – Benutzer wählt selbst.
+// Ausnahme HV-Garnitur (siehe set()/patchItem): dort automatisch feuerverzinkt.
 const emptyFields = {
   menge: "",
   bezeichnung: "",
   groesse: "",
   laenge: "",
-  oberflaeche: "galvanisch",
+  oberflaeche: "",
   hinweis: "",
   important_note: false,
 };
@@ -106,7 +109,11 @@ export default function TechnikerEditor({
       if (k === "bezeichnung" || k === "groesse") {
         const bez = k === "bezeichnung" ? normalizeHvDesignation(v) : normalizeHvDesignation(d.bezeichnung);
         const gr = k === "groesse" ? v : d.groesse;
-        if (k === "bezeichnung" && isHvGarnitur(v)) next.bezeichnung = bez;
+        if (k === "bezeichnung" && isHvGarnitur(v)) {
+          next.bezeichnung = bez;
+          // HV-Garnitur ist fachlich immer feuerverzinkt (neue Position).
+          next.oberflaeche = normalizeHvOberflaeche(bez, d.oberflaeche);
+        }
         next.hinweis = applyAutoTorqueHinweis(k === "hinweis" ? v : d.hinweis, bez, gr);
       }
       return next;
@@ -138,6 +145,12 @@ export default function TechnikerEditor({
         next.bezeichnung = prepared.bezeichnung;
       }
       next.hinweis = prepared.hinweis;
+    }
+    // Bewusste Bearbeitung der Bezeichnung zu HV-Garnitur: Ausführung
+    // fachlich immer feuerverzinkt. Keine rückwirkende Änderung bei
+    // Bearbeitung anderer Felder derselben Position.
+    if (patch.bezeichnung !== undefined && isHvGarnitur(bezIn)) {
+      next.oberflaeche = normalizeHvOberflaeche(bezIn, ausfIn);
     }
     if (patch.bezeichnung !== undefined || patch.oberflaeche !== undefined) {
       const warn = getUnavailableFinishHint(
@@ -204,7 +217,9 @@ export default function TechnikerEditor({
       return;
     }
 
-    setDraft({ ...emptyFields, oberflaeche: draft.oberflaeche, autoMitlauf: draft.autoMitlauf });
+    // Ausführung wird bewusst NICHT aus der vorherigen Zeile übernommen –
+    // jede neue Position startet mit leerer Ausführung.
+    setDraft({ ...emptyFields, autoMitlauf: draft.autoMitlauf });
     focusFirstField();
   }
 

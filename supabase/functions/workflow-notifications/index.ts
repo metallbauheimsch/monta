@@ -75,50 +75,39 @@ async function sendMail(opts) {
   throw new Error(`Unbekannter MAIL_PROVIDER.`);
 }
 
-function buildMail(eventType, payload, baugruppeField) {
+function buildMail(eventType, payload, _baugruppeField) {
   const p = payload || {};
   const projectName = p.project_name || "Projekt";
-  const baugruppe = p.baugruppe || baugruppeField || "";
 
   if (eventType === "tb_pruefung_completed") {
     return {
-      subject: `MONTA – TB/Prüfung abgeschlossen: ${projectName} · ${baugruppe}`,
+      subject: `MONTA – TB/Prüfung abgeschlossen – ${projectName}`,
       text:
-        `Guten Tag,\n\n` +
-        `die technische Bearbeitung und Prüfung der Baugruppe „${baugruppe}“\n` +
-        `im Projekt „${projectName}“ wurde als abgeschlossen markiert.\n\n` +
+        `Mahlzeit Tom,\n\n` +
+        `du bist an der Reihe! Die technische Bearbeitung und Prüfung für das Projekt „${projectName}“ ist abgeschlossen.\n\n` +
+        `Lass den Paternoster wackeln. 😄\n\n` +
         `MONTA\n`,
     };
   }
 
   if (eventType === "lager_completed") {
     return {
-      subject: `MONTA – Lagerprüfung abgeschlossen: ${projectName} · ${baugruppe}`,
+      subject: `MONTA – Lagerprüfung abgeschlossen – ${projectName}`,
       text:
-        `Guten Tag,\n\n` +
-        `die Lagerprüfung für die Baugruppe „${baugruppe}“\n` +
-        `im Projekt „${projectName}“ wurde abgeschlossen.\n\n` +
-        `Offene Fehlmengen können im Warenkorb bearbeitet werden.\n\n` +
+        `Servus Moritz,\n\n` +
+        `du bist an der Reihe! Das Lager für das Projekt „${projectName}“ ist geprüft.\n\n` +
+        `Ich habe das Lager ausgeräumt – wir müssen einkaufen. 😄\n\n` +
         `MONTA\n`,
     };
   }
 
   if (eventType === "all_items_ordered") {
-    const projectWide = Boolean(p.project_wide) || baugruppe === "Gesamtprojekt";
-    if (projectWide) {
-      return {
-        subject: `MONTA – Material vollständig bestellt: ${projectName}`,
-        text:
-          `Guten Tag,\n\n` +
-          `für das Projekt „${projectName}“ wurden alle offenen Materialpositionen als bestellt markiert.\n\n` +
-          `MONTA\n`,
-      };
-    }
     return {
-      subject: `MONTA – Material vollständig bestellt: ${projectName} · ${baugruppe}`,
+      subject: `MONTA – Bestellung abgeschlossen – ${projectName}`,
       text:
-        `Guten Tag,\n\n` +
-        `für die Baugruppe „${baugruppe}“ im Projekt „${projectName}“ wurden alle offenen Materialpositionen als bestellt markiert.\n\n` +
+        `Servus Tom,\n\n` +
+        `ich war mal wieder shoppen! Die Bestellung für das Projekt „${projectName}“ ist raus.\n\n` +
+        `Viel Spaß beim Einräumen. 😄\n\n` +
         `MONTA\n`,
     };
   }
