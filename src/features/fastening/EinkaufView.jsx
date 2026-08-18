@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { groupBy, baugruppeStatus, projectStatus } from "../../utils/helpers";
 import { parseEinbauort } from "../../utils/structure";
-import { naturalCompare, useSortableColumns } from "../../utils/sorting";
+import { naturalCompare, useSortableColumns, compareWithSizeSecondary } from "../../utils/sorting";
 import { filterBySearch, sizeLengthSearchParts } from "../../utils/textSearch";
 import { distribute, readManualValues, writeManualValues } from "./stock";
 import {
@@ -10,6 +10,7 @@ import {
   herkunftVisibleParts,
 } from "./herkunft";
 import { articleIdentityKey, collectUniqueHinweise } from "./fasteningRules";
+import { isActiveItem } from "./replacement";
 import { prepareAndOpenMailRequest } from "../../utils/mailRequest";
 import SearchField from "../../components/SearchField";
 
@@ -34,7 +35,14 @@ function compareByColumn(a, b, key) {
 
 function sortCartRows(rows, sortKey, sortDir) {
   const sorted = sortKey
-    ? [...rows].sort((a, b) => (sortDir === "desc" ? -1 : 1) * compareByColumn(a, b, sortKey))
+    ? [...rows].sort((a, b) =>
+        compareWithSizeSecondary(a, b, {
+          sortKey,
+          sortDir,
+          compareColumn: compareByColumn,
+          tieBreak: (x, y) => naturalCompare(x.key, y.key),
+        })
+      )
     : defaultSort(rows);
   const open = sorted.filter((r) => !r.vollstaendig);
   const done = sorted.filter((r) => r.vollstaendig);
@@ -67,7 +75,9 @@ export default function EinkaufView({ items, project, updateItem }) {
     return { ...i, ...parsed };
   });
 
-  const combos = groupBy(enriched, articleIdentityKey);
+  // Ersetzte Altpositionen sind kein aktueller Bestellbedarf mehr (Sprint 2B):
+  // nicht erneut bestellbar, nicht in "Alle Positionen bestellt" einbezogen.
+  const combos = groupBy(enriched.filter(isActiveItem), articleIdentityKey);
   const rows = Object.values(combos)
     .map((arr) => {
       const first = arr[0];

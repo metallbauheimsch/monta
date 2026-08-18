@@ -95,6 +95,16 @@ th{background:#eee;font-weight:700}
 /* Sortierbare Tabellenüberschriften (Sprint 7): TB-Erfassung + Lager. */
 .sortableTh{cursor:pointer;user-select:none}
 .sortableTh:hover{background:#e2e2e2}
+/* Materialersetzung (Sprint 2B): ersetzte Altpositionen dezent, aber klar
+   erkennbar - kein Datenverlust, aber sichtbar kein aktueller Bedarf mehr. */
+.replacedRow{background:#f6f6f6;color:#777}
+.replacedBadge{font-size:11px;font-weight:700;color:#8a6d1a;background:#fff3cf;border-radius:999px;padding:2px 7px;margin-top:3px;display:inline-block;white-space:nowrap}
+.replacedFieldText{color:#777}
+.replaceConfirm{align-items:flex-start;justify-content:space-between}
+.replacePanel{border-color:#e8c675}
+.lagerReplaceBtn{white-space:nowrap;padding:6px 10px;font-size:13px}
+.replacedHistorySection{margin-top:20px;padding-top:12px;border-top:2px solid #eee}
+.replacedHistorySection h3{font-size:15px;color:#555}
 /* TB-Kopfbereich (Sprint 7): kompakte Kontextzeile statt großer
    Projektkarte, damit die Materialerfassung im Vordergrund steht. */
 .tbContext{font-size:15px;color:#333;margin:8px 0 14px}

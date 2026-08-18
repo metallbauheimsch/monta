@@ -3,6 +3,7 @@ import { groupBy, baugruppeStatus } from "../../utils/helpers";
 import { parseEinbauort, isBaugruppeRow } from "../../utils/structure";
 import { filterBySearch, sizeLengthSearchParts } from "../../utils/textSearch";
 import { isHvGarnitur } from "./fasteningRules";
+import { isActiveItem } from "./replacement";
 import SearchField from "../../components/SearchField";
 import CompletionCheckbox from "../../components/CompletionCheckbox";
 
@@ -20,6 +21,8 @@ function lengthsAreSimilar(a, b) {
 }
 
 function isCheckable(item) {
+  // Ersetzte Altpositionen sind kein aktueller Prüfbedarf mehr (Sprint 2B).
+  if (!isActiveItem(item)) return false;
   // HV-Garnituren und HV-Ausführung: vollständig außerhalb der Längenprüfung
   if (isHvGarnitur(item.bezeichnung)) return false;
   const ausf = String(item.oberflaeche || "").trim().toLowerCase();

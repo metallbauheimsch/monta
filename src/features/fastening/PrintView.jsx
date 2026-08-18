@@ -5,11 +5,12 @@ import {
   formatEinbauort,
   buildProjectStructure,
 } from "../../utils/structure";
-import { naturalCompare, useSortableColumns } from "../../utils/sorting";
+import { naturalCompare, useSortableColumns, compareWithSizeSecondary } from "../../utils/sorting";
 import { filterBySearch, sizeLengthSearchParts } from "../../utils/textSearch";
 import { regalOrderIndex, getRegalPlatz } from "./regalOrder";
 import { groupBy, baugruppeStatus } from "../../utils/helpers";
 import { dedupeHinweisText, normalizeHinweisForCompare } from "./fasteningRules";
+import { isActiveItem } from "./replacement";
 import SearchField from "../../components/SearchField";
 
 function aggregateForPrint(items, project) {
@@ -72,9 +73,13 @@ function compareByColumn(a, b, key) {
 
 function sortRows(items, sortKey, sortDir) {
   if (!sortKey) return sortByPosNumber([...items]);
-  return [...items].sort(
-    (a, b) =>
-      (sortDir === "desc" ? -1 : 1) * compareByColumn(a, b, sortKey) || posValue(a) - posValue(b)
+  return [...items].sort((a, b) =>
+    compareWithSizeSecondary(a, b, {
+      sortKey,
+      sortDir,
+      compareColumn: compareByColumn,
+      tieBreak: (x, y) => posValue(x) - posValue(y),
+    })
   );
 }
 
@@ -136,7 +141,8 @@ export default function PrintView({ project, baugruppe, items, projectItems, str
   const [search, setSearch] = useState("");
   const { sortKey, sortDir, toggleSort, arrow } = useSortableColumns(null);
 
-  const printSource = projectItems || items;
+  // Ersetzte Altpositionen erscheinen nicht auf der aktuellen Montageunterlage (Sprint 2B).
+  const printSource = (projectItems || items).filter(isActiveItem);
 
   const structure = useMemo(
     () => buildProjectStructure(project, printSource, structureRows || []),

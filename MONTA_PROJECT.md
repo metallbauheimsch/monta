@@ -29,6 +29,9 @@ Zusätzlich:
 - `notification_events` (Workflow-Mails, Duplikatschutz)
 - `print_station_settings` / `print_station_config` / `print_jobs`
 - `material_items.important_note`
+- `material_items.ersetzt_durch` (Sprint 2B, Materialersetzung; SQL-Patch
+  `supabase_patch_material_replacement.sql` vorbereitet, noch nicht live
+  angewendet)
 - `project_structure.tb_pruefung_abgeschlossen` / `lager_abgeschlossen`
 
 ## Ansichten

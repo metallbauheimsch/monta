@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { groupBy, projectStatus } from "../../utils/helpers";
 import { parseEinbauort, isBaugruppeRow } from "../../utils/structure";
-import { naturalCompare, useSortableColumns } from "../../utils/sorting";
+import { naturalCompare, useSortableColumns, compareWithSizeSecondary } from "../../utils/sorting";
 import { filterBySearch, sizeLengthSearchParts } from "../../utils/textSearch";
 import { regalOrderIndex, getRegalPlatz } from "./regalOrder";
 import { distribute, readManualValues, writeManualValues } from "./stock";
@@ -12,8 +12,10 @@ import {
   herkunftVisibleParts,
 } from "./herkunft";
 import { articleIdentityKey, collectUniqueHinweise } from "./fasteningRules";
+import { isActiveItem, isReplacedItem } from "./replacement";
 import SearchField from "../../components/SearchField";
 import CompletionCheckbox from "../../components/CompletionCheckbox";
+import LagerReplacePanel from "./LagerReplacePanel";
 
 function defaultSort(rows) {
   return [...rows].sort((a, b) => {
@@ -38,7 +40,14 @@ function compareByColumn(a, b, key) {
 
 function sortLagerRows(rows, sortKey, sortDir) {
   const sorted = sortKey
-    ? [...rows].sort((a, b) => (sortDir === "desc" ? -1 : 1) * compareByColumn(a, b, sortKey))
+    ? [...rows].sort((a, b) =>
+        compareWithSizeSecondary(a, b, {
+          sortKey,
+          sortDir,
+          compareColumn: compareByColumn,
+          tieBreak: (x, y) => naturalCompare(x.key, y.key),
+        })
+      )
     : defaultSort(rows);
   const open = sorted.filter((r) => !r.vollstaendig);
   const done = sorted.filter((r) => r.vollstaendig);
@@ -48,6 +57,8 @@ function sortLagerRows(rows, sortKey, sortDir) {
 export default function LagerView({
   items,
   updateItem,
+  replaceItem,
+  hasFullModuleAccess,
   project,
   structureRows,
   baugruppe,
@@ -55,6 +66,7 @@ export default function LagerView({
 }) {
   const [manualValues, setManualValues] = useState(readManualValues);
   const [search, setSearch] = useState("");
+  const [replacingRow, setReplacingRow] = useState(null);
   const { sortKey, sortDir, toggleSort, arrow } = useSortableColumns(null);
 
   const enriched = items.map((i) => {
@@ -62,7 +74,15 @@ export default function LagerView({
     return { ...i, ...parsed };
   });
 
-  const combos = groupBy(enriched, articleIdentityKey);
+  // Ersetzte Altpositionen dürfen nicht mehr mit dem aktiven Bedarf
+  // desselben Artikels zusammenaggregiert werden (Sprint 2B) - sonst wäre
+  // aktueller Bedarf und ersetzte Historie über articleIdentityKey wieder
+  // ununterscheidbar zusammengefasst.
+  const activeEnriched = enriched.filter(isActiveItem);
+  const replacedEnriched = enriched.filter(isReplacedItem);
+  const itemsById = new Map(items.map((i) => [i.id, i]));
+
+  const combos = groupBy(activeEnriched, articleIdentityKey);
   const rows = Object.values(combos).map((arr) => {
     const first = arr[0];
     const menge = arr.reduce((s, i) => s + Number(i.menge || 0), 0);
@@ -102,6 +122,33 @@ export default function LagerView({
   ]);
   const sortedRows = sortLagerRows(filteredRows, sortKey, sortDir);
   const status = projectStatus(project, items);
+
+  // Ersetzte Altpositionen (Sprint 2B): real vorbereitete/bestellte Ware
+  // bleibt einzeln (nicht aggregiert) nachvollziehbar, zählt aber nicht mehr
+  // als offener Restbedarf und fließt nicht in die Statusampel ein.
+  const replacedRows = filterBySearch(replacedEnriched, search, (i) => [
+    project?.nr,
+    project?.name,
+    i.bezeichnung,
+    i.groesse,
+    i.laenge,
+    i.oberflaeche,
+    i.baugruppe,
+    i.bauteil,
+    i.pos,
+    ...sizeLengthSearchParts(i.groesse, i.laenge),
+  ]).sort((a, b) => naturalCompare(a.bezeichnung, b.bezeichnung) || naturalCompare(a.groesse, b.groesse));
+
+  function replacedByLabel(item) {
+    const newItem = itemsById.get(item.ersetzt_durch);
+    if (!newItem) return "Ersetzt";
+    const parsedNew = parseEinbauort(newItem.einbauort, project?.baugruppe);
+    return `Ersetzt · Pos. ${newItem.pos} (${parsedNew.bauteil})`;
+  }
+
+  async function handleReplace(source, newFields) {
+    await replaceItem(source.id, newFields);
+  }
 
   const bgRow = baugruppe
     ? (structureRows || []).find(
@@ -197,6 +244,7 @@ export default function LagerView({
                 <th className="sortableTh colHerkunft" onClick={() => toggleSort("herkunft")}>
                   Herkunft{arrow("herkunft")}
                 </th>
+                {hasFullModuleAccess && <th></th>}
               </tr>
               {sortedRows.map((row) => {
                 const vis = herkunftVisibleParts(row.herkunft, search);
@@ -247,11 +295,70 @@ export default function LagerView({
                         ))}
                       </div>
                     </td>
+                    {hasFullModuleAccess && (
+                      <td>
+                        <button
+                          type="button"
+                          className="ghost lagerReplaceBtn"
+                          onClick={() => setReplacingRow(row)}
+                        >
+                          Ersetzen
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {replacingRow && (
+        <LagerReplacePanel
+          row={replacingRow}
+          onClose={() => setReplacingRow(null)}
+          onReplace={handleReplace}
+        />
+      )}
+
+      {replacedRows.length > 0 && (
+        <div className="replacedHistorySection">
+          <h3>Ersetzte Altpositionen</h3>
+          <p className="hint">
+            Bereits vorbereitete/bestellte Ware bleibt hier nachvollziehbar, zählt aber nicht mehr
+            als aktueller Bedarf.
+          </p>
+          <div className="tableWrap">
+            <table>
+              <tbody>
+                <tr>
+                  <th>Bezeichnung</th>
+                  <th>Größe</th>
+                  <th>Länge</th>
+                  <th>Ausführung</th>
+                  <th>Vorhanden</th>
+                  <th>Bestellt</th>
+                  <th>Herkunft</th>
+                  <th></th>
+                </tr>
+                {replacedRows.map((i) => (
+                  <tr key={i.id} className="replacedRow">
+                    <td>{i.bezeichnung}</td>
+                    <td>{i.groesse}</td>
+                    <td>{i.laenge}</td>
+                    <td>{i.oberflaeche}</td>
+                    <td>{i.bereit || 0}</td>
+                    <td>{i.bestellt ? "Ja" : "Nein"}</td>
+                    <td>
+                      {i.baugruppe} · {i.bauteil} · Pos. {i.pos}
+                    </td>
+                    <td className="replacedFieldText">{replacedByLabel(i)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

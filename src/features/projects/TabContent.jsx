@@ -13,9 +13,11 @@ export default function TabContent({
   baugruppeItems,
   projectItems,
   structureRows,
+  fullModuleAccess,
   addItem,
   updateItem,
   deleteItem,
+  replaceItem,
   setBaugruppeCompletion,
 }) {
   if (tab === "tb") {
@@ -26,6 +28,7 @@ export default function TabContent({
         addItem={addItem}
         updateItem={updateItem}
         deleteItem={deleteItem}
+        replaceItem={replaceItem}
         baugruppe={baugruppe}
         bauteil={bauteil}
         project={project}
@@ -47,6 +50,8 @@ export default function TabContent({
       <LagerView
         items={projectItems}
         updateItem={updateItem}
+        replaceItem={replaceItem}
+        hasFullModuleAccess={fullModuleAccess}
         project={project}
         structureRows={structureRows}
         baugruppe={baugruppe}

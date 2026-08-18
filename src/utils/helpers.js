@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { isActiveItem } from "../features/fastening/replacement.js";
 
 export function articleKey(item) {
   return [item.bezeichnung, item.groesse, item.laenge, item.oberflaeche].filter(Boolean).join(" ");
@@ -27,9 +28,16 @@ export function remainingQty(item) {
 // lokale "Bestellung erfolgt"-Häkchen aus Sprint 5/6 wurde deshalb
 // entfernt, siehe MONTA_DECISIONS.md, Abschnitt "Bestellung und
 // Lieferung").
+// Ersetzte Altpositionen (Sprint 2B: material_items.ersetzt_durch) fließen
+// bewusst nicht mehr in Status-/Ampel-Berechnung ein - ihr realer bereit-/
+// bestellt-Wert bleibt an der Position selbst unverändert erhalten, zählt
+// aber nicht mehr als offener aktueller Bedarf. Zentral hier gelöst, damit
+// Statusampel, automatischer Druckjob und Workflow-Mails (useWorkflowWatchers)
+// automatisch geschützt sind, ohne das an mehreren Stellen zu wiederholen.
 export function baugruppeStatus(items) {
-  if (!items.length) return { key: "leer", emoji: "⚪", label: "Keine Positionen" };
-  const missing = items.filter((i) => remainingQty(i) > 0);
+  const active = items.filter(isActiveItem);
+  if (!active.length) return { key: "leer", emoji: "⚪", label: "Keine Positionen" };
+  const missing = active.filter((i) => remainingQty(i) > 0);
   if (!missing.length) return { key: "bereit", emoji: "🟢", label: "Bereit" };
   const allBestellt = missing.every((i) => i.bestellt);
   if (allBestellt) return { key: "bestellt", emoji: "🟡", label: "Bestellt" };
@@ -37,7 +45,7 @@ export function baugruppeStatus(items) {
 }
 
 export function projectStatus(project, items) {
-  const own = items.filter((i) => i.project_id === project.id);
+  const own = items.filter((i) => i.project_id === project.id && isActiveItem(i));
   if (!own.length) return { pct: 0, label: "Keine Teile bereit", cls: "red" };
   const ready = own.filter((i) => Number(i.bereit || 0) >= Number(i.menge || 0)).length;
   const pct = Math.round((ready / own.length) * 100);

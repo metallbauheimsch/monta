@@ -726,6 +726,44 @@ Erforderlicher vorhandener Patch falls Spalte fehlt: `supabase_patch_workflow_co
 
 ---
 
+---
+
+# Sprint 2B: Materialersetzung und Sekundärsortierung
+
+## Materialersetzung
+
+- TB und Lager (aggregiert) können eine fachlich falsche Position jetzt
+  sicher durch eine neue Position ersetzen, statt sie direkt zu
+  überschreiben - sofern bereits real Ware vorbereitet oder bestellt wurde.
+- Bereits vorbereitete Mengen und ein bereits gesetzter Bestellstatus
+  bleiben an der Altposition unverändert erhalten, auch nach der
+  Ersetzung. Die Altposition wird klar als „Ersetzt" gekennzeichnet und
+  zählt danach nicht mehr als aktueller Bedarf (Prüfung, Lager-Restmenge,
+  Warenkorb, Druck).
+- Unberührte Positionen (nichts vorbereitet, nicht bestellt) lassen sich
+  weiterhin direkt ändern - kein zusätzlicher Bestätigungsschritt.
+- Ersetzen im Lager steht nur Administratoren und Nutzern mit
+  Vollzugriff zur Verfügung; bei mehreren zusammengefassten
+  Ursprungspositionen muss bewusst genau eine ausgewählt werden.
+- Statusampel, automatischer Druckauftrag und Workflow-Mails berücksichtigen
+  ersetzte Altpositionen nicht mehr als offenen Bedarf.
+- Voraussetzung: Datenbankspalte `material_items.ersetzt_durch`
+  (`supabase_patch_material_replacement.sql`, vorbereitet, noch nicht live
+  angewendet - siehe Backlog).
+
+## Sekundärsortierung
+
+- Beim Sortieren nach einer Spalte (Bezeichnung, Fach, Ausführung, Herkunft
+  u. a.) sortieren gleiche Werte jetzt zusätzlich nach Größe und Länge
+  numerisch (z. B. M8 vor M10 vor M12), statt in zufälliger Reihenfolge.
+  Betrifft TB, Lager, Warenkorb und Druck.
+- Die bewusste Standardreihenfolge ohne aktive Spaltensortierung
+  (Paternoster-Laufweg in Lager/Druck) bleibt unverändert.
+
+Keine Echtdaten verändert. Kein SQL ausgeführt.
+
+---
+
 # Regeln
 
 Nach jedem abgeschlossenen Sprint werden hier ergänzt:

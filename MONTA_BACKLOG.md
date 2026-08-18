@@ -6,6 +6,18 @@ Dieses Dokument enthält ausschließlich noch offene Aufgaben.
 
 # Priorität A – Pilotversion
 
+## Materialersetzung – Review-Branch fertig, noch nicht live
+
+- Branch `review/sprint-2-material-replacement` fachlich/technisch fertig
+  (Tests grün, Build ok), noch nicht auf `main` gemerged.
+- Vor Merge/Deploy nötig: `supabase_patch_material_replacement.sql` im
+  SQL Editor ausführen (fügt nullable Spalte `material_items.ersetzt_durch`
+  hinzu - keine Änderung an bestehenden Datensätzen).
+- Danach: PR review/sprint-2-material-replacement → main freigeben und
+  mergen.
+- Manueller Test an einem Testprojekt vor Freigabe für Echtprojekte
+  (Testplan siehe Sprint-2-Abschlussbericht).
+
 ## Auth + Workflow in Live-Supabase
 
 Siehe `AUTH_SETUP.md`, `MONTA_NEXT_SPRINT.md`, `PRINT_STATION_SETUP.md`:

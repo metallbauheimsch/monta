@@ -21,6 +21,7 @@ export default function ProjectView({
   addItem,
   updateItem,
   deleteItem,
+  replaceItem,
   setBaugruppeCompletion,
 }) {
   const visibleTabs = visibleTabsFor(isNarrow, { fullAccess: fullModuleAccess });
@@ -75,9 +76,11 @@ export default function ProjectView({
         baugruppeItems={baugruppeItems}
         projectItems={projectItems}
         structureRows={structureRows}
+        fullModuleAccess={fullModuleAccess}
         addItem={addItem}
         updateItem={updateItem}
         deleteItem={deleteItem}
+        replaceItem={replaceItem}
         setBaugruppeCompletion={setBaugruppeCompletion}
       />
     </>

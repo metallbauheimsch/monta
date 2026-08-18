@@ -176,6 +176,41 @@ Der Bestellt-Status der Baugruppe ergibt sich aus den Positionen:
 
 ---
 
+## Materialersetzung
+
+Wenn eine Materialposition fachlich geändert wird (Bezeichnung, Größe,
+Länge oder Ausführung), unterscheidet MONTA zwischen unberührten und
+bereits operativ bearbeiteten Positionen.
+
+Unberührt (weder vorbereitet noch bestellt): direkte Änderung wie bisher.
+
+Bereits operativ bearbeitet (vorbereitete Menge > 0 oder bereits bestellt):
+keine direkte Änderung. Stattdessen entsteht eine neue Position mit dem
+neuen fachlichen Inhalt; die Altposition bleibt mit ihrem realen Zustand
+(vorbereitete Menge, Bestellstatus) unverändert erhalten und wird als
+ersetzt gekennzeichnet (`ersetzt_durch`).
+
+Eine ersetzte Altposition zählt nicht mehr als aktueller Bedarf: nicht in
+Prüfung, nicht als Restmenge im Lager, nicht im Warenkorb, nicht auf der
+Druck-Montageunterlage. Sie bleibt in TB und im Lager sichtbar und klar als
+„Ersetzt" gekennzeichnet, damit real vorbereitete oder bestellte Ware
+nachvollziehbar bleibt. Normale fachliche Bearbeitung einer ersetzten
+Altposition ist gesperrt.
+
+Eine bereits bestellte Altposition wird beim Ersetzen nicht automatisch
+storniert und löst keine zusätzliche Mail aus - nur ein sichtbarer Hinweis,
+die Bestellung ggf. manuell zu korrigieren.
+
+Ersetzen aus dem Lager heraus ist nur für Administratoren oder Nutzer mit
+`full_module_access` möglich. Bei einer aggregierten Lagerzeile mit
+mehreren Ursprungspositionen muss der Benutzer genau eine konkrete
+Ursprungsposition auswählen - nie eine pauschale Änderung aller
+gleichartigen Positionen.
+
+Ersetzen ist auch nach TB-/Prüfungs- oder Lagerabschluss möglich, ohne
+bestehende Abschlussflags automatisch zurückzusetzen und ohne automatische
+Abschluss-Mail.
+
 ## Montage
 
 Es gibt keinen eigenen Montage-Reiter.

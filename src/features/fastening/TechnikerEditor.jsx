@@ -12,8 +12,14 @@ import {
   getUnavailableFinishHint,
 } from "./fasteningRules";
 import { formatEinbauort } from "../../utils/structure";
-import { naturalCompare, useSortableColumns } from "../../utils/sorting";
+import { naturalCompare, useSortableColumns, compareWithSizeSecondary } from "../../utils/sorting";
 import { filterBySearch, sizeLengthSearchParts } from "../../utils/textSearch";
+import {
+  isOperationallyTouched,
+  isReplacedItem,
+  isIdentityField,
+  hasIdentityChange,
+} from "./replacement";
 import SearchField from "../../components/SearchField";
 import SuggestionAutocomplete from "./SuggestionAutocomplete";
 
@@ -41,18 +47,24 @@ function compareByColumn(a, b, key) {
   return naturalCompare(a[key], b[key]);
 }
 
-/** Stabile Reihenfolge: gewählte Spalte, sonst Pos.; Tie-Break pos → id. */
+/**
+ * Stabile Reihenfolge: ohne aktive Spaltensortierung nach Pos. (unverändert).
+ * Mit aktiver Spaltensortierung (Sprint 2B): gewählte Spalte → Größe/Länge
+ * numerisch → Bezeichnung → Pos./id als stabiler Tie-Breaker.
+ */
 function stableSortItems(items, sortKey, sortDir) {
-  const dir = sortDir === "desc" ? -1 : 1;
-  return [...items].sort((a, b) => {
-    let primary = 0;
-    if (sortKey) primary = dir * compareByColumn(a, b, sortKey);
-    else primary = posValue(a) - posValue(b);
-    if (primary !== 0) return primary;
-    const byPos = posValue(a) - posValue(b);
-    if (byPos !== 0) return byPos;
-    return String(a.id || "").localeCompare(String(b.id || ""));
-  });
+  if (!sortKey) {
+    return [...items].sort((a, b) => posValue(a) - posValue(b));
+  }
+  return [...items].sort((a, b) =>
+    compareWithSizeSecondary(a, b, {
+      sortKey,
+      sortDir,
+      compareColumn: compareByColumn,
+      tieBreak: (x, y) =>
+        posValue(x) - posValue(y) || String(x.id || "").localeCompare(String(y.id || "")),
+    })
+  );
 }
 
 function prepareFields(bezeichnung, groesse, hinweis) {
@@ -67,6 +79,7 @@ export default function TechnikerEditor({
   addItem,
   updateItem,
   deleteItem,
+  replaceItem,
   baugruppe,
   bauteil,
   project,
@@ -76,6 +89,14 @@ export default function TechnikerEditor({
   const mengeRef = useRef(null);
   const { sortKey, sortDir, toggleSort, arrow } = useSortableColumns(null);
   const descriptionOptions = getDescriptionOptions();
+
+  // Entwurf einzelner Identitätsfelder (Bezeichnung/Größe/Länge/Ausführung)
+  // bei operativ bereits bearbeiteten Positionen: wird erst beim Verlassen
+  // des Feldes fachlich bewertet (nicht bei jedem Tastendruck), damit die
+  // Ersetzen-Bestätigung nicht während des Tippens aufpoppt.
+  const [rowDrafts, setRowDrafts] = useState({});
+  // Angehaltene Ersetzen-Bestätigung für eine konkrete Position.
+  const [pendingReplace, setPendingReplace] = useState(null);
 
   const filteredItems = useMemo(
     () =>
@@ -124,12 +145,8 @@ export default function TechnikerEditor({
     requestAnimationFrame(() => mengeRef.current?.focus());
   }
 
-  function patchItem(id, patch) {
-    const current = items.find((x) => x.id === id);
-    if (!current) {
-      updateItem(id, patch);
-      return;
-    }
+  /** Bisherige HV-/Drehmoment-/Hinweis-Normalisierung, unverändert - nur aus patchItem ausgelagert. */
+  function resolvePatchFields(current, patch) {
     let next = { ...patch };
     const bezIn = patch.bezeichnung !== undefined ? patch.bezeichnung : current.bezeichnung;
     const grIn = patch.groesse !== undefined ? patch.groesse : current.groesse;
@@ -162,7 +179,100 @@ export default function TechnikerEditor({
         alert(warn);
       }
     }
+    return next;
+  }
+
+  /**
+   * Zentrale Bearbeitungsentscheidung (Sprint 2B):
+   * - ersetzte Altposition: fachlich gesperrt, keine Änderung
+   * - unberührte Position: wie bisher direkt speichern
+   * - operativ bearbeitete Position + fachliche Änderung (Bezeichnung/
+   *   Größe/Länge/Ausführung): NICHT direkt speichern, sondern sichtbare
+   *   Ersetzen-Bestätigung anzeigen (siehe pendingReplace-Panel)
+   */
+  function patchItem(id, patch) {
+    const current = items.find((x) => x.id === id);
+    if (!current) {
+      updateItem(id, patch);
+      return;
+    }
+    if (isReplacedItem(current)) return;
+
+    const next = resolvePatchFields(current, patch);
+
+    if (replaceItem && isOperationallyTouched(current) && hasIdentityChange(current, next)) {
+      setPendingReplace({ id, current, newFields: next });
+      return;
+    }
+
     updateItem(id, next);
+  }
+
+  function fieldDisplayValue(item, key) {
+    const draft = rowDrafts[item.id];
+    return draft && draft[key] !== undefined ? draft[key] : item[key] || "";
+  }
+
+  /**
+   * Änderung an einem Identitätsfeld einer operativ bearbeiteten, noch
+   * aktiven Position wird zunächst nur als Entwurf gehalten (kein Speichern
+   * bei jedem Tastendruck) - die fachliche Ersetzen-Entscheidung erfolgt
+   * erst beim Verlassen des Feldes (commitFieldDraft). Alle anderen Fälle
+   * verhalten sich unverändert wie bisher (sofortiges patchItem).
+   */
+  function handleFieldChange(item, key, value) {
+    if (isIdentityField(key) && isOperationallyTouched(item) && !isReplacedItem(item)) {
+      setRowDrafts((prev) => ({ ...prev, [item.id]: { ...prev[item.id], [key]: value } }));
+      return;
+    }
+    patchItem(item.id, { [key]: value });
+  }
+
+  function clearRowDraft(itemId) {
+    setRowDrafts((prev) => {
+      if (!prev[itemId]) return prev;
+      const next = { ...prev };
+      delete next[itemId];
+      return next;
+    });
+  }
+
+  function commitFieldDraft(item, key) {
+    const draft = rowDrafts[item.id];
+    if (!draft || draft[key] === undefined) return;
+    // Gesamten bisherigen Entwurf der Zeile übernehmen, damit mehrere
+    // gleichzeitig geänderte Identitätsfelder in einer gemeinsamen
+    // Ersetzen-Bestätigung zusammengefasst werden statt mehrfach zu fragen.
+    const merged = { ...draft };
+    clearRowDraft(item.id);
+    patchItem(item.id, merged);
+  }
+
+  function cancelReplace() {
+    if (pendingReplace) clearRowDraft(pendingReplace.id);
+    setPendingReplace(null);
+  }
+
+  async function confirmReplace() {
+    if (!pendingReplace || !replaceItem) return;
+    try {
+      await replaceItem(pendingReplace.id, pendingReplace.newFields);
+    } catch {
+      return;
+    } finally {
+      clearRowDraft(pendingReplace.id);
+      setPendingReplace(null);
+    }
+  }
+
+  function findProjectItemById(id) {
+    return (allProjectItems || items).find((x) => x.id === id) || null;
+  }
+
+  function replacedHint(item) {
+    if (!isReplacedItem(item)) return null;
+    const repl = findProjectItemById(item.ersetzt_durch);
+    return repl ? `Ersetzt · Pos. ${repl.pos}` : "Ersetzt";
   }
 
   async function submit(e) {
@@ -299,6 +409,53 @@ export default function TechnikerEditor({
       <div className="card">
         <h2>Erfasste Positionen{bauteil ? ` · ${bauteil}` : ""}</h2>
         <SearchField value={search} onChange={setSearch} />
+        {pendingReplace && (
+          <div className="completionConfirm replaceConfirm">
+            <div>
+              <p>
+                Diese Position wurde bereits{" "}
+                {pendingReplace.current.bereit > 0 && pendingReplace.current.bestellt
+                  ? "vorbereitet und bestellt"
+                  : pendingReplace.current.bereit > 0
+                  ? "vorbereitet"
+                  : "bestellt"}
+                .
+              </p>
+              {pendingReplace.current.bereit > 0 && (
+                <p>
+                  {pendingReplace.current.bereit} × {pendingReplace.current.bezeichnung}{" "}
+                  {pendingReplace.current.groesse}
+                  {pendingReplace.current.laenge ? `×${pendingReplace.current.laenge}` : ""} bleiben
+                  als vorbereitete Altposition erhalten.
+                </p>
+              )}
+              <p>
+                Die neue Position{" "}
+                {pendingReplace.newFields.bezeichnung ?? pendingReplace.current.bezeichnung}{" "}
+                {pendingReplace.newFields.groesse ?? pendingReplace.current.groesse}
+                {(pendingReplace.newFields.laenge ?? pendingReplace.current.laenge)
+                  ? `×${pendingReplace.newFields.laenge ?? pendingReplace.current.laenge}`
+                  : ""}{" "}
+                startet im Lager mit 0.
+              </p>
+              {pendingReplace.current.bestellt && (
+                <p className="dangerText">
+                  Diese Position wurde bereits bestellt. Bestellung ggf. manuell stornieren oder
+                  korrigieren.
+                </p>
+              )}
+              <p>Position wirklich ersetzen?</p>
+            </div>
+            <div className="completionConfirmButtons">
+              <button type="button" className="ghost" onClick={cancelReplace}>
+                Abbrechen
+              </button>
+              <button type="button" onClick={confirmReplace}>
+                Ersetzen
+              </button>
+            </div>
+          </div>
+        )}
         <div className="tableWrap">
           <table className="editTable">
             <tbody>
@@ -325,59 +482,96 @@ export default function TechnikerEditor({
                 <th title="Wichtiger Hinweis">Wichtig</th>
                 <th></th>
               </tr>
-              {sortedItems.map((i) => (
-                <tr key={i.id}>
-                  <td className="posCell">{i.pos}</td>
+              {sortedItems.map((i) => {
+                const replaced = isReplacedItem(i);
+                return (
+                <tr key={i.id} className={replaced ? "replacedRow" : undefined}>
+                  <td className="posCell">
+                    {i.pos}
+                    {replaced && <div className="replacedBadge">{replacedHint(i)}</div>}
+                  </td>
                   <td>
-                    <input
-                      type="number"
-                      value={i.menge || 0}
-                      onChange={(e) => patchItem(i.id, { menge: Number(e.target.value) })}
-                    />
+                    {replaced ? (
+                      <span className="replacedFieldText">{i.menge}</span>
+                    ) : (
+                      <input
+                        type="number"
+                        value={i.menge || 0}
+                        onChange={(e) => patchItem(i.id, { menge: Number(e.target.value) })}
+                      />
+                    )}
                   </td>
                   <td className="suggestionCell">
-                    <SuggestionAutocomplete
-                      value={i.bezeichnung || ""}
-                      onChange={(v) => patchItem(i.id, { bezeichnung: v })}
-                      onCommit={rememberDescriptionIfNew}
-                      options={descriptionOptions}
-                      placeholder="Bezeichnung"
-                      ellipsis
-                    />
+                    {replaced ? (
+                      <span className="replacedFieldText">{i.bezeichnung}</span>
+                    ) : (
+                      <SuggestionAutocomplete
+                        value={fieldDisplayValue(i, "bezeichnung")}
+                        onChange={(v) => handleFieldChange(i, "bezeichnung", v)}
+                        onCommit={(v) => {
+                          rememberDescriptionIfNew(v);
+                          commitFieldDraft(i, "bezeichnung");
+                        }}
+                        options={descriptionOptions}
+                        placeholder="Bezeichnung"
+                        ellipsis
+                      />
+                    )}
                   </td>
                   <td>
-                    <input
-                      value={i.groesse || ""}
-                      onChange={(e) => patchItem(i.id, { groesse: e.target.value })}
-                    />
+                    {replaced ? (
+                      <span className="replacedFieldText">{i.groesse}</span>
+                    ) : (
+                      <input
+                        value={fieldDisplayValue(i, "groesse")}
+                        onChange={(e) => handleFieldChange(i, "groesse", e.target.value)}
+                        onBlur={() => commitFieldDraft(i, "groesse")}
+                      />
+                    )}
                   </td>
                   <td>
-                    <input
-                      value={i.laenge || ""}
-                      onChange={(e) => patchItem(i.id, { laenge: e.target.value })}
-                    />
+                    {replaced ? (
+                      <span className="replacedFieldText">{i.laenge}</span>
+                    ) : (
+                      <input
+                        value={fieldDisplayValue(i, "laenge")}
+                        onChange={(e) => handleFieldChange(i, "laenge", e.target.value)}
+                        onBlur={() => commitFieldDraft(i, "laenge")}
+                      />
+                    )}
                   </td>
                   <td className="suggestionCell">
-                    <SuggestionAutocomplete
-                      value={i.oberflaeche || ""}
-                      onChange={(v) => patchItem(i.id, { oberflaeche: v })}
-                      options={ausfuehrungen}
-                      placeholder="Ausführung"
-                      ellipsis
-                    />
+                    {replaced ? (
+                      <span className="replacedFieldText">{i.oberflaeche}</span>
+                    ) : (
+                      <SuggestionAutocomplete
+                        value={fieldDisplayValue(i, "oberflaeche")}
+                        onChange={(v) => handleFieldChange(i, "oberflaeche", v)}
+                        onCommit={() => commitFieldDraft(i, "oberflaeche")}
+                        options={ausfuehrungen}
+                        placeholder="Ausführung"
+                        ellipsis
+                      />
+                    )}
                   </td>
                   <td>
-                    <input
-                      className={i.important_note ? "importantNoteInput" : ""}
-                      value={i.hinweis || ""}
-                      onChange={(e) => patchItem(i.id, { hinweis: e.target.value })}
-                      onBlur={(e) => {
-                        const cleaned = dedupeHinweisText(e.target.value);
-                        if (cleaned !== String(i.hinweis || "")) {
-                          patchItem(i.id, { hinweis: cleaned });
-                        }
-                      }}
-                    />
+                    {replaced ? (
+                      <span className={i.important_note ? "importantNote" : "replacedFieldText"}>
+                        {i.hinweis}
+                      </span>
+                    ) : (
+                      <input
+                        className={i.important_note ? "importantNoteInput" : ""}
+                        value={i.hinweis || ""}
+                        onChange={(e) => patchItem(i.id, { hinweis: e.target.value })}
+                        onBlur={(e) => {
+                          const cleaned = dedupeHinweisText(e.target.value);
+                          if (cleaned !== String(i.hinweis || "")) {
+                            patchItem(i.id, { hinweis: cleaned });
+                          }
+                        }}
+                      />
+                    )}
                   </td>
                   <td
                     onClick={(e) => e.stopPropagation()}
@@ -386,9 +580,11 @@ export default function TechnikerEditor({
                     <input
                       type="checkbox"
                       checked={Boolean(i.important_note)}
+                      disabled={replaced}
                       onClick={(e) => e.stopPropagation()}
                       onChange={(e) => {
                         e.stopPropagation();
+                        if (replaced) return;
                         if (e.target.checked && !String(i.hinweis || "").trim()) {
                           alert("Bitte zuerst einen Hinweis eintragen.");
                           return;
@@ -400,12 +596,19 @@ export default function TechnikerEditor({
                     />
                   </td>
                   <td>
-                    <button type="button" className="ghost" onClick={() => deleteItem(i.id)}>
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => deleteItem(i.id)}
+                      disabled={replaced}
+                      title={replaced ? "Ersetzte Position kann nicht gelöscht werden" : undefined}
+                    >
                       ×
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
