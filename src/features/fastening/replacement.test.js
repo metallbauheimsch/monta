@@ -1,10 +1,13 @@
 /**
- * Tests: zentrale Ersatzlogik (Sprint 2B, erweitert Sprint 2C nach
+ * Tests: zentrale Ersatzlogik (Sprint 2B, erweitert Sprint 2C/2D nach
  * GPT-Code-Review).
  * Ausführen: npm test
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import {
   isOperationallyTouched,
   isUntouchedItem,
@@ -240,3 +243,84 @@ describe("Sprint 2C – Test H: Löschschutz verhindert Reaktivierung einer Altp
 // supabase_patch_material_replacement.sql) und ohne laufende Supabase-
 // Datenbank hier nicht automatisiert testbar. Siehe manueller
 // Doppelgerät-Testplan im Sprint-2C-Abschlussbericht.
+
+// ---------------------------------------------------------------------------
+// Sprint 2D (GPT-Code-Review): Lager-Ursprungsauswahl bei mehreren
+// zusammengefassten Positionen (Blocker: LagerReplacePanel rief eine nicht
+// existierende Funktion fieldsFromSource() statt fieldsFromOrigin() auf).
+// ---------------------------------------------------------------------------
+
+describe("Sprint 2D – Test A: fieldsFromOrigin mit Ursprung A", () => {
+  it("übernimmt alle Werte von Ursprung A korrekt", () => {
+    const row = { bezeichnung: "Sechskantschraube", groesse: "M16", laenge: "60", oberflaeche: "feuerverzinkt" };
+    const sourceA = { id: "A", menge: 12, hinweis: "Hinweis A", important_note: true };
+    const fields = fieldsFromOrigin(row, sourceA);
+    assert.equal(fields.bezeichnung, "Sechskantschraube");
+    assert.equal(fields.groesse, "M16");
+    assert.equal(fields.laenge, "60");
+    assert.equal(fields.oberflaeche, "feuerverzinkt");
+    assert.equal(fields.menge, 12);
+    assert.equal(fields.hinweis, "Hinweis A");
+    assert.equal(fields.important_note, true);
+  });
+});
+
+describe("Sprint 2D – Test B: fieldsFromOrigin mit Ursprung B (Wechsel)", () => {
+  it("wechselt vollständig zu Ursprung B, insbesondere Hinweis und important_note", () => {
+    const row = { bezeichnung: "Sechskantschraube", groesse: "M16", laenge: "60", oberflaeche: "feuerverzinkt" };
+    const sourceA = { id: "A", menge: 12, hinweis: "Hinweis A", important_note: true };
+    const sourceB = { id: "B", menge: 5, hinweis: "Hinweis B", important_note: false };
+
+    // Simuliert LagerReplacePanel.selectSource(): erst A, dann "Andere Position
+    // wählen" -> B. fieldsFromOrigin() muss beim zweiten Aufruf VOLLSTÄNDIG
+    // neu belegen, kein Rest von A darf übrig bleiben (kein Merge).
+    const fieldsA = fieldsFromOrigin(row, sourceA);
+    assert.equal(fieldsA.menge, 12);
+    assert.equal(fieldsA.hinweis, "Hinweis A");
+    assert.equal(fieldsA.important_note, true);
+
+    const fieldsB = fieldsFromOrigin(row, sourceB);
+    assert.equal(fieldsB.menge, 5);
+    assert.equal(fieldsB.hinweis, "Hinweis B");
+    assert.equal(fieldsB.important_note, false);
+    // Row-Felder (Bezeichnung/Größe/Länge/Ausführung) bleiben gleich, da
+    // aggregierte Zeile per Definition fachlich identisch ist:
+    assert.equal(fieldsB.bezeichnung, "Sechskantschraube");
+    assert.equal(fieldsB.groesse, "M16");
+  });
+});
+
+describe("Sprint 2D – Test C: kein Verweis mehr auf undefiniertes fieldsFromSource", () => {
+  it("LagerReplacePanel.jsx verwendet ausschließlich die zentrale fieldsFromOrigin()", () => {
+    const panelPath = path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "LagerReplacePanel.jsx"
+    );
+    const source = readFileSync(panelPath, "utf8");
+    assert.equal(/fieldsFromSource/.test(source), false, "fieldsFromSource darf nicht mehr referenziert werden");
+    assert.match(source, /setFields\(fieldsFromOrigin\(row, item\)\)/);
+  });
+});
+
+// Sprint 2D – Test D (parallele Positionsvergabe bei zwei gleichzeitigen
+// Ersetzungen VERSCHIEDENER Ursprungspositionen desselben Projekts) ist
+// DB-/RPC-seitig gelöst: replace_material_item sperrt zusätzlich zur
+// Ursprungszeile die zugehörige projects-Zeile (SELECT ... FOR UPDATE), bevor
+// die kleinste freie Positionsnummer berechnet wird (siehe
+// supabase_patch_material_replacement.sql). Damit serialisiert Postgres beide
+// Aufrufe: der zweite wartet, bis der erste committed hat, und berechnet die
+// nächste freie Nummer danach auf Basis der bereits eingefügten Zeile neu.
+// Ohne laufende Supabase-Instanz hier nicht als echter Nebenläufigkeitstest
+// automatisierbar. Manueller Doppelgerät-Testplan:
+//   1. Zwei Geräte/Browser, derselbe aktive Nutzer oder zwei aktive Nutzer,
+//      dasselbe Projekt geöffnet.
+//   2. Gerät A: Lager -> Position 10 ersetzen (fachliche Änderung, Formular
+//      bis kurz vor "Ersetzen" ausfüllen).
+//   3. Gerät B: Lager -> Position 20 ersetzen (andere Position, ebenfalls
+//      bis kurz vor "Ersetzen").
+//   4. Auf beiden Geräten nahezu gleichzeitig auf "Ersetzen" klicken.
+//   5. Erwartet: beide Ersetzungen gelingen, die beiden neu angelegten
+//      Positionen erhalten unterschiedliche, jeweils kleinste freie
+//      Positionsnummern (keine Dopplung in derselben Projektübersicht/im
+//      Druck). Positionen 10 und 20 bleiben unverändert als "Ersetzt"
+//      erhalten.

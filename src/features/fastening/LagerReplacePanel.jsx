@@ -56,7 +56,7 @@ export default function LagerReplacePanel({ row, onClose, onReplace, onDirectUpd
 
   function selectSource(item) {
     setSourceId(item.id);
-    setFields(fieldsFromSource(row, item));
+    setFields(fieldsFromOrigin(row, item));
   }
 
   function set(k, v) {

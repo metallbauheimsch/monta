@@ -14,6 +14,22 @@
 --      paralleler Ersetzung derselben Ursprungsposition (Sperre per
 --      SELECT ... FOR UPDATE).
 --
+-- Sprint 2D (GPT-Code-Review) korrigiert gegenüber Sprint 2C:
+--   3) Die Sperre auf die Ursprungszeile allein schützt nur vor einer
+--      doppelten Ersetzung DERSELBEN Ursprungsposition. Zwei gleichzeitige
+--      Ersetzungen VERSCHIEDENER Ursprungspositionen im selben Projekt
+--      (z. B. Gerät A ersetzt Pos. 10, Gerät B gleichzeitig Pos. 20)
+--      konnten dieselbe "kleinste freie" Positionsnummer berechnen, da kein
+--      eindeutiger Constraint auf (project_id, pos) existiert. Die Funktion
+--      sperrt jetzt zusätzlich die zugehörige projects-Zeile
+--      (SELECT ... FOR UPDATE), bevor die nächste freie Positionsnummer
+--      berechnet wird - das serialisiert die Positionsvergabe projektweit,
+--      ohne die projects-Zeile inhaltlich zu verändern. Bewusst kein UNIQUE
+--      INDEX auf (project_id, pos): bestehende Echtprojekte wurden nicht auf
+--      bereits vorhandene Dopplungen geprüft, ein blind ergänzter Constraint
+--      könnte bestehende Projekte beim ersten Anwenden des Patches
+--      überraschend blockieren (siehe Abschlussbericht Sprint 2D).
+--
 -- ---------------------------------------------------------------------------
 -- 1) Spalte ersetzt_durch
 -- ---------------------------------------------------------------------------
@@ -68,7 +84,12 @@ comment on column public.material_items.ersetzt_durch is
 -- "security invoker" (Postgres-Standard) unter den Rechten des Aufrufers -
 -- RLS greift dadurch innerhalb der Funktion genauso wie bei einem direkten
 -- INSERT/UPDATE aus der App. Es entsteht keine zusätzliche Rechteausweitung
--- und keine Umgehung bestehender Policies.
+-- und keine Umgehung bestehender Policies. Das gilt auch für die neue
+-- SELECT ... FOR UPDATE-Sperre auf projects (Sprint 2D): jeder aktive Nutzer
+-- besitzt dafür laut "active read projects" / "active update projects"
+-- (supabase_patch_auth_lockdown.sql) bereits SELECT- und UPDATE-Rechte -
+-- Postgres verlangt für eine gesperrte SELECT-Zeile unter RLS beide
+-- Policies. Keine zusätzliche Policy nötig.
 create or replace function public.replace_material_item(
   p_source_id uuid,
   p_bezeichnung text,
@@ -103,6 +124,14 @@ begin
   if v_source.ersetzt_durch is not null then
     raise exception 'Diese Position wurde bereits ersetzt.';
   end if;
+
+  -- Projektweite Sperre (Sprint 2D, GPT-Review Punkt 2): verhindert, dass
+  -- zwei gleichzeitige Ersetzungen VERSCHIEDENER Ursprungspositionen
+  -- desselben Projekts parallel dieselbe "kleinste freie" Positionsnummer
+  -- berechnen. Die Sperre auf die Ursprungszeile oben schützt nur vor einer
+  -- doppelten Ersetzung DERSELBEN Position. Keine inhaltliche Änderung an
+  -- der projects-Zeile - reine Serialisierung der Positionsvergabe.
+  perform 1 from public.projects where id = v_source.project_id for update;
 
   -- Kleinste freie, projektweit eindeutige Positionsnummer (wie bisher
   -- clientseitig in technikerUtils.allocatePositions: nicht einfach
@@ -154,6 +183,7 @@ grant execute on function public.replace_material_item(
 ) to authenticated;
 
 -- Kein UPDATE auf bestehende Zeilen, keine Löschung, keine weitere
--- RLS-Änderung nötig (bestehende "active update/select/insert items"-
--- Policies aus supabase_patch_auth_lockdown.sql decken die neue Spalte und
--- die Funktion automatisch mit ab, da diese als security invoker läuft).
+-- RLS-Änderung nötig (bestehende "active update/select/insert items"- und
+-- "active read/update projects"-Policies aus supabase_patch_auth_lockdown.sql
+-- decken die neue Spalte, die Funktion und die projektweite Sperre
+-- automatisch mit ab, da diese als security invoker läuft).
