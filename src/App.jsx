@@ -40,7 +40,12 @@ import {
 import { defaultTabFor, resolveTabFullAccess } from "./utils/tabs";
 import { renameBaugruppeInManualValues } from "./features/fastening/stock";
 import { nextPosNumber } from "./features/fastening/technikerUtils";
-import { buildReplacementFields, isReplacedItem } from "./features/fastening/replacement";
+import {
+  buildReplacementFields,
+  isReplacedItem,
+  isReferencedAsReplacement,
+  REPLACEMENT_TARGET_LOCKED_DELETE_MESSAGE,
+} from "./features/fastening/replacement";
 
 const SYNC_POLL_MS = 20000;
 
@@ -858,25 +863,68 @@ function App() {
   }
 
   /**
-   * Zentrale Materialersetzung (Sprint 2B): wird sowohl von TB
-   * (TechnikerEditor) als auch von Lager (LagerView) aufgerufen - keine
-   * getrennte Fachlogik je Ansicht. Ablauf bewusst in dieser Reihenfolge:
-   *   1. neue Position anlegen (neue UUID, operative Felder 0/false)
-   *   2. erst danach die Ursprungsposition als ersetzt markieren
-   * Schlägt Schritt 2 fehl, wird die neu angelegte Position wieder entfernt
-   * (Rollback) - sonst gäbe es kurzzeitig zwei aktive Bedarfe für denselben
-   * Artikel. Schlägt Schritt 1 fehl, ist gar nichts passiert und die
-   * Ursprungsposition bleibt unverändert der aktuelle Bedarf - der aktuelle
-   * Bedarf kann dadurch nie "verschwinden". Ein echtes atomisches
-   * DB-Verfahren (RPC) ist damit bewusst nicht nötig; siehe Abschlussbericht.
+   * Zentrale Materialersetzung (Sprint 2B, atomar seit Sprint 2C nach
+   * GPT-Code-Review): wird sowohl von TB (TechnikerEditor) als auch von
+   * Lager (LagerView) aufgerufen - keine getrennte Fachlogik je Ansicht.
+   *
+   * Läuft über die Datenbankfunktion `replace_material_item`
+   * (supabase_patch_material_replacement.sql): neue Position anlegen und
+   * Ursprungsposition als ersetzt markieren geschehen dort als EINE
+   * atomare Transaktion inkl. Sperre der Ursprungszeile. Damit kann weder
+   * ein Zwischenzustand entstehen (kurzzeitig zwei aktive Bedarfe) noch
+   * eine zweite, parallele Ersetzung derselben Ursprungsposition
+   * durchgehen - kein Client-seitiges Rollback mehr nötig.
    */
   async function replaceItem(sourceId, newFields) {
     const source = items.find((i) => i.id === sourceId);
     if (!source) throw new Error("Ursprungsposition wurde nicht gefunden.");
     if (isReplacedItem(source)) throw new Error("Diese Position wurde bereits ersetzt.");
 
-    const posBasis = items.filter((i) => i.project_id === source.project_id);
     const fields = buildReplacementFields(source, newFields);
+
+    if (supabase) {
+      const { data: newItem, error } = await supabase.rpc("replace_material_item", {
+        p_source_id: source.id,
+        p_bezeichnung: fields.bezeichnung,
+        p_groesse: fields.groesse,
+        p_laenge: fields.laenge,
+        p_oberflaeche: fields.oberflaeche,
+        p_hinweis: fields.hinweis,
+        p_important_note: fields.important_note,
+        p_menge: fields.menge,
+      });
+      if (error) {
+        console.error("MONTA: Materialersetzung (RPC) fehlgeschlagen.", error);
+        const missingFunction =
+          error.code === "PGRST202" ||
+          error.code === "42883" ||
+          (/replace_material_item/i.test(error.message || "") &&
+            /(does not exist|not find|schema cache)/i.test(error.message || ""));
+        alert(
+          missingFunction
+            ? "Diese Funktion benötigt einen noch nicht angewendeten Datenbank-Patch " +
+                "(supabase_patch_material_replacement.sql). Bitte den Administrator informieren."
+            : `Ersetzen konnte nicht abgeschlossen werden: ${error.message || "unbekannter Fehler"}. ` +
+                "Die alte Position ist unverändert."
+        );
+        throw error;
+      }
+      setItems((prev) => {
+        const withoutDuplicate = prev.filter((i) => i.id !== newItem.id);
+        return [
+          ...withoutDuplicate.map((i) =>
+            i.id === source.id ? { ...i, ersetzt_durch: newItem.id } : i
+          ),
+          newItem,
+        ];
+      });
+      return newItem;
+    }
+
+    // Lokaler Fallback ohne Supabase: in der Praxis nicht erreichbar, da
+    // load() ohne Supabase-Verbindung keine Projektdaten lädt (siehe
+    // load() oben) - nur zur Symmetrie mit addItem/updateItem/deleteItem.
+    const posBasis = items.filter((i) => i.project_id === source.project_id);
     const newItem = {
       id: crypto.randomUUID(),
       project_id: source.project_id,
@@ -884,57 +932,34 @@ function App() {
       einbauort: source.einbauort,
       ...fields,
     };
-
-    if (supabase) {
-      const { error: insertError } = await supabase.from("material_items").insert(newItem);
-      if (insertError) {
-        console.error("MONTA: Ersatzposition anlegen fehlgeschlagen.", insertError);
-        alert(
-          `Ersatzposition konnte nicht angelegt werden: ${insertError.message || "unbekannter Fehler"}. ` +
-            "Die alte Position ist unverändert."
-        );
-        throw insertError;
-      }
-    }
-    setItems((prev) => (prev.some((i) => i.id === newItem.id) ? prev : [...prev, newItem]));
-
-    if (supabase) {
-      const { error: markError } = await supabase
-        .from("material_items")
-        .update({ ersetzt_durch: newItem.id })
-        .eq("id", source.id);
-      if (markError) {
-        console.error("MONTA: Altposition konnte nicht als ersetzt markiert werden.", markError);
-        // Rollback: neu angelegte Position wieder entfernen - sonst zwei aktive Bedarfe gleichzeitig.
-        const { error: rollbackError } = await supabase
-          .from("material_items")
-          .delete()
-          .eq("id", newItem.id);
-        if (rollbackError) {
-          console.error("MONTA: Rollback der Ersatzposition fehlgeschlagen.", rollbackError);
-        } else {
-          setItems((prev) => prev.filter((i) => i.id !== newItem.id));
-        }
-        alert(
-          `Ersetzen konnte nicht abgeschlossen werden: ${markError.message || "unbekannter Fehler"}. ` +
-            "Die neue Position wurde wieder entfernt, die alte Position ist unverändert. " +
-            "Möglicherweise fehlt der Datenbank-Patch supabase_patch_material_replacement.sql."
-        );
-        throw markError;
-      }
-    }
-    setItems((prev) => prev.map((i) => (i.id === source.id ? { ...i, ersetzt_durch: newItem.id } : i)));
-
+    setItems((prev) => [
+      ...prev.map((i) => (i.id === source.id ? { ...i, ersetzt_durch: newItem.id } : i)),
+      newItem,
+    ]);
     return newItem;
   }
 
   async function deleteItem(id) {
+    // Löschschutz (Sprint 2C): eine Position, auf die eine ältere Position
+    // über ersetzt_durch verweist, darf nicht gelöscht werden - sonst
+    // würde die Altposition (bei einer künftigen Regeländerung oder einem
+    // direkten DB-Zugriff) wieder wie ein aktueller Bedarf wirken. Auf
+    // Datenbankebene zusätzlich über "on delete restrict" abgesichert.
+    if (isReferencedAsReplacement(items.find((i) => i.id === id), items)) {
+      alert(REPLACEMENT_TARGET_LOCKED_DELETE_MESSAGE);
+      return;
+    }
     if (!confirm("Position wirklich löschen?")) return;
     if (supabase) {
       const { error } = await supabase.from("material_items").delete().eq("id", id);
       if (error) {
         console.error("MONTA: Materialposition löschen fehlgeschlagen.", error);
-        alert(`Position konnte nicht gelöscht werden: ${error.message || "unbekannter Fehler"}`);
+        const isRestrictViolation = error.code === "23503";
+        alert(
+          isRestrictViolation
+            ? REPLACEMENT_TARGET_LOCKED_DELETE_MESSAGE
+            : `Position konnte nicht gelöscht werden: ${error.message || "unbekannter Fehler"}`
+        );
         return;
       }
     }

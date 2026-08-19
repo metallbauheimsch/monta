@@ -150,6 +150,12 @@ export default function LagerView({
     await replaceItem(source.id, newFields);
   }
 
+  // Unberührte Position (Sprint 2C, GPT-Review Punkt 3): direkte Änderung
+  // ohne Historie, exakt dieselbe zentrale Entscheidung wie in TB.
+  async function handleDirectUpdate(itemId, patch) {
+    await updateItem(itemId, patch);
+  }
+
   const bgRow = baugruppe
     ? (structureRows || []).find(
         (r) =>
@@ -319,6 +325,7 @@ export default function LagerView({
           row={replacingRow}
           onClose={() => setReplacingRow(null)}
           onReplace={handleReplace}
+          onDirectUpdate={handleDirectUpdate}
         />
       )}
 

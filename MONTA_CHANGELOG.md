@@ -764,6 +764,51 @@ Keine Echtdaten verändert. Kein SQL ausgeführt.
 
 ---
 
+# Sprint 2C: Materialersetzung absichern (GPT-Code-Review)
+
+## Sicherheit der Ersetzung
+
+- Die eigentliche Ersetzung (neue Position anlegen + Altposition markieren)
+  läuft jetzt als EINE atomare Datenbankfunktion statt zwei getrennter
+  Schreibvorgänge. Dadurch kann kein Zwischenzustand mehr entstehen, und
+  zwei gleichzeitige Ersetzungsversuche derselben Position sind
+  ausgeschlossen (der zweite Versuch bricht mit einer klaren Meldung ab).
+- Eine Position, die durch eine ältere Position referenziert wird (weil sie
+  deren Ersatz ist), kann nicht mehr gelöscht werden - weder über die
+  Datenbank noch über die App. Verhindert, dass eine bereits ersetzte
+  Altposition durch das Löschen ihrer Ersatzposition versehentlich wieder
+  als aktueller Bedarf erscheint. Gilt auch über mehrere Ersetzungsschritte
+  hinweg (A ersetzt durch B, B später ersetzt durch C).
+
+## Lager – unberührte Position
+
+- Korrektur: Wird im Lager eine Position ausgewählt, die noch nicht
+  vorbereitet und nicht bestellt ist, wird sie jetzt direkt geändert (wie
+  in TB) statt unnötig eine neue Position anzulegen.
+
+## Lager – Hinweis/Wichtig übernehmen
+
+- Das Lager-Ersetzen-Formular startet jetzt mit Bezeichnung, Größe, Länge,
+  Ausführung, Menge, Hinweis und „Wichtig" der ausgewählten
+  Ursprungsposition, statt mit leerem Hinweis. Bereits vorhandene
+  Information (z. B. „Lochspalt verfüllen") geht dadurch nicht mehr
+  verloren.
+
+## Menge erhöht bei bereits bestellter Position
+
+- Wird die benötigte Menge einer bereits bestellten Position erhöht,
+  erscheint ein Hinweis, dass der bisherige Bestellstatus die zusätzliche
+  Menge möglicherweise nicht abdeckt. Nach Bestätigung gilt die Position
+  wieder als nicht bestellt, damit sie im Warenkorb korrekt als offen
+  erscheint. Löst keine zusätzliche Mail aus.
+- Wird die Menge verringert, bleibt eine bereits vorbereitete Menge
+  unverändert erhalten (überzählige Stück bleiben praktisch übrig); die
+  Restmengenberechnung wird nie negativ.
+
+Keine Echtdaten verändert. Kein SQL ausgeführt.
+
+---
+
 # Regeln
 
 Nach jedem abgeschlossenen Sprint werden hier ergänzt:

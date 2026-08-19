@@ -9,14 +9,17 @@ Dieses Dokument enthält ausschließlich noch offene Aufgaben.
 ## Materialersetzung – Review-Branch fertig, noch nicht live
 
 - Branch `review/sprint-2-material-replacement` fachlich/technisch fertig
-  (Tests grün, Build ok), noch nicht auf `main` gemerged.
+  (Tests grün, Build ok, GPT-Code-Review-Punkte aus Sprint 2C behoben),
+  noch nicht auf `main` gemerged.
 - Vor Merge/Deploy nötig: `supabase_patch_material_replacement.sql` im
-  SQL Editor ausführen (fügt nullable Spalte `material_items.ersetzt_durch`
-  hinzu - keine Änderung an bestehenden Datensätzen).
+  SQL Editor ausführen (nullable Spalte `material_items.ersetzt_durch` mit
+  sicherem `on delete restrict` + atomare Funktion `replace_material_item`
+  - keine Änderung an bestehenden Datensätzen).
 - Danach: PR review/sprint-2-material-replacement → main freigeben und
   mergen.
-- Manueller Test an einem Testprojekt vor Freigabe für Echtprojekte
-  (Testplan siehe Sprint-2-Abschlussbericht).
+- Manueller Test an einem Testprojekt vor Freigabe für Echtprojekte,
+  inkl. Doppelgerät-Test für parallele Ersetzung (Testplan siehe
+  Sprint-2C-Abschlussbericht).
 
 ## Auth + Workflow in Live-Supabase
 

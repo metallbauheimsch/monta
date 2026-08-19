@@ -4,7 +4,7 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { baugruppeStatus, projectStatus } from "./helpers.js";
+import { baugruppeStatus, projectStatus, remainingQty } from "./helpers.js";
 
 describe("baugruppeStatus ignoriert ersetzte Altpositionen", () => {
   it("offene Restmenge einer ersetzten Altposition erzeugt keinen offenen Bedarf mehr", () => {
@@ -38,5 +38,18 @@ describe("projectStatus ignoriert ersetzte Altpositionen", () => {
     const status = projectStatus(project, items);
     assert.equal(status.pct, 100);
     assert.equal(status.label, "Montagebereit");
+  });
+});
+
+describe("Sprint 2C – Test F: Mengenreduzierung bei bereit > neue Menge", () => {
+  it("Restmenge wird nie negativ (bestehendes Math.max(0, ...))", () => {
+    // 20 x M16x60 benötigt, 12 vorbereitet, Bedarf auf 8 reduziert -> bereit bleibt 12 (überzählig übrig).
+    const item = { menge: 8, bereit: 12 };
+    assert.equal(remainingQty(item), 0);
+    assert.equal(item.bereit, 12); // remainingQty verändert bereit nicht
+  });
+
+  it("normale Restmenge bleibt korrekt (keine Regression)", () => {
+    assert.equal(remainingQty({ menge: 20, bereit: 12 }), 8);
   });
 });

@@ -9,6 +9,11 @@ import {
   dedupeHinweisText,
   getUnavailableFinishHint,
 } from "./fasteningRules";
+import {
+  needsReplacement,
+  mengeIncreaseNeedsBestelltReset,
+  fieldsFromOrigin,
+} from "./replacement";
 import SuggestionAutocomplete from "./SuggestionAutocomplete";
 
 function prepareFields(bezeichnung, groesse, hinweis) {
@@ -18,35 +23,40 @@ function prepareFields(bezeichnung, groesse, hinweis) {
 }
 
 /**
- * Ersetzen-Panel aus dem Lager (Sprint 2B): Auswahl der konkreten
- * Ursprungsposition bei mehreren aktiven Ursprüngen einer aggregierten
- * Lagerzeile, danach neuer fachlicher Inhalt, danach sichtbare Bestätigung.
+ * Ersetzen-Panel aus dem Lager (Sprint 2B, überarbeitet Sprint 2C nach
+ * GPT-Code-Review): Auswahl der konkreten Ursprungsposition bei mehreren
+ * aktiven Ursprüngen einer aggregierten Lagerzeile, danach neuer
+ * fachlicher Inhalt, danach EINE zentrale Entscheidung (needsReplacement,
+ * dieselbe wie in TB):
+ *
+ *   unberührte Position (bereit=0 und bestellt=false)
+ *     -> bestehende Zeile direkt ändern (onDirectUpdate), keine Historie
+ *   operativ bearbeitete Position + fachliche Identitätsänderung
+ *     -> sichere atomare Ersatzlogik (onReplace)
+ *   operativ bearbeitete Position, nur Menge erhöht, bereits bestellt
+ *     -> eigene kleine Bestätigung, danach bestellt=false
+ *
  * Erzeugt bewusst keine automatischen Mitlaufartikel (U-Scheibe/Mutter) -
- * das würde bei einer 1:1-Ersetzung einer einzelnen Position unbeabsichtigt
+ * das würde bei einer 1:1-Änderung einer einzelnen Position unbeabsichtigt
  * doppelte Mitlaufpositionen erzeugen. Reine, wiederverwendete TB-Logik
  * (Vorschläge, HV-/Drehmoment-Normalisierung, Werkstoff-Hinweise).
  */
-export default function LagerReplacePanel({ row, onClose, onReplace }) {
+export default function LagerReplacePanel({ row, onClose, onReplace, onDirectUpdate }) {
   const origins = row.items;
   const [sourceId, setSourceId] = useState(origins.length === 1 ? origins[0].id : null);
   const source = origins.find((i) => i.id === sourceId) || null;
 
-  const [fields, setFields] = useState(() => ({
-    bezeichnung: row.bezeichnung || "",
-    groesse: row.groesse || "",
-    laenge: row.laenge || "",
-    oberflaeche: row.oberflaeche || "",
-    menge: source ? Number(source.menge || 0) : "",
-    hinweis: "",
-  }));
+  const [fields, setFields] = useState(() => fieldsFromOrigin(row, source));
+  const [pendingPatch, setPendingPatch] = useState(null);
   const [confirming, setConfirming] = useState(false);
+  const [confirmingMengeReset, setConfirmingMengeReset] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const descriptionOptions = getDescriptionOptions();
 
   function selectSource(item) {
     setSourceId(item.id);
-    setFields((f) => ({ ...f, menge: Number(item.menge || 0) }));
+    setFields(fieldsFromSource(row, item));
   }
 
   function set(k, v) {
@@ -67,26 +77,71 @@ export default function LagerReplacePanel({ row, onClose, onReplace }) {
 
   const finishHint = getUnavailableFinishHint(fields.bezeichnung, fields.oberflaeche);
 
-  async function handleConfirm() {
+  function buildPatch() {
+    const prepared = prepareFields(fields.bezeichnung, fields.groesse, fields.hinweis);
+    return {
+      bezeichnung: prepared.bezeichnung,
+      groesse: fields.groesse,
+      laenge: fields.laenge,
+      oberflaeche: fields.oberflaeche,
+      hinweis: prepared.hinweis,
+      important_note: Boolean(fields.important_note),
+      menge: Number(fields.menge || 0),
+    };
+  }
+
+  function handleWeiter() {
     if (!source) return;
+    if (fields.important_note && !String(fields.hinweis || "").trim()) {
+      setError("Bitte zuerst einen Hinweis eintragen.");
+      return;
+    }
+    setError(null);
+    const patch = buildPatch();
+    if (needsReplacement(source, patch)) {
+      setPendingPatch(patch);
+      setConfirming(true);
+      return;
+    }
+    if (mengeIncreaseNeedsBestelltReset(source, patch)) {
+      setPendingPatch(patch);
+      setConfirmingMengeReset(true);
+      return;
+    }
+    applyDirectUpdate(patch);
+  }
+
+  async function applyDirectUpdate(patch) {
     setBusy(true);
     setError(null);
     try {
-      const prepared = prepareFields(fields.bezeichnung, fields.groesse, fields.hinweis);
-      rememberDescriptionIfNew(prepared.bezeichnung);
-      await onReplace(source, {
-        bezeichnung: prepared.bezeichnung,
-        groesse: fields.groesse,
-        laenge: fields.laenge,
-        oberflaeche: fields.oberflaeche,
-        hinweis: prepared.hinweis,
-        menge: Number(fields.menge || 0),
-      });
+      rememberDescriptionIfNew(patch.bezeichnung);
+      await onDirectUpdate(source.id, patch);
+      onClose();
+    } catch (err) {
+      setError(err?.message || "Speichern fehlgeschlagen.");
+      setBusy(false);
+    }
+  }
+
+  async function handleConfirmReplace() {
+    if (!pendingPatch) return;
+    setBusy(true);
+    setError(null);
+    try {
+      rememberDescriptionIfNew(pendingPatch.bezeichnung);
+      await onReplace(source, pendingPatch);
       onClose();
     } catch (err) {
       setError(err?.message || "Ersetzen fehlgeschlagen.");
       setBusy(false);
     }
+  }
+
+  function handleConfirmMengeReset() {
+    if (!pendingPatch) return;
+    setConfirmingMengeReset(false);
+    applyDirectUpdate({ ...pendingPatch, bestellt: false });
   }
 
   return (
@@ -137,7 +192,7 @@ export default function LagerReplacePanel({ row, onClose, onReplace }) {
         </>
       )}
 
-      {source && !confirming && (
+      {source && !confirming && !confirmingMengeReset && (
         <>
           <p className="hint">
             Ursprung: {source.baugruppe} · {source.bauteil} · Pos. {source.pos}
@@ -184,16 +239,31 @@ export default function LagerReplacePanel({ row, onClose, onReplace }) {
               value={fields.hinweis}
               onChange={(e) => set("hinweis", e.target.value)}
             />
+            <label className="checkboxLine entryImportantNote" title="Wichtiger Hinweis">
+              <input
+                type="checkbox"
+                checked={Boolean(fields.important_note)}
+                onChange={(e) => {
+                  if (e.target.checked && !String(fields.hinweis || "").trim()) {
+                    setError("Bitte zuerst einen Hinweis eintragen.");
+                    return;
+                  }
+                  set("important_note", e.target.checked);
+                }}
+              />
+              Wichtig
+            </label>
           </div>
           {finishHint && <p className="authError finishHint">{finishHint}</p>}
+          {error && <p className="hint dangerText">{error}</p>}
           <div className="completionConfirmButtons">
             <button type="button" className="ghost" onClick={onClose}>
               Abbrechen
             </button>
             <button
               type="button"
-              onClick={() => setConfirming(true)}
-              disabled={!fields.bezeichnung || !String(fields.menge)}
+              onClick={handleWeiter}
+              disabled={!fields.bezeichnung || !String(fields.menge) || busy}
             >
               Weiter
             </button>
@@ -225,11 +295,45 @@ export default function LagerReplacePanel({ row, onClose, onReplace }) {
             {error && <p className="hint dangerText">{error}</p>}
           </div>
           <div className="completionConfirmButtons">
-            <button type="button" className="ghost" onClick={() => setConfirming(false)} disabled={busy}>
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => {
+                setConfirming(false);
+                setError(null);
+              }}
+              disabled={busy}
+            >
               Abbrechen
             </button>
-            <button type="button" onClick={handleConfirm} disabled={busy}>
+            <button type="button" onClick={handleConfirmReplace} disabled={busy}>
               Ersetzen
+            </button>
+          </div>
+        </div>
+      )}
+
+      {source && confirmingMengeReset && (
+        <div className="completionConfirm">
+          <div>
+            <p>
+              Die benötigte Menge wurde erhöht. Der bisherige Bestellstatus deckt die zusätzliche
+              Menge möglicherweise nicht ab.
+            </p>
+            <p>Menge übernehmen und Bestellstatus zurücksetzen?</p>
+            {error && <p className="hint dangerText">{error}</p>}
+          </div>
+          <div className="completionConfirmButtons">
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => setConfirmingMengeReset(false)}
+              disabled={busy}
+            >
+              Abbrechen
+            </button>
+            <button type="button" onClick={handleConfirmMengeReset} disabled={busy}>
+              Bestätigen
             </button>
           </div>
         </div>

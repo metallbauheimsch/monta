@@ -73,3 +73,70 @@ export function buildReplacementFields(source, newFields) {
     geliefert: false,
   };
 }
+
+/**
+ * EINE zentrale Entscheidung (Sprint 2C, GPT-Review Punkt 3): wird von TB
+ * UND Lager gleichermaßen verwendet, damit nicht an zwei Stellen getrennte
+ * Regeln entstehen. Eine ersetzte Altposition darf gar nicht mehr editiert
+ * werden (Aufrufer prüft das separat). Nur wenn die Position bereits real
+ * bearbeitet wurde UND sich die fachliche Identität ändert, ist die
+ * atomare Ersatzlogik nötig - eine reine Mengenänderung reicht nicht
+ * (siehe hasIdentityChange).
+ */
+export function needsReplacement(source, patch) {
+  if (isReplacedItem(source)) return false;
+  return isOperationallyTouched(source) && hasIdentityChange(source, patch);
+}
+
+/**
+ * Position ist Ziel einer bestehenden Ersetzung (eine andere Zeile verweist
+ * über ersetzt_durch auf sie) - z. B. weil sie selbst die neue Position aus
+ * einer früheren Ersetzung ist. Solche Positionen dürfen nicht gelöscht
+ * werden: sonst würde die alte, ersetzte Position (bei einer laxeren
+ * FK-Regel) unbeabsichtigt wieder aktiv erscheinen. Schützt auch
+ * Ersatzketten (A -> B -> C): B und C dürfen nicht gelöscht werden,
+ * solange eine Position noch auf sie verweist.
+ */
+export function isReferencedAsReplacement(item, allItems) {
+  const id = item?.id;
+  if (!id) return false;
+  return (allItems || []).some((i) => i.ersetzt_durch === id);
+}
+
+export const REPLACEMENT_TARGET_LOCKED_DELETE_MESSAGE =
+  "Diese Position ist Teil einer Materialersetzung und kann nicht gelöscht werden.";
+
+/**
+ * Menge wurde erhöht, während die Position bereits als bestellt markiert
+ * ist (Sprint 2C, GPT-Review Punkt 5): der bisherige Bestellstatus deckt
+ * die zusätzliche Menge möglicherweise nicht ab. Nur bei reiner
+ * Mengenerhöhung relevant - eine Identitätsänderung läuft ohnehin über
+ * needsReplacement() und betrifft eine eigene neue Position (die immer mit
+ * bestellt=false startet).
+ */
+export function mengeIncreaseNeedsBestelltReset(source, patch) {
+  if (patch.menge === undefined) return false;
+  if (!source?.bestellt) return false;
+  return Number(patch.menge) > Number(source?.menge || 0);
+}
+
+/**
+ * Vorbelegung des Lager-Ersetzen-Formulars für eine konkret ausgewählte
+ * Ursprungsposition (Sprint 2C, GPT-Review Punkt 4): Hinweis und
+ * important_note müssen vom Ursprung übernommen werden, nicht leer starten
+ * - sonst geht bereits vorhandene Information verloren, obwohl der
+ * Benutzer nichts geändert hat. Bezeichnung/Größe/Länge/Ausführung kommen
+ * bewusst aus der aggregierten Lagerzeile (bei mehreren Ursprüngen
+ * identisch, per Definition der Aggregation).
+ */
+export function fieldsFromOrigin(row, source) {
+  return {
+    bezeichnung: row?.bezeichnung || "",
+    groesse: row?.groesse || "",
+    laenge: row?.laenge || "",
+    oberflaeche: row?.oberflaeche || "",
+    menge: source ? Number(source.menge || 0) : "",
+    hinweis: source ? source.hinweis || "" : "",
+    important_note: source ? Boolean(source.important_note) : false,
+  };
+}

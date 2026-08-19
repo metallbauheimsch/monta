@@ -18,7 +18,10 @@ import {
   isOperationallyTouched,
   isReplacedItem,
   isIdentityField,
-  hasIdentityChange,
+  needsReplacement,
+  isReferencedAsReplacement,
+  mengeIncreaseNeedsBestelltReset,
+  REPLACEMENT_TARGET_LOCKED_DELETE_MESSAGE,
 } from "./replacement";
 import SearchField from "../../components/SearchField";
 import SuggestionAutocomplete from "./SuggestionAutocomplete";
@@ -97,6 +100,8 @@ export default function TechnikerEditor({
   const [rowDrafts, setRowDrafts] = useState({});
   // Angehaltene Ersetzen-Bestätigung für eine konkrete Position.
   const [pendingReplace, setPendingReplace] = useState(null);
+  // Angehaltene Bestätigung: Menge erhöht, obwohl bereits bestellt (Sprint 2C).
+  const [pendingMengeReset, setPendingMengeReset] = useState(null);
 
   const filteredItems = useMemo(
     () =>
@@ -183,12 +188,16 @@ export default function TechnikerEditor({
   }
 
   /**
-   * Zentrale Bearbeitungsentscheidung (Sprint 2B):
+   * Zentrale Bearbeitungsentscheidung (Sprint 2B, GPT-Review Sprint 2C):
    * - ersetzte Altposition: fachlich gesperrt, keine Änderung
-   * - unberührte Position: wie bisher direkt speichern
-   * - operativ bearbeitete Position + fachliche Änderung (Bezeichnung/
-   *   Größe/Länge/Ausführung): NICHT direkt speichern, sondern sichtbare
-   *   Ersetzen-Bestätigung anzeigen (siehe pendingReplace-Panel)
+   * - operativ bearbeitete Position + fachliche Identitätsänderung
+   *   (Bezeichnung/Größe/Länge/Ausführung): NICHT direkt speichern,
+   *   sondern sichtbare Ersetzen-Bestätigung (pendingReplace-Panel) -
+   *   Entscheidung zentral über needsReplacement() (auch von Lager genutzt)
+   * - Menge wird erhöht, obwohl bereits bestellt: eigene, kleinere
+   *   Bestätigung (pendingMengeReset-Panel), danach bestellt=false
+   * - sonst: wie bisher direkt speichern (auch bei operativ bearbeiteten
+   *   Positionen, wenn sich nur die Menge ändert - siehe hasIdentityChange)
    */
   function patchItem(id, patch) {
     const current = items.find((x) => x.id === id);
@@ -200,8 +209,13 @@ export default function TechnikerEditor({
 
     const next = resolvePatchFields(current, patch);
 
-    if (replaceItem && isOperationallyTouched(current) && hasIdentityChange(current, next)) {
+    if (replaceItem && needsReplacement(current, next)) {
       setPendingReplace({ id, current, newFields: next });
+      return;
+    }
+
+    if (mengeIncreaseNeedsBestelltReset(current, next)) {
+      setPendingMengeReset({ id, current, patch: next });
       return;
     }
 
@@ -265,6 +279,20 @@ export default function TechnikerEditor({
     }
   }
 
+  function cancelMengeReset() {
+    setPendingMengeReset(null);
+  }
+
+  function confirmMengeReset() {
+    if (!pendingMengeReset) return;
+    // Bewusst: neue Menge übernehmen, aber Bestellstatus zurücksetzen -
+    // der bisherige Bestellstatus deckt die zusätzliche Menge nicht ab.
+    // Löst keine Mail aus (Workflow-Watcher reagiert nur auf den
+    // Übergang IN "bestellt", nicht auf das Zurücksetzen).
+    updateItem(pendingMengeReset.id, { ...pendingMengeReset.patch, bestellt: false });
+    setPendingMengeReset(null);
+  }
+
   function findProjectItemById(id) {
     return (allProjectItems || items).find((x) => x.id === id) || null;
   }
@@ -273,6 +301,11 @@ export default function TechnikerEditor({
     if (!isReplacedItem(item)) return null;
     const repl = findProjectItemById(item.ersetzt_durch);
     return repl ? `Ersetzt · Pos. ${repl.pos}` : "Ersetzt";
+  }
+
+  /** Löschschutz (Sprint 2C): Position ist Ziel einer Ersetzung (wird von einer Altposition referenziert). */
+  function isDeleteLocked(item) {
+    return isReferencedAsReplacement(item, allProjectItems || items);
   }
 
   async function submit(e) {
@@ -456,6 +489,25 @@ export default function TechnikerEditor({
             </div>
           </div>
         )}
+        {pendingMengeReset && (
+          <div className="completionConfirm replaceConfirm">
+            <div>
+              <p>
+                Die benötigte Menge wurde erhöht. Der bisherige Bestellstatus deckt die
+                zusätzliche Menge möglicherweise nicht ab.
+              </p>
+              <p>Menge übernehmen und Bestellstatus zurücksetzen?</p>
+            </div>
+            <div className="completionConfirmButtons">
+              <button type="button" className="ghost" onClick={cancelMengeReset}>
+                Abbrechen
+              </button>
+              <button type="button" onClick={confirmMengeReset}>
+                Bestätigen
+              </button>
+            </div>
+          </div>
+        )}
         <div className="tableWrap">
           <table className="editTable">
             <tbody>
@@ -484,6 +536,7 @@ export default function TechnikerEditor({
               </tr>
               {sortedItems.map((i) => {
                 const replaced = isReplacedItem(i);
+                const deleteLocked = replaced || isDeleteLocked(i);
                 return (
                 <tr key={i.id} className={replaced ? "replacedRow" : undefined}>
                   <td className="posCell">
@@ -600,8 +653,14 @@ export default function TechnikerEditor({
                       type="button"
                       className="ghost"
                       onClick={() => deleteItem(i.id)}
-                      disabled={replaced}
-                      title={replaced ? "Ersetzte Position kann nicht gelöscht werden" : undefined}
+                      disabled={deleteLocked}
+                      title={
+                        replaced
+                          ? "Ersetzte Position kann nicht gelöscht werden"
+                          : deleteLocked
+                          ? REPLACEMENT_TARGET_LOCKED_DELETE_MESSAGE
+                          : undefined
+                      }
                     >
                       ×
                     </button>

@@ -1,5 +1,6 @@
 /**
- * Tests: zentrale Ersatzlogik (Sprint 2B).
+ * Tests: zentrale Ersatzlogik (Sprint 2B, erweitert Sprint 2C nach
+ * GPT-Code-Review).
  * Ausführen: npm test
  */
 import { describe, it } from "node:test";
@@ -10,6 +11,10 @@ import {
   isReplacedItem,
   isActiveItem,
   hasIdentityChange,
+  needsReplacement,
+  isReferencedAsReplacement,
+  mengeIncreaseNeedsBestelltReset,
+  fieldsFromOrigin,
   buildReplacementFields,
 } from "./replacement.js";
 
@@ -124,3 +129,114 @@ describe("G. Aktive Ersatzposition ist aktueller Bedarf", () => {
     assert.equal(isActiveItem(legacyRow), true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Sprint 2C (GPT-Code-Review): Lager verwendet jetzt dieselbe zentrale
+// Entscheidung wie TB (needsReplacement) statt immer zu ersetzen.
+// ---------------------------------------------------------------------------
+
+describe("Sprint 2C – Test A: Lager + unberührte Position -> direkte Änderung", () => {
+  it("needsReplacement ist false, obwohl sich die Größe ändert", () => {
+    const source = { bereit: 0, bestellt: false, bezeichnung: "Sechskantschraube", groesse: "M16", laenge: "60", oberflaeche: "feuerverzinkt" };
+    assert.equal(needsReplacement(source, { laenge: "70" }), false);
+  });
+});
+
+describe("Sprint 2C – Test B: Lager + bereit > 0 -> Ersatz notwendig", () => {
+  it("needsReplacement ist true bei Identitätsänderung", () => {
+    const source = { bereit: 12, bestellt: false, bezeichnung: "Sechskantschraube", groesse: "M16", laenge: "60", oberflaeche: "feuerverzinkt" };
+    assert.equal(needsReplacement(source, { laenge: "70" }), true);
+  });
+});
+
+describe("Sprint 2C – Test C: Lager + bestellt=true -> Ersatz notwendig", () => {
+  it("needsReplacement ist true bei Identitätsänderung, auch ohne bereit", () => {
+    const source = { bereit: 0, bestellt: true, bezeichnung: "Sechskantschraube", groesse: "M16", laenge: "60", oberflaeche: "feuerverzinkt" };
+    assert.equal(needsReplacement(source, { groesse: "M20" }), true);
+  });
+});
+
+describe("Sprint 2C – Test D: Hinweis/important_note bleiben beim Lager-Ersetzen erhalten", () => {
+  it("fieldsFromOrigin übernimmt Hinweis und important_note der ausgewählten Ursprungsposition", () => {
+    const row = { bezeichnung: "Sechskantschraube", groesse: "M16", laenge: "60", oberflaeche: "feuerverzinkt" };
+    const source = { menge: 20, hinweis: "Lochspalt verfüllen", important_note: true };
+    const fields = fieldsFromOrigin(row, source);
+    assert.equal(fields.hinweis, "Lochspalt verfüllen");
+    assert.equal(fields.important_note, true);
+  });
+
+  it("kein Ursprung ausgewählt -> Felder leer, kein falscher Hinweis", () => {
+    const row = { bezeichnung: "Sechskantschraube", groesse: "M16" };
+    const fields = fieldsFromOrigin(row, null);
+    assert.equal(fields.hinweis, "");
+    assert.equal(fields.important_note, false);
+  });
+});
+
+describe("Sprint 2C – Test E: Menge erhöht bei bestellt=true", () => {
+  it("mengeIncreaseNeedsBestelltReset erkennt die Erhöhung", () => {
+    const source = { menge: 20, bestellt: true };
+    assert.equal(mengeIncreaseNeedsBestelltReset(source, { menge: 30 }), true);
+  });
+  it("keine Reaktion bei gleicher oder kleinerer Menge", () => {
+    const source = { menge: 20, bestellt: true };
+    assert.equal(mengeIncreaseNeedsBestelltReset(source, { menge: 20 }), false);
+    assert.equal(mengeIncreaseNeedsBestelltReset(source, { menge: 10 }), false);
+  });
+  it("keine Reaktion, wenn noch nicht bestellt", () => {
+    const source = { menge: 20, bestellt: false };
+    assert.equal(mengeIncreaseNeedsBestelltReset(source, { menge: 30 }), false);
+  });
+  it("nach Bestätigung: bestellt wird false, Menge übernommen (Reducer-Logik der UI)", () => {
+    const source = { menge: 20, bestellt: true };
+    const patch = { menge: 30 };
+    const applied = { ...patch, bestellt: false };
+    assert.equal(applied.menge, 30);
+    assert.equal(applied.bestellt, false);
+  });
+});
+
+describe("Sprint 2C – Test G: Ersatzkette A -> B -> C", () => {
+  it("A und B bleiben ersetzt, nur C ist aktiver Bedarf", () => {
+    const c = { id: "C", ersetzt_durch: null };
+    const b = { id: "B", ersetzt_durch: "C" };
+    const a = { id: "A", ersetzt_durch: "B" };
+    assert.equal(isActiveItem(a), false);
+    assert.equal(isActiveItem(b), false);
+    assert.equal(isActiveItem(c), true);
+  });
+});
+
+describe("Sprint 2C – Test H: Löschschutz verhindert Reaktivierung einer Altposition", () => {
+  it("B kann nicht gelöscht werden, solange A auf B verweist", () => {
+    const b = { id: "B", ersetzt_durch: "C" };
+    const all = [
+      { id: "A", ersetzt_durch: "B" },
+      b,
+      { id: "C", ersetzt_durch: null },
+    ];
+    assert.equal(isReferencedAsReplacement(b, all), true);
+  });
+
+  it("C kann nicht gelöscht werden, solange B auf C verweist", () => {
+    const c = { id: "C", ersetzt_durch: null };
+    const all = [
+      { id: "A", ersetzt_durch: "B" },
+      { id: "B", ersetzt_durch: "C" },
+      c,
+    ];
+    assert.equal(isReferencedAsReplacement(c, all), true);
+  });
+
+  it("eine unreferenzierte, aktive Position darf gelöscht werden", () => {
+    const c = { id: "C", ersetzt_durch: null };
+    const all = [c];
+    assert.equal(isReferencedAsReplacement(c, all), false);
+  });
+});
+
+// Test I (paralleler Ersatz derselben Ursprungsposition) ist DB-/RPC-seitig
+// gelöst (SELECT ... FOR UPDATE in replace_material_item, siehe
+// supabase_patch_material_replacement.sql) und ohne laufende Supabase-
+// Datenbank hier nicht automatisiert testbar. Siehe manueller
+// Doppelgerät-Testplan im Sprint-2C-Abschlussbericht.
