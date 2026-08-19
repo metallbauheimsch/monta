@@ -177,13 +177,24 @@ begin
 end;
 $$;
 
--- Ausführung nur für angemeldete (RLS-geprüfte) Nutzer; anon bleibt ohne Zugriff.
+-- Ausführungsrechte (Sprint 2D, GPT-Review - letzte Härtung vor Testbetrieb):
+--   - Die Funktion läuft als "security invoker" (siehe oben) und bleibt das -
+--     RLS greift dadurch innerhalb der Funktion genauso wie bei einem
+--     direkten INSERT/UPDATE aus der App; bestehende Tabellenrechte/Policies
+--     ("active insert/update items", "active read/update projects" aus
+--     supabase_patch_auth_lockdown.sql) bleiben allein maßgeblich dafür, WAS
+--     ein Nutzer sehen/ändern darf.
+--   - EXECUTE regelt zusätzlich, WER die Funktion überhaupt aufrufen darf:
+--     PUBLIC (inkl. der anonymen Rolle) wird das Recht explizit entzogen,
+--     nur die Rolle "authenticated" erhält es. Ohne aktive, freigegebene
+--     Session (RLS: is_active_user()) läuft ein Aufruf trotzdem ins Leere,
+--     diese Härtung schließt zusätzlich den unwahrscheinlichen Fall ab, dass
+--     PUBLIC durch einen künftigen Datenbank-Default wieder EXECUTE-Rechte
+--     bekommt.
+revoke execute on function public.replace_material_item(
+  uuid, text, text, text, text, text, boolean, numeric
+) from public;
+
 grant execute on function public.replace_material_item(
   uuid, text, text, text, text, text, boolean, numeric
 ) to authenticated;
-
--- Kein UPDATE auf bestehende Zeilen, keine Löschung, keine weitere
--- RLS-Änderung nötig (bestehende "active update/select/insert items"- und
--- "active read/update projects"-Policies aus supabase_patch_auth_lockdown.sql
--- decken die neue Spalte, die Funktion und die projektweite Sperre
--- automatisch mit ab, da diese als security invoker läuft).
