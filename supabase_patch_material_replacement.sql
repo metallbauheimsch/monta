@@ -177,23 +177,32 @@ begin
 end;
 $$;
 
--- Ausführungsrechte (Sprint 2D, GPT-Review - letzte Härtung vor Testbetrieb):
+-- Ausführungsrechte (Sprint 2D, GPT-Review; nach Live-Prüfung korrigiert):
 --   - Die Funktion läuft als "security invoker" (siehe oben) und bleibt das -
 --     RLS greift dadurch innerhalb der Funktion genauso wie bei einem
 --     direkten INSERT/UPDATE aus der App; bestehende Tabellenrechte/Policies
 --     ("active insert/update items", "active read/update projects" aus
 --     supabase_patch_auth_lockdown.sql) bleiben allein maßgeblich dafür, WAS
 --     ein Nutzer sehen/ändern darf.
---   - EXECUTE regelt zusätzlich, WER die Funktion überhaupt aufrufen darf:
---     PUBLIC (inkl. der anonymen Rolle) wird das Recht explizit entzogen,
---     nur die Rolle "authenticated" erhält es. Ohne aktive, freigegebene
---     Session (RLS: is_active_user()) läuft ein Aufruf trotzdem ins Leere,
---     diese Härtung schließt zusätzlich den unwahrscheinlichen Fall ab, dass
---     PUBLIC durch einen künftigen Datenbank-Default wieder EXECUTE-Rechte
---     bekommt.
+--   - EXECUTE regelt zusätzlich, WER die Funktion überhaupt aufrufen darf.
+--     "revoke ... from public" entzieht nur das implizite PUBLIC-Recht.
+--     Supabase erteilt bei "create function" zusätzlich über
+--     ALTER DEFAULT PRIVILEGES eigene, direkte EXECUTE-Grants an die Rollen
+--     "anon" und "authenticated" - diese direkten Grants werden durch
+--     "revoke ... from public" NICHT entfernt. Eine Live-Prüfung nach
+--     Ausführung dieses Patches zeigte deshalb zunächst weiterhin
+--     anon_can_execute = true, obwohl "from public" bereits entzogen war.
+--     Korrektur: EXECUTE wird jetzt zusätzlich explizit von "anon" entzogen,
+--     bevor es gezielt an "authenticated" erteilt wird. Live erneut geprüft:
+--     security_definer = false, authenticated_can_execute = true,
+--     anon_can_execute = false.
 revoke execute on function public.replace_material_item(
   uuid, text, text, text, text, text, boolean, numeric
 ) from public;
+
+revoke execute on function public.replace_material_item(
+  uuid, text, text, text, text, text, boolean, numeric
+) from anon;
 
 grant execute on function public.replace_material_item(
   uuid, text, text, text, text, text, boolean, numeric
