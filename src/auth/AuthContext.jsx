@@ -58,34 +58,24 @@ export function AuthProvider({ children }) {
       return undefined;
     }
 
-    let cancelled = false;
-
-    async function init() {
-      setAuthLoading(true);
-      try {
-        const { data: { session: s } } = await supabase.auth.getSession();
-        if (cancelled) return;
-        setSession(s);
-        if (s?.user) {
-          const p = await fetchOwnProfile(s.user.id);
-          if (cancelled) return;
-          setProfile(p);
-          profileUserRef.current = s.user.id;
-        } else {
-          setProfile(null);
-        }
-      } catch (err) {
-        if (!cancelled) setAuthError(err?.message || "Anmeldung konnte nicht geprüft werden.");
-      } finally {
-        if (!cancelled) setAuthLoading(false);
-      }
-    }
-
-    init();
+    // Einzige Quelle für Session/Profil beim Start: onAuthStateChange liefert
+    // beim Abonnieren garantiert ein erstes Ereignis (INITIAL_SESSION) mit der
+    // aktuellen Sitzung. Ein zusätzlicher, separater supabase.auth.getSession()-
+    // Aufruf lief bisher parallel dazu und löste bei Sitzungen nahe am
+    // Token-Ablauf (90s-Margin) einen zweiten, unkoordinierten Token-Refresh
+    // aus. Von den zwei damit unabhängig gestarteten Profil-Abrufen konnte der
+    // zuerst fertige (auch ein Fehler durch die gerade rotierende Sitzung)
+    // gewinnen, unabhängig davon ob er noch aktuell war - das Konto blieb dann
+    // fälschlich auf "wartet auf Freigabe"/Fehler stehen, bis ein Neustart mit
+    // bereits stabiler Sitzung lief. Ein Generation-Zähler sorgt jetzt dafür,
+    // dass ausschließlich die jeweils zuletzt gestartete Profilabfrage den
+    // Zustand setzen darf.
+    let fetchGen = 0;
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, s) => {
       if (event === "PASSWORD_RECOVERY") setRecoveryMode(true);
       if (event === "SIGNED_OUT") {
+        fetchGen += 1;
         clearAuthData();
         setAuthLoading(false);
         return;
@@ -96,14 +86,19 @@ export function AuthProvider({ children }) {
         if (event === "TOKEN_REFRESHED" && profileUserRef.current === s.user.id) {
           return;
         }
+        const myGen = ++fetchGen;
         try {
           const p = await fetchOwnProfile(s.user.id);
+          if (myGen !== fetchGen) return; // durch neueres Auth-Ereignis überholt
           setProfile(p);
           profileUserRef.current = s.user.id;
+          setAuthError(null);
         } catch (err) {
+          if (myGen !== fetchGen) return; // überholter Fehler ignoriert
           setAuthError(err?.message || "Profil konnte nicht geladen werden.");
         }
       } else {
+        fetchGen += 1;
         setProfile(null);
         profileUserRef.current = null;
       }
@@ -111,7 +106,7 @@ export function AuthProvider({ children }) {
     });
 
     return () => {
-      cancelled = true;
+      fetchGen += 1;
       subscription.unsubscribe();
     };
   }, [clearAuthData]);
