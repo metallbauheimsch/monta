@@ -6,6 +6,7 @@ import {
   isHvGarnitur,
   normalizeHvDesignation,
   normalizeHvOberflaeche,
+  normalizeMetricSize,
   dedupeHinweisText,
   getUnavailableFinishHint,
 } from "./fasteningRules";
@@ -79,9 +80,13 @@ export default function LagerReplacePanel({ row, onClose, onReplace, onDirectUpd
 
   function buildPatch() {
     const prepared = prepareFields(fields.bezeichnung, fields.groesse, fields.hinweis);
+    // Größendarstellung nur bei eindeutig erkanntem metrischem Gewindeartikel
+    // standardisieren (m12/M 12/12 → M12) - bewusste Bearbeitung, wie bei
+    // der HV-/Drehmoment-Normalisierung oben.
+    const finalGroesse = normalizeMetricSize(prepared.bezeichnung, fields.groesse);
     return {
       bezeichnung: prepared.bezeichnung,
-      groesse: fields.groesse,
+      groesse: finalGroesse,
       laenge: fields.laenge,
       oberflaeche: fields.oberflaeche,
       hinweis: prepared.hinweis,

@@ -4,10 +4,65 @@ import { naturalCompare } from "../../utils/sorting.js";
 export function articleIdentityKey(item) {
   return [
     String(item.bezeichnung || "").trim().toLowerCase(),
-    String(item.groesse || "").trim().toLowerCase(),
+    sizeCompareValue(item.bezeichnung, item.groesse),
     String(item.laenge || "").trim().toLowerCase(),
     String(item.oberflaeche || "").trim().toLowerCase(),
   ].join("|");
+}
+
+/**
+ * Artikelarten mit bewusst NICHT-metrischer Größenangabe (Sprint: Größen-
+ * normalisierung nach Praxis-Feedback). Holz-/Blech-/Bohrschrauben und
+ * Betonschrauben verwenden eigene, numerische Baugrößen (z. B. Durchmesser
+ * in mm) - ein fehlendes "M" bedeutet dort NICHT dieselbe Größe wie bei
+ * einem metrischen Gewindeartikel. Deckungsgleich mit der bestehenden
+ * Mitlauf-Ausschlussliste in getMitlaufForBezeichnung(), damit nicht zwei
+ * verschiedene Klassifikationen parallel gepflegt werden.
+ */
+const NON_METRIC_SIZE_RE = /bohr|holz|blech|beton|wurm/;
+
+/**
+ * Erkennt, ob eine Bezeichnung fachlich einen metrischen Gewindeartikel
+ * beschreibt (Schraube/Mutter/Scheibe/Gewindestange, HV-Garnitur, Hilti-HIT/
+ * Verbundmörtel, Ankerstange). Nur für solche Artikel bedeutet eine reine
+ * Zahl ("8") dieselbe Größe wie "M8" - bei allen anderen Artikeln (z. B.
+ * Holzschraube) bleibt eine Zahlengröße unangetastet.
+ */
+export function isMetricThreadArticle(bezeichnung) {
+  const s = String(bezeichnung || "").toLowerCase().trim();
+  if (!s) return false;
+  if (isHvGarnitur(s) || isHiltiHitOrVerbund(s) || isAnkerstange(s)) return true;
+  if (NON_METRIC_SIZE_RE.test(s)) return false;
+  return /schraube|mutter|scheibe|gewindestange/.test(s);
+}
+
+/**
+ * Metrische Gewindegröße auf eine einheitliche Anzeige-/Vergleichsform
+ * normalisiert: "M8", "m8", "M 8", "m 8", "8" → "M8". Nur wirksam für als
+ * metrisch erkannte Gewindeartikel (isMetricThreadArticle) - bei allen
+ * anderen Artikeln (z. B. Holzschraube "8") bleibt der Wert unverändert.
+ * Werte, die nicht dem einfachen Muster "[M] Zahl" entsprechen (z. B.
+ * "A2-70" als Ausführung, nicht Größe, oder freier Text), bleiben ebenfalls
+ * unverändert - es wird nichts erfunden.
+ */
+export function normalizeMetricSize(bezeichnung, groesse) {
+  const raw = String(groesse ?? "").trim();
+  if (!raw) return raw;
+  if (!isMetricThreadArticle(bezeichnung)) return raw;
+  const compact = raw.toUpperCase().replace(/\s+/g, "");
+  const m = compact.match(/^M?(\d+(?:[.,]\d+)?)$/);
+  if (!m) return raw;
+  return `M${m[1].replace(",", ".")}`;
+}
+
+/**
+ * Vergleichswert für Größe (Aggregation in Lager/Warenkorb/Prüfung/Druck):
+ * nutzt normalizeMetricSize für erkannte metrische Gewindeartikel, sonst
+ * den unveränderten, kleingeschriebenen Originalwert. Ändert nie den
+ * gespeicherten Wert - nur die Vergleichsbasis für Anzeige-Aggregation.
+ */
+export function sizeCompareValue(bezeichnung, groesse) {
+  return normalizeMetricSize(bezeichnung, groesse).trim().toLowerCase();
 }
 
 /**

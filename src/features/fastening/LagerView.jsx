@@ -12,7 +12,7 @@ import {
   herkunftVisibleParts,
 } from "./herkunft";
 import { articleIdentityKey, collectUniqueHinweise } from "./fasteningRules";
-import { isActiveItem, isReplacedItem } from "./replacement";
+import { isActiveItem, isReplacedItem, formatReplacedHint } from "./replacement";
 import SearchField from "../../components/SearchField";
 import CompletionCheckbox from "../../components/CompletionCheckbox";
 import LagerReplacePanel from "./LagerReplacePanel";
@@ -67,6 +67,10 @@ export default function LagerView({
   const [manualValues, setManualValues] = useState(readManualValues);
   const [search, setSearch] = useState("");
   const [replacingRow, setReplacingRow] = useState(null);
+  // Rein lokale UI-Markierung "zuletzt geändert" (kein Undo, keine
+  // Datenbankhistorie, kein Persistieren über Neuladen hinaus) - hilft nur,
+  // eine versehentlich geänderte Lagerzeile sofort wiederzufinden.
+  const [lastChangedKey, setLastChangedKey] = useState(null);
   const { sortKey, sortDir, toggleSort, arrow } = useSortableColumns(null);
 
   const enriched = items.map((i) => {
@@ -141,9 +145,9 @@ export default function LagerView({
 
   function replacedByLabel(item) {
     const newItem = itemsById.get(item.ersetzt_durch);
-    if (!newItem) return "Ersetzt";
+    if (!newItem) return formatReplacedHint(null);
     const parsedNew = parseEinbauort(newItem.einbauort, project?.baugruppe);
-    return `Ersetzt · Pos. ${newItem.pos} (${parsedNew.bauteil})`;
+    return formatReplacedHint(newItem, parsedNew.bauteil);
   }
 
   async function handleReplace(source, newFields) {
@@ -166,8 +170,10 @@ export default function LagerView({
     : null;
   const lagerDone = Boolean(bgRow?.lager_abgeschlossen);
 
-  function applyGelegt(rowItems, value) {
-    distribute(rowItems, value).forEach((u) => updateItem(u.id, { bereit: u.bereit }));
+  async function applyGelegt(rowItems, value) {
+    await Promise.all(
+      distribute(rowItems, value).map((u) => updateItem(u.id, { bereit: u.bereit }))
+    );
   }
 
   function rememberManualValue(rowKey, value) {
@@ -178,19 +184,21 @@ export default function LagerView({
     });
   }
 
-  function handleManualChange(row, value) {
+  async function handleManualChange(row, value) {
     const v = Number(value) || 0;
     rememberManualValue(row.key, v);
-    applyGelegt(row.items, v);
+    await applyGelegt(row.items, v);
+    setLastChangedKey(row.key);
   }
 
-  function handleCompleteToggle(row, checked) {
+  async function handleCompleteToggle(row, checked) {
     if (checked) {
       rememberManualValue(row.key, row.gelegt);
-      applyGelegt(row.items, row.menge);
+      await applyGelegt(row.items, row.menge);
     } else {
-      applyGelegt(row.items, manualValues[row.key] || 0);
+      await applyGelegt(row.items, manualValues[row.key] || 0);
     }
+    setLastChangedKey(row.key);
   }
 
   return (
@@ -254,8 +262,15 @@ export default function LagerView({
               </tr>
               {sortedRows.map((row) => {
                 const vis = herkunftVisibleParts(row.herkunft, search);
+                const isLastChanged = row.key === lastChangedKey;
+                const rowClass = [
+                  row.vollstaendig ? "rowDone" : null,
+                  isLastChanged ? "lastChangedRow" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" ") || undefined;
                 return (
-                  <tr key={row.key} className={row.vollstaendig ? "rowDone" : undefined}>
+                  <tr key={row.key} className={rowClass} title={isLastChanged ? "Zuletzt geändert" : undefined}>
                     <td>{getRegalPlatz(row)}</td>
                     <td>{row.bezeichnung}</td>
                     <td>{row.groesse}</td>

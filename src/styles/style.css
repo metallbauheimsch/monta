@@ -46,6 +46,9 @@ th{background:#eee;font-weight:700}
 .editTable th,.editTable td{border:1px solid #d0d0d0}
 /* Erledigte Zeilen in Lager/Warenkorb: dezent grün, gleiche Farbe in beiden Ansichten. */
 .rowDone{background:#eef8ee}
+/* Lager: zuletzt vom aktuellen Benutzer geänderte Zeile (rein lokal, kein
+   Fehler-/Warnzustand) - dezenter blauer Rand, überlagert auch "rowDone". */
+.lastChangedRow{box-shadow:inset 4px 0 0 #3a7bde}
 .breadcrumb{color:#666;font-size:14px;margin:0 0 6px}.breadcrumb .sep{margin:0 4px}
 .checkboxLine{display:flex;align-items:center;gap:8px;font-size:14px;color:#444;margin-top:6px}.checkboxLine input{width:auto}
 .completionLine{margin:8px 0 12px;padding:6px 10px;border-radius:6px;width:fit-content;max-width:100%}

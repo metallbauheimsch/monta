@@ -7,6 +7,7 @@ import {
   isHvGarnitur,
   normalizeHvDesignation,
   normalizeHvOberflaeche,
+  normalizeMetricSize,
   dedupeHinweisText,
   buildMitlaufItems,
   getUnavailableFinishHint,
@@ -21,6 +22,7 @@ import {
   needsReplacement,
   isReferencedAsReplacement,
   mengeIncreaseNeedsBestelltReset,
+  formatReplacedHint,
   REPLACEMENT_TARGET_LOCKED_DELETE_MESSAGE,
 } from "./replacement";
 import SearchField from "../../components/SearchField";
@@ -258,6 +260,13 @@ export default function TechnikerEditor({
     // gleichzeitig geänderte Identitätsfelder in einer gemeinsamen
     // Ersetzen-Bestätigung zusammengefasst werden statt mehrfach zu fragen.
     const merged = { ...draft };
+    if (merged.groesse !== undefined) {
+      // Erst beim Verlassen des Feldes normalisieren (nicht bei jedem
+      // Tastendruck) - sonst würde z. B. "1" beim Tippen sofort zu "M1"
+      // springen, bevor die zweite Ziffer eingegeben ist.
+      const bez = merged.bezeichnung !== undefined ? merged.bezeichnung : item.bezeichnung;
+      merged.groesse = normalizeMetricSize(bez, merged.groesse);
+    }
     clearRowDraft(item.id);
     patchItem(item.id, merged);
   }
@@ -300,7 +309,7 @@ export default function TechnikerEditor({
   function replacedHint(item) {
     if (!isReplacedItem(item)) return null;
     const repl = findProjectItemById(item.ersetzt_durch);
-    return repl ? `Ersetzt · Pos. ${repl.pos}` : "Ersetzt";
+    return formatReplacedHint(repl);
   }
 
   /** Löschschutz (Sprint 2C): Position ist Ziel einer Ersetzung (wird von einer Altposition referenziert). */
@@ -314,9 +323,14 @@ export default function TechnikerEditor({
     const posBasis = allProjectItems || items;
     const menge = Number(draft.menge || 0);
     const prepared = prepareFields(draft.bezeichnung, draft.groesse, draft.hinweis);
+    // Größendarstellung nur bei eindeutig erkanntem metrischem Gewindeartikel
+    // standardisieren (m12/M 12/12 → M12); alle anderen Größen (z. B.
+    // Holzschraube "8") bleiben unverändert. Gilt nur für die neu angelegte
+    // Position - keine rückwirkende Änderung bestehender Daten.
+    const finalGroesse = normalizeMetricSize(prepared.bezeichnung, draft.groesse);
     const companions = draft.autoMitlauf
       ? buildMitlaufItems(prepared.bezeichnung, {
-          groesse: draft.groesse,
+          groesse: finalGroesse,
           oberflaeche: draft.oberflaeche,
           menge,
         })
@@ -336,7 +350,7 @@ export default function TechnikerEditor({
         einbauort,
         menge,
         bezeichnung: prepared.bezeichnung,
-        groesse: draft.groesse,
+        groesse: finalGroesse,
         laenge: draft.laenge,
         oberflaeche: draft.oberflaeche,
         hinweis: prepared.hinweis,

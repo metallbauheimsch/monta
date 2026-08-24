@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { groupBy, baugruppeStatus } from "../../utils/helpers";
 import { parseEinbauort, isBaugruppeRow } from "../../utils/structure";
 import { filterBySearch, sizeLengthSearchParts } from "../../utils/textSearch";
-import { isHvGarnitur } from "./fasteningRules";
+import { isHvGarnitur, sizeCompareValue } from "./fasteningRules";
 import { isActiveItem } from "./replacement";
 import SearchField from "../../components/SearchField";
 import CompletionCheckbox from "../../components/CompletionCheckbox";
@@ -37,7 +37,10 @@ function isCheckable(item) {
 
 function groupKey(item) {
   const ausfuehrung = String(item.oberflaeche || "").trim().toLowerCase();
-  return `${item.bezeichnung.trim().toLowerCase()}|${item.groesse.trim().toLowerCase()}|${ausfuehrung}`;
+  // Größenvergleich metrisch-bewusst (z. B. "M12" und "12" derselben
+  // Sechskantschraube gelten als gleiche Größe; Holzschrauben-Größe "8"
+  // bleibt eigenständig) - siehe sizeCompareValue().
+  return `${item.bezeichnung.trim().toLowerCase()}|${sizeCompareValue(item.bezeichnung, item.groesse)}|${ausfuehrung}`;
 }
 
 function findSimilarPairs(items) {

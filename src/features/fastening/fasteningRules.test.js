@@ -10,6 +10,10 @@ import {
   getUnavailableFinishHint,
   isHvGarnitur,
   normalizeHvOberflaeche,
+  isMetricThreadArticle,
+  normalizeMetricSize,
+  sizeCompareValue,
+  articleIdentityKey,
 } from "./fasteningRules.js";
 
 describe("Nicht verfügbare Kombinationen (nur Hinweis)", () => {
@@ -105,6 +109,109 @@ describe("Mitlauf übernimmt Werkstoff des Hauptartikels", () => {
     assert.equal(rows[0].menge, 3);
     assert.equal(rows[1].menge, 3);
     assert.ok(rows.every((r) => r.oberflaeche === "Edelstahl"));
+  });
+});
+
+describe("Größennormalisierung metrischer Gewindeartikel (Praxis-Feedback)", () => {
+  it("A: Sechskantschraube M8 und m8 → gleicher Vergleichswert", () => {
+    assert.equal(
+      normalizeMetricSize("Sechskantschraube", "M8"),
+      normalizeMetricSize("Sechskantschraube", "m8")
+    );
+    assert.equal(normalizeMetricSize("Sechskantschraube", "m8"), "M8");
+  });
+
+  it("B: Sechskantschraube M8 und '8' → gleicher Vergleichswert (eindeutig metrisch)", () => {
+    assert.equal(
+      normalizeMetricSize("Sechskantschraube", "M8"),
+      normalizeMetricSize("Sechskantschraube", "8")
+    );
+    assert.equal(normalizeMetricSize("Sechskantschraube", "8"), "M8");
+  });
+
+  it("C: Holzschraube '8' bleibt '8', wird NICHT pauschal M8", () => {
+    assert.equal(isMetricThreadArticle("Holzschraube"), false);
+    assert.equal(normalizeMetricSize("Holzschraube", "8"), "8");
+  });
+
+  it("D: M12 / m12 / M 12 → gleiche fachliche Größe", () => {
+    const a = normalizeMetricSize("Sechskantschraube", "M12");
+    const b = normalizeMetricSize("Sechskantschraube", "m12");
+    const c = normalizeMetricSize("Sechskantschraube", "M 12");
+    assert.equal(a, "M12");
+    assert.equal(a, b);
+    assert.equal(a, c);
+  });
+
+  it("E: unterschiedliche echte metrische Größen bleiben unterschiedlich (M8 != M10)", () => {
+    assert.notEqual(
+      normalizeMetricSize("Sechskantschraube", "M8"),
+      normalizeMetricSize("Sechskantschraube", "M10")
+    );
+  });
+
+  it("weitere metrische Gewindeartikel: Mutter, Scheibe, Ankerstange, HV, Hilti HIT", () => {
+    assert.equal(isMetricThreadArticle("Sechskantmutter"), true);
+    assert.equal(isMetricThreadArticle("U-Scheibe"), true);
+    assert.equal(isMetricThreadArticle("Ankerstange"), true);
+    assert.equal(isMetricThreadArticle("HV-Garnitur"), true);
+    assert.equal(isMetricThreadArticle("Hilti HIT"), true);
+    assert.equal(normalizeMetricSize("Sechskantmutter", "10"), "M10");
+  });
+
+  it("Bohr-/Blech-/Betonschraube bleiben eigenständig (keine metrische Umdeutung)", () => {
+    assert.equal(isMetricThreadArticle("Bohrschraube"), false);
+    assert.equal(isMetricThreadArticle("Blechschraube"), false);
+    assert.equal(isMetricThreadArticle("Betonschraube"), false);
+    assert.equal(normalizeMetricSize("Blechschraube", "8"), "8");
+  });
+
+  it("kein pauschaler globaler Zwang: freier Text/Ausführungswert bleibt unverändert", () => {
+    assert.equal(normalizeMetricSize("Sechskantschraube", "A2-70"), "A2-70");
+    assert.equal(normalizeMetricSize("Sechskantschraube", ""), "");
+  });
+
+  it("sizeCompareValue macht M12 und 12 im Vergleich gleich, unabhängig von Groß-/Kleinschreibung", () => {
+    assert.equal(
+      sizeCompareValue("Sechskantschraube", "M12"),
+      sizeCompareValue("Sechskantschraube", "12")
+    );
+    assert.equal(
+      sizeCompareValue("Sechskantschraube", "m12"),
+      sizeCompareValue("Sechskantschraube", "M 12")
+    );
+  });
+
+  it("articleIdentityKey aggregiert M12- und 12-Schraube als denselben Artikel, Holzschraube 8 bleibt eigenständig", () => {
+    const a = { bezeichnung: "Sechskantschraube", groesse: "M12", laenge: "50", oberflaeche: "galvanisch" };
+    const b = { bezeichnung: "Sechskantschraube", groesse: "12", laenge: "50", oberflaeche: "galvanisch" };
+    const c = { bezeichnung: "Sechskantschraube", groesse: "M10", laenge: "50", oberflaeche: "galvanisch" };
+    const wood = { bezeichnung: "Holzschraube", groesse: "8", laenge: "50", oberflaeche: "galvanisch" };
+    assert.equal(articleIdentityKey(a), articleIdentityKey(b));
+    assert.notEqual(articleIdentityKey(a), articleIdentityKey(c));
+    assert.equal(articleIdentityKey(wood), "holzschraube|8|50|galvanisch");
+  });
+});
+
+describe("F/G: Mitlauf übernimmt vollständige, aber nie erfundene Werte", () => {
+  it("F: Sechskantschraube M12/50/galvanisch → U-Scheibe/Mutter M12 galvanisch", () => {
+    const rows = buildMitlaufItems("Sechskantschraube", {
+      groesse: "M12",
+      oberflaeche: "galvanisch",
+      menge: 6,
+    });
+    assert.equal(rows.length, 2);
+    assert.ok(rows.every((r) => r.groesse === "M12"));
+    assert.ok(rows.every((r) => r.oberflaeche === "galvanisch"));
+  });
+
+  it("G: fehlende Ausgangsausführung erzeugt keinen erfundenen Wert (bleibt leer)", () => {
+    const rows = buildMitlaufItems("Sechskantschraube", {
+      groesse: "M12",
+      oberflaeche: "",
+      menge: 6,
+    });
+    assert.ok(rows.every((r) => r.oberflaeche === ""));
   });
 });
 

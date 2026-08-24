@@ -9,7 +9,7 @@ import { naturalCompare, useSortableColumns, compareWithSizeSecondary } from "..
 import { filterBySearch, sizeLengthSearchParts } from "../../utils/textSearch";
 import { regalOrderIndex, getRegalPlatz } from "./regalOrder";
 import { groupBy, baugruppeStatus } from "../../utils/helpers";
-import { dedupeHinweisText, normalizeHinweisForCompare } from "./fasteningRules";
+import { dedupeHinweisText, normalizeHinweisForCompare, sizeCompareValue } from "./fasteningRules";
 import { isActiveItem } from "./replacement";
 import SearchField from "../../components/SearchField";
 
@@ -17,7 +17,15 @@ function aggregateForPrint(items, project) {
   const groups = new Map();
   items.forEach((item) => {
     const { baugruppe, bauteil } = parseEinbauort(item.einbauort, project?.baugruppe);
-    const key = [bauteil, item.bezeichnung, item.groesse, item.laenge, item.oberflaeche].join("|");
+    // Größenvergleich metrisch-bewusst (siehe sizeCompareValue) - gleiche
+    // Sechskantschraube M12/"12" wird auf der Montageunterlage zusammengefasst.
+    const key = [
+      bauteil,
+      item.bezeichnung,
+      sizeCompareValue(item.bezeichnung, item.groesse),
+      item.laenge,
+      item.oberflaeche,
+    ].join("|");
     if (!groups.has(key)) {
       groups.set(key, {
         id: item.id,

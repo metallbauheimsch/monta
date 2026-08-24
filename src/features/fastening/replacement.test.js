@@ -19,6 +19,7 @@ import {
   mengeIncreaseNeedsBestelltReset,
   fieldsFromOrigin,
   buildReplacementFields,
+  formatReplacedHint,
 } from "./replacement.js";
 
 describe("A. Unberührte Position: bereit=0, bestellt=false", () => {
@@ -196,6 +197,21 @@ describe("Sprint 2C – Test E: Menge erhöht bei bestellt=true", () => {
     const applied = { ...patch, bestellt: false };
     assert.equal(applied.menge, 30);
     assert.equal(applied.bestellt, false);
+  });
+});
+
+describe("Praxis-Feedback: verständlicher Ersetzungs-Hinweis", () => {
+  it("formatReplacedHint nennt die konkrete neue Positionsnummer", () => {
+    assert.equal(formatReplacedHint({ pos: "3" }), "Wurde ersetzt durch Pos. 3");
+  });
+  it("formatReplacedHint mit Zusatzkontext (z. B. Bauteil im Lager)", () => {
+    assert.equal(
+      formatReplacedHint({ pos: "3" }, "Stütze 1"),
+      "Wurde ersetzt durch Pos. 3 (Stütze 1)"
+    );
+  });
+  it("formatReplacedHint ohne auflösbare neue Position → verständlicher Fallback", () => {
+    assert.equal(formatReplacedHint(null), "Wurde ersetzt");
   });
 });
 

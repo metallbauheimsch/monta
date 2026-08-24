@@ -107,6 +107,19 @@ export const REPLACEMENT_TARGET_LOCKED_DELETE_MESSAGE =
   "Diese Position ist Teil einer Materialersetzung und kann nicht gelöscht werden.";
 
 /**
+ * Konsistenter, verständlicher Text für eine ersetzte Altposition (Praxis-
+ * Feedback nach Sprint 2C: "Ersetzt · Pos. 3" war nicht eindeutig genug).
+ * Wird von TB (TechnikerEditor) und Lager (LagerView) gemeinsam verwendet,
+ * damit die Formulierung überall gleich ist. `extraLabel` ergänzt optional
+ * Kontext (z. B. das Bauteil der neuen Position, wie im Lager benötigt).
+ */
+export function formatReplacedHint(newItem, extraLabel) {
+  if (!newItem) return "Wurde ersetzt";
+  const extra = extraLabel ? ` (${extraLabel})` : "";
+  return `Wurde ersetzt durch Pos. ${newItem.pos}${extra}`;
+}
+
+/**
  * Menge wurde erhöht, während die Position bereits als bestellt markiert
  * ist (Sprint 2C, GPT-Review Punkt 5): der bisherige Bestellstatus deckt
  * die zusätzliche Menge möglicherweise nicht ab. Nur bei reiner
