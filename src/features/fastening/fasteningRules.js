@@ -27,6 +27,15 @@ const NON_METRIC_SIZE_RE = /bohr|holz|blech|beton|wurm/;
  * Verbundmörtel, Ankerstange). Nur für solche Artikel bedeutet eine reine
  * Zahl ("8") dieselbe Größe wie "M8" - bei allen anderen Artikeln (z. B.
  * Holzschraube) bleibt eine Zahlengröße unangetastet.
+ *
+ * Hilti HIT/Verbundmörtel/VMU: NICHT allein wegen der vorhandenen
+ * Drehmoment-Automatik als metrisch eingestuft, sondern weil die
+ * bestehende, bereits produktiv genutzte Drehmoment-Zuordnung (HIT_TORQUE
+ * unten, siehe getAutoTorqueNm/normalizeSizeKey) für diese Artikel selbst
+ * ausschließlich mit M-Größen (M8/M10/M12/M16) arbeitet - die Größe eines
+ * Hilti-HIT-/Verbundmörtel-Postens bezeichnet in MONTA die eingesetzte
+ * Ankerstangen-/Gewindestangengröße, nicht eine Mörtel-Kartuschengröße.
+ * Diese fachliche Bedeutung war bereits vor dieser Änderung so hinterlegt.
  */
 export function isMetricThreadArticle(bezeichnung) {
   const s = String(bezeichnung || "").toLowerCase().trim();
@@ -341,6 +350,19 @@ export function buildMitlaufItems(bezeichnung, { groesse = "", oberflaeche = "",
     oberflaeche: String(oberflaeche || ""),
     menge: Number(menge || 0) * c.faktor,
   }));
+}
+
+/**
+ * Ob eine automatische Mitlauf-Ergänzung (U-Scheibe/Mutter) ohne Ausführung
+ * fachlich unsicher wäre (Praxis-Feedback: Mitlaufpositionen entstanden mit
+ * dauerhaft leerer Ausführung, weil eine spätere Ausführungsänderung an der
+ * Hauptposition mangels gespeicherter Verknüpfung nicht sicher nachgezogen
+ * werden kann - siehe replacement.js-Dokumentation zur fehlenden
+ * Rückverknüpfung). Nur relevant, wenn der Artikel überhaupt Mitlaufartikel
+ * erzeugt (z. B. nicht bei HV-Garnitur).
+ */
+export function mitlaufNeedsOberflaeche(bezeichnung, oberflaeche) {
+  return getMitlaufForBezeichnung(bezeichnung).length > 0 && !String(oberflaeche || "").trim();
 }
 
 function normalizeAusf(value) {

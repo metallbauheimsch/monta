@@ -10,6 +10,7 @@ import {
   normalizeMetricSize,
   dedupeHinweisText,
   buildMitlaufItems,
+  mitlaufNeedsOberflaeche,
   getUnavailableFinishHint,
 } from "./fasteningRules";
 import { formatEinbauort } from "../../utils/structure";
@@ -335,6 +336,22 @@ export default function TechnikerEditor({
           menge,
         })
       : [];
+
+    // Praxis-Feedback: automatisch ergänzte U-Scheiben/Muttern übernehmen die
+    // Ausführung des Hauptartikels nur im Moment der Anlage - es gibt keine
+    // gespeicherte Verknüpfung zurück zur Hauptposition, über die eine
+    // spätere Ausführungsänderung sicher nachgezogen werden könnte (siehe
+    // Sprint-Abschlussbericht). Damit Mitlaufpositionen nicht mit dauerhaft
+    // leerer Ausführung entstehen, wird die Anlage hier blockiert, solange
+    // eine Ausführung fehlt - wie beim bestehenden Hinweis-Pflichtfeld unten.
+    if (draft.autoMitlauf && mitlaufNeedsOberflaeche(prepared.bezeichnung, draft.oberflaeche)) {
+      alert(
+        "Bitte zuerst eine Ausführung wählen, damit U-Scheibe/Mutter automatisch dieselbe Ausführung " +
+          'erhalten (oder "U-Scheibe/Mutter automatisch ergänzen" abwählen).'
+      );
+      return;
+    }
+
     const [mainPos, ...companionPos] = allocatePositions(posBasis, 1 + companions.length);
 
     rememberDescriptionIfNew(prepared.bezeichnung);

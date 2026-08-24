@@ -14,6 +14,8 @@ import {
   normalizeMetricSize,
   sizeCompareValue,
   articleIdentityKey,
+  mitlaufNeedsOberflaeche,
+  getAutoTorqueNm,
 } from "./fasteningRules.js";
 
 describe("Nicht verfügbare Kombinationen (nur Hinweis)", () => {
@@ -159,6 +161,17 @@ describe("Größennormalisierung metrischer Gewindeartikel (Praxis-Feedback)", (
     assert.equal(normalizeMetricSize("Sechskantmutter", "10"), "M10");
   });
 
+  it("Hilti HIT/Verbundmörtel/VMU sind metrisch, konsistent zur bestehenden Drehmoment-Zuordnung (M8/M10/M12/M16)", () => {
+    assert.equal(isMetricThreadArticle("Hilti HIT"), true);
+    assert.equal(isMetricThreadArticle("Verbundmörtel"), true);
+    assert.equal(isMetricThreadArticle("VMU"), true);
+    // Konsistenzprüfung: die Größe, die normalizeMetricSize hier erzeugt,
+    // ist genau die Schlüsselform, die getAutoTorqueNm/HIT_TORQUE bereits
+    // erwartet (M8/M10/M12/M16) - keine neue, abweichende Bedeutung.
+    assert.equal(normalizeMetricSize("Hilti HIT", "12"), "M12");
+    assert.equal(getAutoTorqueNm("Hilti HIT", normalizeMetricSize("Hilti HIT", "12")), 40);
+  });
+
   it("Bohr-/Blech-/Betonschraube bleiben eigenständig (keine metrische Umdeutung)", () => {
     assert.equal(isMetricThreadArticle("Bohrschraube"), false);
     assert.equal(isMetricThreadArticle("Blechschraube"), false);
@@ -212,6 +225,31 @@ describe("F/G: Mitlauf übernimmt vollständige, aber nie erfundene Werte", () =
       menge: 6,
     });
     assert.ok(rows.every((r) => r.oberflaeche === ""));
+  });
+});
+
+describe("Praxis-Feedback: Mitlauf-Ausführung Fall A / Fall B (Reproduktion)", () => {
+  it("Fall A: Neuanlage MIT Ausführung → Mitlauf entsteht sofort korrekt befüllt (kein Blocker)", () => {
+    assert.equal(mitlaufNeedsOberflaeche("Sechskantschraube", "galvanisch"), false);
+    const rows = buildMitlaufItems("Sechskantschraube", {
+      groesse: "M12",
+      oberflaeche: "galvanisch",
+      menge: 4,
+    });
+    assert.ok(rows.every((r) => r.oberflaeche === "galvanisch"));
+  });
+
+  it("Fall B: Neuanlage OHNE Ausführung → als unsicher erkannt, damit die Anlage blockiert werden kann", () => {
+    // Reproduziert den Praxisfehler: ohne diese Prüfung würden U-Scheibe/
+    // Mutter mit dauerhaft leerer Ausführung entstehen, weil es keine
+    // gespeicherte Verknüpfung zurück zur Hauptposition gibt, über die eine
+    // spätere Ausführungsänderung sicher nachgezogen werden könnte.
+    assert.equal(mitlaufNeedsOberflaeche("Sechskantschraube", ""), true);
+    assert.equal(mitlaufNeedsOberflaeche("Sechskantschraube", "   "), true);
+  });
+
+  it("Fall B gilt nicht für Artikel ohne Mitlaufartikel (z. B. HV-Garnitur)", () => {
+    assert.equal(mitlaufNeedsOberflaeche("HV-Garnitur", ""), false);
   });
 });
 

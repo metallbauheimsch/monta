@@ -170,10 +170,15 @@ export default function LagerView({
     : null;
   const lagerDone = Boolean(bgRow?.lager_abgeschlossen);
 
+  // Meldet zurück, ob WIRKLICH alle zur Aktion gehörenden Updates gespeichert
+  // wurden (updateItem liefert jetzt true/false statt nur intern zu alerten) -
+  // nötig, damit die "zuletzt geändert"-Markierung niemals bei einem
+  // fehlgeschlagenen Speichern gesetzt wird.
   async function applyGelegt(rowItems, value) {
-    await Promise.all(
+    const results = await Promise.all(
       distribute(rowItems, value).map((u) => updateItem(u.id, { bereit: u.bereit }))
     );
+    return results.every(Boolean);
   }
 
   function rememberManualValue(rowKey, value) {
@@ -187,18 +192,19 @@ export default function LagerView({
   async function handleManualChange(row, value) {
     const v = Number(value) || 0;
     rememberManualValue(row.key, v);
-    await applyGelegt(row.items, v);
-    setLastChangedKey(row.key);
+    const ok = await applyGelegt(row.items, v);
+    if (ok) setLastChangedKey(row.key);
   }
 
   async function handleCompleteToggle(row, checked) {
+    let ok;
     if (checked) {
       rememberManualValue(row.key, row.gelegt);
-      await applyGelegt(row.items, row.menge);
+      ok = await applyGelegt(row.items, row.menge);
     } else {
-      await applyGelegt(row.items, manualValues[row.key] || 0);
+      ok = await applyGelegt(row.items, manualValues[row.key] || 0);
     }
-    setLastChangedKey(row.key);
+    if (ok) setLastChangedKey(row.key);
   }
 
   return (

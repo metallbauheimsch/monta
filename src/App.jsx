@@ -850,16 +850,22 @@ function App() {
     }
   }
 
+  // Rückgabewert true/false (Erfolg/Fehlschlag) zusätzlich zum bestehenden
+  // Verhalten (Alert bei Fehler, kein Throw) - bestehende Aufrufer, die den
+  // Rückgabewert ignorieren, sind davon unberührt. Neue Aufrufer (z. B.
+  // Lager-Markierung "zuletzt geändert") können damit sicher erkennen, ob
+  // eine Änderung wirklich gespeichert wurde, statt das nur zu vermuten.
   async function updateItem(id, patch) {
     if (supabase) {
       const { error } = await supabase.from("material_items").update(patch).eq("id", id);
       if (error) {
         console.error("MONTA: Materialposition aktualisieren fehlgeschlagen.", error);
         alert(`Position konnte nicht aktualisiert werden: ${error.message || "unbekannter Fehler"}`);
-        return;
+        return false;
       }
     }
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+    return true;
   }
 
   /**
