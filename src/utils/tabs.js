@@ -35,6 +35,18 @@ export function defaultTabFor(isNarrow, { fullAccess } = {}) {
   return "material";
 }
 
+/**
+ * Reiter beim Öffnen eines Bauteils (Sprint: Reiterzustand beim
+ * Bauteilwechsel). Ohne zuvor innerhalb des Projekts verwendeten Reiter
+ * gilt weiterhin derselbe Standard wie bisher (siehe defaultTabFor - TB,
+ * bzw. Lager auf schmalen Geräten ohne Vollzugriff). Mit einem zuvor
+ * verwendeten Reiter wird genau dieser wiederverwendet, statt bei jedem
+ * Bauteilwechsel automatisch auf TB zurückzuspringen.
+ */
+export function tabForBauteilOpen(rememberedTab, isNarrow, { fullAccess } = {}) {
+  return rememberedTab || defaultTabFor(isNarrow, { fullAccess });
+}
+
 export function visibleTabsFor(isNarrow, { fullAccess } = {}) {
   if (fullAccess) return [...TAB_ORDER];
   return TAB_ORDER.filter((t) => !isNarrow || !NARROW_HIDDEN_TABS.includes(t));

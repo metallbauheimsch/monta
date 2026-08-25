@@ -38,7 +38,7 @@ import {
   renameBauteilInRegistry,
   isBaugruppeRow,
 } from "./utils/structure";
-import { defaultTabFor, resolveTabFullAccess } from "./utils/tabs";
+import { defaultTabFor, resolveTabFullAccess, tabForBauteilOpen } from "./utils/tabs";
 import { renameBaugruppeInManualValues } from "./features/fastening/stock";
 import { nextPosNumber } from "./features/fastening/technikerUtils";
 import {
@@ -90,6 +90,24 @@ function App() {
   const migratingRef = useRef(false);
   const structureRowsRef = useRef(structureRows);
   structureRowsRef.current = structureRows;
+
+  // Zuletzt verwendeter fachlicher Reiter innerhalb des aktuell geöffneten
+  // Projekts (Sprint: Reiterzustand beim Bauteilwechsel) - rein im
+  // Laufzeitzustand der App (kein localStorage, keine DB), damit beim
+  // Öffnen eines anderen Bauteils nicht mehr automatisch auf TB
+  // zurückgesprungen wird. Nach Reload/App-Neustart bleibt TB der Default,
+  // da der Ref dann wieder leer ist.
+  const lastFachTabRef = useRef(null);
+
+  useEffect(() => {
+    lastFachTabRef.current = null;
+  }, [projectId]);
+
+  useEffect(() => {
+    if (view === "project" || view === "projectWide") {
+      lastFachTabRef.current = tab;
+    }
+  }, [tab, view]);
 
   const project = projects.find((p) => p.id === projectId);
   const projectItems = items.filter((i) => i.project_id === projectId);
@@ -803,7 +821,7 @@ function App() {
   function openBauteil(baugruppeName, bauteilName) {
     setSelectedBaugruppe(baugruppeName);
     setSelectedBauteil(bauteilName);
-    setTab(defaultTabFor(isNarrow, { fullAccess: tabFullAccess }));
+    setTab(tabForBauteilOpen(lastFachTabRef.current, isNarrow, { fullAccess: tabFullAccess }));
     setView("project");
   }
 
