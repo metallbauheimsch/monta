@@ -207,9 +207,6 @@ th{background:#eee;font-weight:700}
 .lagerEditRow>td{background:#fbf7ea;padding:10px}
 .lagerEditForm .entryGrid{margin-top:8px}
 .lagerEditForm .hint button{margin-left:8px}
-/* Abschluss-Checkboxen projektweit (Sprint: Lager-Offline-Praxis): eine
-   je Baugruppe, wenn kein einzelner Baugruppen-Kontext vorliegt. */
-.completionListWrap{display:flex;flex-direction:column;gap:2px}
 /* Offline-Modus vorbereiten (Sprint: Lager-Offline-Praxis). */
 .offlinePrepare{margin:10px 0}
 .offlinePrepare button{width:auto}

@@ -5,14 +5,21 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import {
   buildSnapshot,
   isValidSnapshot,
   containsForbiddenKeys,
+  snapshotMatchesProject,
+  offlinePrepareButtonLabel,
   SNAPSHOT_SCHEMA_VERSION,
 } from "./offlineSnapshotBuilder.js";
 import { filterBySearch } from "../utils/textSearch.js";
 import { groupBy } from "../utils/helpers.js";
+
+const dir = path.dirname(fileURLToPath(import.meta.url));
 
 const project = { id: "p1", nr: "2024-015", name: "Pergola", baugruppe: "", zeichnung: "Z-1" };
 const items = [
@@ -98,6 +105,76 @@ describe("S/T) Bestehende Such- und Gruppierungslogik funktioniert unverändert 
     const groups = groupBy(snap.items, (i) => i.bezeichnung);
     assert.equal(Object.keys(groups).length, 2);
     assert.equal(groups["Sechskantschraube"].length, 1);
+  });
+});
+
+describe("C/D) Persistenter Offline-Status wird aus dem gespeicherten Snapshot angezeigt", () => {
+  it("C) ein gespeicherter, zum aktuellen Projekt passender Snapshot gilt als 'vorbereitet'", () => {
+    const snap = buildSnapshot({ project, items, structureRows });
+    assert.equal(snapshotMatchesProject(snap, "p1"), true);
+  });
+
+  it("D) preparedAt des geladenen Snapshots wird unverändert für die Anzeige übernommen", () => {
+    const snap = buildSnapshot({ project, items, structureRows });
+    // Simuliert das erneute Laden aus IndexedDB (loadSnapshot()) - dieselben Metadaten.
+    const loaded = { ...snap };
+    assert.equal(loaded.preparedAt, snap.preparedAt);
+    assert.equal(Number.isNaN(Date.parse(loaded.preparedAt)), false);
+  });
+
+  it("ein Snapshot eines ANDEREN Projekts gilt nicht als 'vorbereitet' für das aktuell geöffnete", () => {
+    const snap = buildSnapshot({ project, items, structureRows });
+    assert.equal(snapshotMatchesProject(snap, "p2-anderes-projekt"), false);
+  });
+
+  it("kein Snapshot -> nicht 'vorbereitet'", () => {
+    assert.equal(snapshotMatchesProject(null, "p1"), false);
+  });
+});
+
+describe("E/F) Button-Beschriftung: 'vorbereiten' ohne, 'aktualisieren' mit passendem Snapshot", () => {
+  it("E) ohne passenden Snapshot: 'Offline-Modus vorbereiten'", () => {
+    assert.equal(offlinePrepareButtonLabel(false), "Offline-Modus vorbereiten");
+  });
+
+  it("F) mit passendem Snapshot: 'Offline-Stand aktualisieren'", () => {
+    assert.equal(offlinePrepareButtonLabel(true), "Offline-Stand aktualisieren");
+  });
+});
+
+describe("H) Online-Anzeige verwendet 'Offline vorbereitet', nicht 'OFFLINE' als aktiven Zustand", () => {
+  it("OfflinePrepareButton.jsx zeigt 'Offline vorbereitet' und nicht das Wort 'OFFLINE' als Status", () => {
+    const source = readFileSync(
+      path.join(dir, "..", "features", "fastening", "OfflinePrepareButton.jsx"),
+      "utf8"
+    );
+    // Kommentare (Erklärung, warum "OFFLINE" bewusst NICHT verwendet wird)
+    // vor der Prüfung entfernen - nur tatsächlicher Anzeige-Code zählt.
+    const codeOnly = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    assert.match(codeOnly, /Offline vorbereitet/);
+    assert.equal(/OFFLINE/.test(codeOnly), false);
+  });
+});
+
+describe("G) Reiterwechsel (erneutes Mounten) verändert/löscht den Snapshot nicht", () => {
+  it("OfflinePrepareButton.jsx liest beim Mounten nur (loadSnapshot), schreibt nur im bewussten Klick-Handler (saveSnapshot)", () => {
+    const source = readFileSync(
+      path.join(dir, "..", "features", "fastening", "OfflinePrepareButton.jsx"),
+      "utf8"
+    );
+    const saveSnapshotCalls = (source.match(/saveSnapshot\(/g) || []).length;
+    const loadSnapshotCalls = (source.match(/loadSnapshot\(/g) || []).length;
+    assert.equal(saveSnapshotCalls, 1, "saveSnapshot darf nur einmal aufgerufen werden - im Klick-Handler");
+    assert.equal(loadSnapshotCalls, 1, "loadSnapshot darf nur einmal aufgerufen werden - beim Mounten");
+
+    const saveIndex = source.indexOf("saveSnapshot(");
+    const before = source.slice(0, saveIndex);
+    const lastHandlerStart = before.lastIndexOf("async function handlePrepare");
+    const lastEffectStart = before.lastIndexOf("useEffect(");
+    assert.ok(
+      lastHandlerStart > lastEffectStart,
+      "saveSnapshot() muss im Klick-Handler stehen, nicht im Mount-Effekt"
+    );
   });
 });
 

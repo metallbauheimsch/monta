@@ -40,7 +40,6 @@ export default function ProjectsList({ projects, items, structureRows, setView, 
         <h2>Projekte</h2>
         <button onClick={() => setView("newProject")}>Neues Projekt</button>
       </div>
-      <p className="hint">Erfassung am PC. Workflow-Bearbeitung mobil oder am Tablet.</p>
       {projects.map((p) => {
         const s = projectStatus(p, items);
         const projectItems = items.filter((i) => i.project_id === p.id);

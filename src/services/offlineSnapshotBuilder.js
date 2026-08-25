@@ -70,3 +70,25 @@ export function isValidSnapshot(snapshot) {
       Array.isArray(snapshot.structureRows)
   );
 }
+
+/**
+ * Praxiskorrektur: der Online-Status "Offline vorbereitet" (siehe
+ * OfflinePrepareButton.jsx) darf nur für das AKTUELL geöffnete Projekt
+ * gelten - sonst würde nach dem Wechsel zu einem anderen Projekt
+ * fälschlich "vorbereitet"/"aktualisieren" für ein Projekt angezeigt,
+ * dessen Snapshot gar nicht das gerade offene ist (weiterhin EIN
+ * Snapshot pro Gerät, siehe offlineSnapshot.js).
+ */
+export function snapshotMatchesProject(snapshot, projectId) {
+  return Boolean(snapshot && projectId && String(snapshot.projectId) === String(projectId));
+}
+
+/**
+ * Beschriftung des "Offline-Modus vorbereiten"-Buttons (Praxiskorrektur,
+ * Test E/F): ohne passenden Snapshot weiterhin "vorbereiten", mit
+ * passendem Snapshot "aktualisieren" - reine Textentscheidung, damit sie
+ * ohne Rendering testbar ist.
+ */
+export function offlinePrepareButtonLabel(hasMatchingSnapshot) {
+  return hasMatchingSnapshot ? "Offline-Stand aktualisieren" : "Offline-Modus vorbereiten";
+}

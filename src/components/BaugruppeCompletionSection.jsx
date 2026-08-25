@@ -2,18 +2,20 @@ import CompletionCheckbox from "./CompletionCheckbox";
 import { isBaugruppeRow } from "../utils/structure";
 
 /**
- * Abschluss-Checkbox(en) für TB/Prüfung bzw. Lagerprüfung - projektweit
- * wiederverwendet (Sprint: Lager-Offline-Praxis), damit die neuen
- * projektweiten Zugänge (ProjectWideView, siehe App.jsx openProjectWide)
- * dieselben bestehenden Abschluss- und Mail-Workflow-Funktionen bieten wie
- * der bisherige, bauteilbezogene Zugang. Keine zweite Workflow-
- * Implementierung: ruft ausschließlich das bestehende
- * setBaugruppeCompletion() auf (Berechtigungsprüfung, Mail-Workflow,
- * Realtime-/Statuslogik bleiben dort unverändert).
+ * Abschluss-Checkbox für TB/Prüfung bzw. Lagerprüfung - wiederverwendet
+ * von Checks.jsx/LagerView.jsx, egal ob bauteilbezogen (ProjectView) oder
+ * über die projektweite Navigation (ProjectWideView, siehe App.jsx
+ * openProjectWide) geöffnet. Keine zweite Workflow-Implementierung: ruft
+ * ausschließlich das bestehende setBaugruppeCompletion() auf
+ * (Berechtigungsprüfung, Mail-Workflow, Realtime-/Statuslogik bleiben dort
+ * unverändert).
  *
- * Mit konkreter Baugruppe (bauteilbezogener Zugang): genau eine Checkbox,
- * Verhalten unverändert. Ohne Baugruppe (projektweiter Zugang): eine
- * Checkbox je Baugruppe des Projekts, jede unabhängig bedienbar.
+ * Praxiskorrektur: der Abschluss ist fachlich an eine konkrete Baugruppe
+ * gebunden. Ohne diesen Kontext (projektweiter Zugang) wird bewusst KEINE
+ * Checkbox angezeigt - insbesondere keine Liste mit einer Checkbox je
+ * Baugruppe des Projekts. Das entspricht exakt dem Verhalten vor der
+ * projektweiten Navigation: dieselbe Abschlussbedienung wie bisher, keine
+ * neue, abweichende UI.
  */
 export default function BaugruppeCompletionSection({
   project,
@@ -24,37 +26,18 @@ export default function BaugruppeCompletionSection({
   confirmText,
   setBaugruppeCompletion,
 }) {
-  if (!setBaugruppeCompletion || !project) return null;
+  if (!setBaugruppeCompletion || !project || !baugruppe) return null;
 
-  const baugruppenRows = (structureRows || []).filter(
-    (r) => String(r.project_id) === String(project.id) && isBaugruppeRow(r)
+  const bgRow = (structureRows || []).find(
+    (r) => String(r.project_id) === String(project.id) && r.baugruppe === baugruppe && isBaugruppeRow(r)
   );
 
-  if (baugruppe) {
-    const bgRow = baugruppenRows.find((r) => r.baugruppe === baugruppe);
-    return (
-      <CompletionCheckbox
-        label={`${labelPrefix} · ${baugruppe}`}
-        checked={Boolean(bgRow?.[field])}
-        onToggle={(next) => setBaugruppeCompletion(project.id, baugruppe, field, next)}
-        confirmMessage={confirmText(baugruppe)}
-      />
-    );
-  }
-
-  if (baugruppenRows.length === 0) return null;
-
   return (
-    <div className="completionListWrap">
-      {baugruppenRows.map((row) => (
-        <CompletionCheckbox
-          key={row.id}
-          label={`${labelPrefix} · ${row.baugruppe}`}
-          checked={Boolean(row[field])}
-          onToggle={(next) => setBaugruppeCompletion(project.id, row.baugruppe, field, next)}
-          confirmMessage={confirmText(row.baugruppe)}
-        />
-      ))}
-    </div>
+    <CompletionCheckbox
+      label={`${labelPrefix} · ${baugruppe}`}
+      checked={Boolean(bgRow?.[field])}
+      onToggle={(next) => setBaugruppeCompletion(project.id, baugruppe, field, next)}
+      confirmMessage={confirmText(baugruppe)}
+    />
   );
 }

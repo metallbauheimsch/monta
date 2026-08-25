@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { buildSnapshot } from "../../services/offlineSnapshotBuilder";
-import { saveSnapshot } from "../../services/offlineSnapshot";
+import { useEffect, useState } from "react";
+import { buildSnapshot, snapshotMatchesProject, offlinePrepareButtonLabel } from "../../services/offlineSnapshotBuilder";
+import { saveSnapshot, loadSnapshot } from "../../services/offlineSnapshot";
 import { prepareOfflineShell, isOfflinePrepareSuccessful } from "../../services/offlineShell";
 
 export function formatOfflineTimestamp(iso) {
@@ -19,34 +19,58 @@ export function formatOfflineTimestamp(iso) {
 
 /**
  * "Offline-Modus vorbereiten" (Sprint: Lager-Offline-Praxis, GPT-Review-
- * Korrektur "Offline-Startgarantie"): speichert einen strukturierten,
- * zum jetzigen Zeitpunkt eingefrorenen Projekt-Snapshot lokal auf diesem
- * Gerät (IndexedDB, siehe services/offlineSnapshot.js) UND stellt
- * zusätzlich sicher, dass die komplette App-Shell offline startfähig ist
- * (siehe services/offlineShell.js) - keine Supabase-Schreiboperation, kein
- * Sync zurück, kein automatisches Auslösen bei 100 %. Bewusst nur EIN
- * Snapshot je Gerät: ein erneutes Vorbereiten ersetzt kontrolliert den
- * vorherigen Stand (siehe offlineSnapshotBuilder.js).
+ * Korrektur "Offline-Startgarantie", Praxiskorrektur "Offline-Status nach
+ * Reiterwechsel"): speichert einen strukturierten, zum jetzigen Zeitpunkt
+ * eingefrorenen Projekt-Snapshot lokal auf diesem Gerät (IndexedDB, siehe
+ * services/offlineSnapshot.js) UND stellt zusätzlich sicher, dass die
+ * komplette App-Shell offline startfähig ist (siehe services/
+ * offlineShell.js) - keine Supabase-Schreiboperation, kein Sync zurück,
+ * kein automatisches Auslösen bei 100 %. Bewusst nur EIN Snapshot je
+ * Gerät: ein erneutes Vorbereiten ersetzt kontrolliert den vorherigen
+ * Stand (siehe offlineSnapshotBuilder.js).
  *
- * "WLAN/Hotspot kann jetzt ausgeschaltet werden" erscheint NUR, wenn
- * BEIDES erfolgreich war (isOfflinePrepareSuccessful) - schlägt die
- * App-Shell-Vorbereitung fehl, bleibt ein bereits gespeicherter Snapshot
- * bestehen, aber die Meldung macht klar, dass ein Offline-Start deshalb
- * noch nicht sicher garantiert ist.
+ * Praxiskorrektur: der Vorbereitet-Status ist NICHT nur temporärer
+ * React-State, sondern wird beim Mounten aus dem gespeicherten Snapshot
+ * (IndexedDB) geladen und bleibt dadurch auch nach einem Reiterwechsel
+ * sichtbar. "Offline vorbereitet" (Online-Zustand, Snapshot vorhanden) ist
+ * bewusst NICHT dasselbe wie "OFFLINE" (siehe OfflineApp.jsx - der
+ * tatsächliche Offline-Start) - unterschiedliche Formulierung, damit
+ * niemand annimmt, gerade offline zu arbeiten, obwohl MONTA weiterhin live
+ * läuft. Ein Reiterwechsel liest hier nur (useEffect beim Mounten), er
+ * verändert/erzeugt/löscht den Snapshot nie.
  */
 export default function OfflinePrepareButton({ project, items, structureRows }) {
+  const [savedSnapshotMeta, setSavedSnapshotMeta] = useState(null); // { preparedAt, projectId } | null
+  const [metaLoaded, setMetaLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null); // { preparedAt } | { error } | null
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadSnapshot()
+      .then((snap) => {
+        if (cancelled) return;
+        setSavedSnapshotMeta(snap ? { preparedAt: snap.preparedAt, projectId: snap.projectId } : null);
+      })
+      .finally(() => {
+        if (!cancelled) setMetaLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const hasMatchingSnapshot = snapshotMatchesProject(savedSnapshotMeta, project?.id);
 
   async function handlePrepare() {
     setBusy(true);
-    setResult(null);
+    setError(null);
 
     let snapshot = null;
     try {
       snapshot = buildSnapshot({ project, items, structureRows });
     } catch (err) {
-      setResult({ error: err?.message || "Projekt-Snapshot konnte nicht erstellt werden." });
+      setError(err?.message || "Projekt-Snapshot konnte nicht erstellt werden.");
       setBusy(false);
       return;
     }
@@ -68,32 +92,36 @@ export default function OfflinePrepareButton({ project, items, structureRows }) 
         shellOk = true;
       } catch (err) {
         errorMessage =
-          `Der Projekt-Snapshot wurde gespeichert, die App kann aber möglicherweise nicht ` +
-          `vollständig offline starten (${err?.message || "unbekannter Fehler"}). Bitte online ` +
-          `bleiben und „Offline-Modus vorbereiten“ erneut versuchen - WLAN/Hotspot noch NICHT ausschalten.`;
+          `Der Snapshot wurde gespeichert, die App kann aber möglicherweise nicht vollständig ` +
+          `offline starten (${err?.message || "unbekannter Fehler"}). Bitte online bleiben und ` +
+          `erneut versuchen - WLAN/Hotspot noch NICHT ausschalten.`;
       }
     }
 
     if (isOfflinePrepareSuccessful({ snapshotOk, shellOk })) {
-      setResult({ preparedAt: snapshot.preparedAt });
+      setSavedSnapshotMeta({ preparedAt: snapshot.preparedAt, projectId: snapshot.projectId });
     } else {
-      setResult({ error: errorMessage });
+      setError(errorMessage);
     }
     setBusy(false);
   }
 
   return (
     <div className="offlinePrepare noPrint">
-      <button type="button" className="ghost" onClick={handlePrepare} disabled={busy || !project?.id}>
-        {busy ? "…" : "Offline-Modus vorbereiten"}
-      </button>
-      {result?.preparedAt && (
+      {hasMatchingSnapshot && (
         <p className="hint offlinePrepareOk">
-          Offline-Stand gespeichert: {formatOfflineTimestamp(result.preparedAt)}. WLAN/Hotspot kann
-          jetzt ausgeschaltet werden.
+          ✓ Offline vorbereitet · Stand: {formatOfflineTimestamp(savedSnapshotMeta.preparedAt)}
         </p>
       )}
-      {result?.error && <p className="hint dangerText">{result.error}</p>}
+      <button
+        type="button"
+        className="ghost"
+        onClick={handlePrepare}
+        disabled={busy || !project?.id || !metaLoaded}
+      >
+        {busy ? "…" : offlinePrepareButtonLabel(hasMatchingSnapshot)}
+      </button>
+      {error && <p className="hint dangerText">{error}</p>}
     </div>
   );
 }
