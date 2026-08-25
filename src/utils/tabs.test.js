@@ -4,36 +4,46 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { projectWideTabsFor, PROJECT_WIDE_TAB_ORDER, tabForBauteilOpen } from "./tabs.js";
+import {
+  projectWideTabsFor,
+  PROJECT_WIDE_TAB_ORDER,
+  tabForBauteilOpen,
+  visibleTabsFor,
+  resolveTabFullAccess,
+  TAB_ORDER,
+} from "./tabs.js";
 
-describe("projectWideTabsFor: Projektübersicht bietet genau die projektweiten Ziele", () => {
-  it("bietet bei Vollzugriff genau Prüfung/Lager/Warenkorb/Druck", () => {
-    assert.deepEqual(projectWideTabsFor(false, { fullAccess: true }), [
-      "pruefung",
-      "material",
-      "bestellliste",
-      "druck",
-    ]);
+describe("visibleTabsFor/projectWideTabsFor: Reiter sind auf jedem Gerät erreichbar (Praxistest-Korrektur)", () => {
+  it("visibleTabsFor liefert immer alle Reiter - kein Viewport-Parameter mehr, der etwas ausblenden könnte", () => {
+    assert.equal(visibleTabsFor.length, 0);
+    assert.deepEqual(visibleTabsFor(), TAB_ORDER);
+  });
+
+  it("H) Viewport-Breite allein entfernt keinen fachlich erlaubten Reiter", () => {
+    // Frühere Aufrufer übergaben (isNarrow, {fullAccess}) - selbst mit
+    // solchen (jetzt wirkungslosen) Argumenten bleibt das Ergebnis gleich.
+    assert.deepEqual(visibleTabsFor(true, { fullAccess: false }), TAB_ORDER);
+  });
+
+  it("I) 'Prüfung' bleibt auch ohne Vollzugriff erreichbar, insbesondere im Tablet-Hochformat", () => {
+    assert.equal(visibleTabsFor().includes("pruefung"), true);
+    assert.equal(projectWideTabsFor().includes("pruefung"), true);
+  });
+
+  it("projektweite Navigation bietet genau Prüfung/Lager/Warenkorb/Druck", () => {
+    assert.deepEqual(projectWideTabsFor(), ["pruefung", "material", "bestellliste", "druck"]);
   });
 
   it("TB ist NIEMALS Bestandteil der projektweiten Navigation", () => {
     assert.equal(PROJECT_WIDE_TAB_ORDER.includes("tb"), false);
-    assert.equal(projectWideTabsFor(false, { fullAccess: true }).includes("tb"), false);
-    assert.equal(projectWideTabsFor(true, { fullAccess: false }).includes("tb"), false);
-    assert.equal(projectWideTabsFor(true, { fullAccess: true }).includes("tb"), false);
+    assert.equal(projectWideTabsFor().includes("tb"), false);
   });
+});
 
-  it("auf schmalen Geräten ohne Vollzugriff bleibt Prüfung ausgeblendet (wie TB/Prüfung generell)", () => {
-    assert.deepEqual(projectWideTabsFor(true, { fullAccess: false }), [
-      "material",
-      "bestellliste",
-      "druck",
-    ]);
-  });
-
-  it("auf schmalen Geräten MIT Vollzugriff bleibt Prüfung sichtbar", () => {
-    const tabs = projectWideTabsFor(true, { fullAccess: true });
-    assert.equal(tabs.includes("pruefung"), true);
+describe("J) Berechtigungen wirken weiterhin unabhängig vom Viewport", () => {
+  it("resolveTabFullAccess kennt keinen Viewport-Parameter und bleibt reine Berechtigungsprüfung", () => {
+    assert.equal(resolveTabFullAccess({ hasFullModuleAccess: true }), true);
+    assert.equal(resolveTabFullAccess({ hasFullModuleAccess: false, session: null }), false);
   });
 });
 

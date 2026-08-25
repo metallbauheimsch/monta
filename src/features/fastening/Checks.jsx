@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { groupBy, baugruppeStatus } from "../../utils/helpers";
-import { parseEinbauort, isBaugruppeRow } from "../../utils/structure";
+import { parseEinbauort } from "../../utils/structure";
 import { filterBySearch, sizeLengthSearchParts } from "../../utils/textSearch";
 import { isHvGarnitur, sizeCompareValue } from "./fasteningRules";
 import { isActiveItem } from "./replacement";
 import SearchField from "../../components/SearchField";
-import CompletionCheckbox from "../../components/CompletionCheckbox";
+import BaugruppeCompletionSection from "../../components/BaugruppeCompletionSection";
 
 const LENGTH_TOLERANCE_MM = 20;
 const AUTO_HINWEIS = "Automatisch ergänzt";
@@ -103,16 +103,6 @@ export default function Checks({
   const warnings = findSimilarPairs(candidates);
   const status = baugruppeStatus(items);
 
-  const bgRow = baugruppe
-    ? (structureRows || []).find(
-        (r) =>
-          String(r.project_id) === String(project?.id) &&
-          r.baugruppe === baugruppe &&
-          isBaugruppeRow(r)
-      )
-    : null;
-  const tbDone = Boolean(bgRow?.tb_pruefung_abgeschlossen);
-
   return (
     <div className="card">
       <h2>
@@ -122,16 +112,15 @@ export default function Checks({
           {status.emoji} {status.label}
         </span>
       </h2>
-      {baugruppe && setBaugruppeCompletion && (
-        <CompletionCheckbox
-          label={`TB / Prüfung abgeschlossen · ${baugruppe}`}
-          checked={tbDone}
-          onToggle={(next) =>
-            setBaugruppeCompletion(project.id, baugruppe, "tb_pruefung_abgeschlossen", next)
-          }
-          confirmMessage="TB / Prüfung für dieses Projekt wirklich als abgeschlossen markieren?"
-        />
-      )}
+      <BaugruppeCompletionSection
+        project={project}
+        baugruppe={baugruppe}
+        structureRows={structureRows}
+        field="tb_pruefung_abgeschlossen"
+        labelPrefix="TB / Prüfung abgeschlossen"
+        confirmText={(bg) => `TB / Prüfung für „${bg}“ wirklich als abgeschlossen markieren?`}
+        setBaugruppeCompletion={setBaugruppeCompletion}
+      />
       <SearchField value={search} onChange={setSearch} />
       <p className="hint">
         Projektweite Prüfung: gleiche Bezeichnung, Größe und Ausführung mit Längenabweichung bis 20 mm.

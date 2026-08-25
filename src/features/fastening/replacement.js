@@ -132,24 +132,3 @@ export function mengeIncreaseNeedsBestelltReset(source, patch) {
   if (!source?.bestellt) return false;
   return Number(patch.menge) > Number(source?.menge || 0);
 }
-
-/**
- * Vorbelegung des Lager-Ersetzen-Formulars für eine konkret ausgewählte
- * Ursprungsposition (Sprint 2C, GPT-Review Punkt 4): Hinweis und
- * important_note müssen vom Ursprung übernommen werden, nicht leer starten
- * - sonst geht bereits vorhandene Information verloren, obwohl der
- * Benutzer nichts geändert hat. Bezeichnung/Größe/Länge/Ausführung kommen
- * bewusst aus der aggregierten Lagerzeile (bei mehreren Ursprüngen
- * identisch, per Definition der Aggregation).
- */
-export function fieldsFromOrigin(row, source) {
-  return {
-    bezeichnung: row?.bezeichnung || "",
-    groesse: row?.groesse || "",
-    laenge: row?.laenge || "",
-    oberflaeche: row?.oberflaeche || "",
-    menge: source ? Number(source.menge || 0) : "",
-    hinweis: source ? source.hinweis || "" : "",
-    important_note: source ? Boolean(source.important_note) : false,
-  };
-}

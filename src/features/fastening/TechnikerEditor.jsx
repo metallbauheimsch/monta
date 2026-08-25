@@ -3,29 +3,26 @@ import { ausfuehrungen, groessen } from "./constants";
 import { getDescriptionOptions, rememberDescriptionIfNew } from "./descriptionsRegistry";
 import { allocatePositions } from "./technikerUtils";
 import {
-  applyAutoTorqueHinweis,
   isHvGarnitur,
   normalizeHvDesignation,
   normalizeHvOberflaeche,
   normalizeMetricSize,
-  dedupeHinweisText,
   buildMitlaufItems,
   mitlaufNeedsOberflaeche,
   getUnavailableFinishHint,
+  dedupeHinweisText,
+  applyAutoTorqueHinweis,
 } from "./fasteningRules";
 import { formatEinbauort } from "../../utils/structure";
 import { naturalCompare, useSortableColumns, compareWithSizeSecondary } from "../../utils/sorting";
 import { filterBySearch, sizeLengthSearchParts } from "../../utils/textSearch";
 import {
-  isOperationallyTouched,
   isReplacedItem,
-  isIdentityField,
-  needsReplacement,
   isReferencedAsReplacement,
-  mengeIncreaseNeedsBestelltReset,
   formatReplacedHint,
   REPLACEMENT_TARGET_LOCKED_DELETE_MESSAGE,
 } from "./replacement";
+import { useItemEditor } from "./useItemEditor";
 import SearchField from "../../components/SearchField";
 import SuggestionAutocomplete from "./SuggestionAutocomplete";
 
@@ -96,15 +93,22 @@ export default function TechnikerEditor({
   const { sortKey, sortDir, toggleSort, arrow } = useSortableColumns(null);
   const descriptionOptions = getDescriptionOptions();
 
-  // Entwurf einzelner Identitätsfelder (Bezeichnung/Größe/Länge/Ausführung)
-  // bei operativ bereits bearbeiteten Positionen: wird erst beim Verlassen
-  // des Feldes fachlich bewertet (nicht bei jedem Tastendruck), damit die
-  // Ersetzen-Bestätigung nicht während des Tippens aufpoppt.
-  const [rowDrafts, setRowDrafts] = useState({});
-  // Angehaltene Ersetzen-Bestätigung für eine konkrete Position.
-  const [pendingReplace, setPendingReplace] = useState(null);
-  // Angehaltene Bestätigung: Menge erhöht, obwohl bereits bestellt (Sprint 2C).
-  const [pendingMengeReset, setPendingMengeReset] = useState(null);
+  // Zentrale Bearbeitungsentscheidung (direkt/Ersetzen/Mengenreset), jetzt
+  // gemeinsam mit Lager genutzt (Sprint: Lager-Direktbearbeitung) - siehe
+  // useItemEditor.js. Verhalten hier unverändert gegenüber dem bisherigen
+  // lokalen Code.
+  const {
+    patchItem,
+    fieldDisplayValue,
+    handleFieldChange,
+    commitFieldDraft,
+    pendingReplace,
+    pendingMengeReset,
+    cancelReplace,
+    confirmReplace,
+    cancelMengeReset,
+    confirmMengeReset,
+  } = useItemEditor({ items, updateItem, replaceItem });
 
   const filteredItems = useMemo(
     () =>
@@ -151,156 +155,6 @@ export default function TechnikerEditor({
 
   function focusFirstField() {
     requestAnimationFrame(() => mengeRef.current?.focus());
-  }
-
-  /** Bisherige HV-/Drehmoment-/Hinweis-Normalisierung, unverändert - nur aus patchItem ausgelagert. */
-  function resolvePatchFields(current, patch) {
-    let next = { ...patch };
-    const bezIn = patch.bezeichnung !== undefined ? patch.bezeichnung : current.bezeichnung;
-    const grIn = patch.groesse !== undefined ? patch.groesse : current.groesse;
-    const hinIn = patch.hinweis !== undefined ? patch.hinweis : current.hinweis;
-    const ausfIn = patch.oberflaeche !== undefined ? patch.oberflaeche : current.oberflaeche;
-    if (
-      patch.bezeichnung !== undefined ||
-      patch.groesse !== undefined ||
-      patch.hinweis !== undefined
-    ) {
-      const prepared = prepareFields(bezIn, grIn, hinIn);
-      if (patch.bezeichnung !== undefined || isHvGarnitur(bezIn)) {
-        next.bezeichnung = prepared.bezeichnung;
-      }
-      next.hinweis = prepared.hinweis;
-    }
-    // Bewusste Bearbeitung der Bezeichnung zu HV-Garnitur: Ausführung
-    // fachlich immer feuerverzinkt. Keine rückwirkende Änderung bei
-    // Bearbeitung anderer Felder derselben Position.
-    if (patch.bezeichnung !== undefined && isHvGarnitur(bezIn)) {
-      next.oberflaeche = normalizeHvOberflaeche(bezIn, ausfIn);
-    }
-    if (patch.bezeichnung !== undefined || patch.oberflaeche !== undefined) {
-      const warn = getUnavailableFinishHint(
-        next.bezeichnung !== undefined ? next.bezeichnung : bezIn,
-        ausfIn
-      );
-      if (warn) {
-        // Nur Hinweis – keine automatische Korrektur von Werkstoff/Artikel
-        alert(warn);
-      }
-    }
-    return next;
-  }
-
-  /**
-   * Zentrale Bearbeitungsentscheidung (Sprint 2B, GPT-Review Sprint 2C):
-   * - ersetzte Altposition: fachlich gesperrt, keine Änderung
-   * - operativ bearbeitete Position + fachliche Identitätsänderung
-   *   (Bezeichnung/Größe/Länge/Ausführung): NICHT direkt speichern,
-   *   sondern sichtbare Ersetzen-Bestätigung (pendingReplace-Panel) -
-   *   Entscheidung zentral über needsReplacement() (auch von Lager genutzt)
-   * - Menge wird erhöht, obwohl bereits bestellt: eigene, kleinere
-   *   Bestätigung (pendingMengeReset-Panel), danach bestellt=false
-   * - sonst: wie bisher direkt speichern (auch bei operativ bearbeiteten
-   *   Positionen, wenn sich nur die Menge ändert - siehe hasIdentityChange)
-   */
-  function patchItem(id, patch) {
-    const current = items.find((x) => x.id === id);
-    if (!current) {
-      updateItem(id, patch);
-      return;
-    }
-    if (isReplacedItem(current)) return;
-
-    const next = resolvePatchFields(current, patch);
-
-    if (replaceItem && needsReplacement(current, next)) {
-      setPendingReplace({ id, current, newFields: next });
-      return;
-    }
-
-    if (mengeIncreaseNeedsBestelltReset(current, next)) {
-      setPendingMengeReset({ id, current, patch: next });
-      return;
-    }
-
-    updateItem(id, next);
-  }
-
-  function fieldDisplayValue(item, key) {
-    const draft = rowDrafts[item.id];
-    return draft && draft[key] !== undefined ? draft[key] : item[key] || "";
-  }
-
-  /**
-   * Änderung an einem Identitätsfeld einer operativ bearbeiteten, noch
-   * aktiven Position wird zunächst nur als Entwurf gehalten (kein Speichern
-   * bei jedem Tastendruck) - die fachliche Ersetzen-Entscheidung erfolgt
-   * erst beim Verlassen des Feldes (commitFieldDraft). Alle anderen Fälle
-   * verhalten sich unverändert wie bisher (sofortiges patchItem).
-   */
-  function handleFieldChange(item, key, value) {
-    if (isIdentityField(key) && isOperationallyTouched(item) && !isReplacedItem(item)) {
-      setRowDrafts((prev) => ({ ...prev, [item.id]: { ...prev[item.id], [key]: value } }));
-      return;
-    }
-    patchItem(item.id, { [key]: value });
-  }
-
-  function clearRowDraft(itemId) {
-    setRowDrafts((prev) => {
-      if (!prev[itemId]) return prev;
-      const next = { ...prev };
-      delete next[itemId];
-      return next;
-    });
-  }
-
-  function commitFieldDraft(item, key) {
-    const draft = rowDrafts[item.id];
-    if (!draft || draft[key] === undefined) return;
-    // Gesamten bisherigen Entwurf der Zeile übernehmen, damit mehrere
-    // gleichzeitig geänderte Identitätsfelder in einer gemeinsamen
-    // Ersetzen-Bestätigung zusammengefasst werden statt mehrfach zu fragen.
-    const merged = { ...draft };
-    if (merged.groesse !== undefined) {
-      // Erst beim Verlassen des Feldes normalisieren (nicht bei jedem
-      // Tastendruck) - sonst würde z. B. "1" beim Tippen sofort zu "M1"
-      // springen, bevor die zweite Ziffer eingegeben ist.
-      const bez = merged.bezeichnung !== undefined ? merged.bezeichnung : item.bezeichnung;
-      merged.groesse = normalizeMetricSize(bez, merged.groesse);
-    }
-    clearRowDraft(item.id);
-    patchItem(item.id, merged);
-  }
-
-  function cancelReplace() {
-    if (pendingReplace) clearRowDraft(pendingReplace.id);
-    setPendingReplace(null);
-  }
-
-  async function confirmReplace() {
-    if (!pendingReplace || !replaceItem) return;
-    try {
-      await replaceItem(pendingReplace.id, pendingReplace.newFields);
-    } catch {
-      return;
-    } finally {
-      clearRowDraft(pendingReplace.id);
-      setPendingReplace(null);
-    }
-  }
-
-  function cancelMengeReset() {
-    setPendingMengeReset(null);
-  }
-
-  function confirmMengeReset() {
-    if (!pendingMengeReset) return;
-    // Bewusst: neue Menge übernehmen, aber Bestellstatus zurücksetzen -
-    // der bisherige Bestellstatus deckt die zusätzliche Menge nicht ab.
-    // Löst keine Mail aus (Workflow-Watcher reagiert nur auf den
-    // Übergang IN "bestellt", nicht auf das Zurücksetzen).
-    updateItem(pendingMengeReset.id, { ...pendingMengeReset.patch, bestellt: false });
-    setPendingMengeReset(null);
   }
 
   function findProjectItemById(id) {

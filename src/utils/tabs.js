@@ -9,15 +9,16 @@ export const TAB_LABELS = {
   druck: "Druck",
 };
 
-// Smartphone/Tablet inkl. Querformat (≤1024 px): TB und Prüfung ausblenden,
-// sofern kein Vollzugriff (Admin oder full_module_access).
-// Sichtbar bleiben Lager, Warenkorb, Druck. Desktop (>1024 px) unverändert.
-export const NARROW_HIDDEN_TABS = ["tb", "pruefung"];
-
 /**
- * Ob TB/Prüfung auch mobil sichtbar sind.
- * Solange Session da ist und Profil noch lädt: nicht vorschnell ausblenden
- * (sonst fehlen Admin/Vollzugriff-Nutzer kurz die Reiter / openBauteil landet auf Lager).
+ * Ob ein Benutzer Vollzugriff hat (Admin oder full_module_access).
+ * Steuert NUR noch, welcher Reiter beim Öffnen eines Bauteils ohne
+ * gemerkten Reiter zuerst angezeigt wird (siehe defaultTabFor) - eine
+ * reine Komfort-Voreinstellung, keine Sichtbarkeits-/Berechtigungsprüfung
+ * (siehe visibleTabsFor/projectWideTabsFor: alle Reiter sind für alle
+ * aktiven Nutzer auf jedem Gerät erreichbar).
+ * Solange Session da ist und Profil noch lädt: nicht vorschnell auf
+ * "kein Vollzugriff" fallen (sonst zeigt der Erststart kurz den falschen
+ * Standard-Reiter für Admin/Vollzugriff-Nutzer).
  */
 export function resolveTabFullAccess({
   hasFullModuleAccess,
@@ -47,9 +48,19 @@ export function tabForBauteilOpen(rememberedTab, isNarrow, { fullAccess } = {}) 
   return rememberedTab || defaultTabFor(isNarrow, { fullAccess });
 }
 
-export function visibleTabsFor(isNarrow, { fullAccess } = {}) {
-  if (fullAccess) return [...TAB_ORDER];
-  return TAB_ORDER.filter((t) => !isNarrow || !NARROW_HIDDEN_TABS.includes(t));
+/**
+ * Alle fachlich vorhandenen Reiter sind auf jedem Gerät erreichbar
+ * (Sprint: Lager-Offline-Praxis - Praxisfeedback: Viewport-Breite/
+ * Ausrichtung simulierte bisher unbeabsichtigt eine Berechtigung, z. B.
+ * verschwand "Prüfung" im Tablet-Hochformat für Nutzer ohne Vollzugriff,
+ * obwohl dieselben Nutzer sie am Desktop uneingeschränkt sahen). Responsive
+ * Layout darf kompakter werden, umbrechen oder horizontal scrollbar sein -
+ * es entfernt aber keine Reiter mehr aufgrund der Bildschirmbreite.
+ * Eine echte fachliche Berechtigungsprüfung würde hier separat ansetzen;
+ * aktuell existiert keine solche Einschränkung für TB/Prüfung.
+ */
+export function visibleTabsFor() {
+  return [...TAB_ORDER];
 }
 
 // Projektweite Reiter (Sprint: Projektnavigation): Prüfung, Lager, Warenkorb
@@ -58,8 +69,6 @@ export function visibleTabsFor(isNarrow, { fullAccess } = {}) {
 // Bestandteil dieser Liste - nur über ein konkretes Bauteil erreichbar.
 export const PROJECT_WIDE_TAB_ORDER = TAB_ORDER.filter((t) => t !== "tb");
 
-export function projectWideTabsFor(isNarrow, { fullAccess } = {}) {
-  return visibleTabsFor(isNarrow, { fullAccess }).filter((t) =>
-    PROJECT_WIDE_TAB_ORDER.includes(t)
-  );
+export function projectWideTabsFor() {
+  return [...PROJECT_WIDE_TAB_ORDER];
 }

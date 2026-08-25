@@ -47,6 +47,10 @@ import {
   isReferencedAsReplacement,
   REPLACEMENT_TARGET_LOCKED_DELETE_MESSAGE,
 } from "./features/fastening/replacement";
+import OfflineApp from "./features/offline/OfflineApp";
+import { registerAppShellServiceWorker } from "./services/offlineShell";
+import { loadSnapshot } from "./services/offlineSnapshot";
+import { decideOfflineState } from "./services/offlineState";
 
 const SYNC_POLL_MS = 20000;
 
@@ -1118,7 +1122,6 @@ function App() {
           setView={setView}
           openBauteil={openBauteil}
           openProjectWide={openProjectWide}
-          isNarrow={isNarrow}
           fullModuleAccess={Boolean(tabFullAccess)}
           setProjectArchived={setProjectArchived}
           deleteProject={deleteProject}
@@ -1143,7 +1146,6 @@ function App() {
           allItems={items}
           structureRows={structureRows}
           backToDetail={() => setView("projectDetail")}
-          isNarrow={isNarrow}
           fullModuleAccess={Boolean(tabFullAccess)}
           tab={tab}
           setTab={setTab}
@@ -1161,7 +1163,6 @@ function App() {
           projectItems={projectItems}
           structureRows={structureRows}
           backToDetail={() => setView("projectDetail")}
-          isNarrow={isNarrow}
           fullModuleAccess={Boolean(tabFullAccess)}
           tab={tab}
           setTab={setTab}
@@ -1174,8 +1175,39 @@ function App() {
   );
 }
 
-createRoot(document.getElementById("root")).render(
-  <AuthProvider>
-    <App />
-  </AuthProvider>
-);
+// Online/Offline-Start (Sprint: Lager-Offline-Praxis). Bewusst als
+// eigener, vollständig getrennter Einstiegspfad VOR AuthProvider/App:
+// ist das Gerät beim Start offline, wird ausschließlich die read-only
+// OfflineApp gerendert - AuthProvider/AuthContext.jsx werden in diesem
+// Zweig gar nicht erst instanziiert, es gibt also keine Berührung mit dem
+// bestehenden Online-Auth-Lifecycle. Ist Internet vorhanden, startet
+// MONTA exakt wie bisher (einzige Ergänzung: die - vom Ergebnis
+// unabhängige - Registrierung des App-Shell-Service-Workers, damit ein
+// späterer Offline-Start die Anwendungs-Shell laden kann).
+//
+// Die Entscheidung fällt bewusst nur einmal beim Start (nicht laufend
+// live), passend zum beschriebenen Arbeitsablauf: Offline-Modus morgens
+// im WLAN vorbereiten, danach App ggf. schließen und ohne Netz erneut
+// öffnen (siehe MONTA_NEXT_SPRINT.md / Sprintbericht für Details und
+// bekannte Grenzfälle von navigator.onLine).
+registerAppShellServiceWorker();
+
+async function bootstrap() {
+  const root = createRoot(document.getElementById("root"));
+  const isOnline = typeof navigator === "undefined" ? true : navigator.onLine;
+
+  if (!isOnline) {
+    const snapshot = await loadSnapshot();
+    const state = decideOfflineState({ isOnline: false, snapshot });
+    root.render(<OfflineApp state={state} snapshot={snapshot} />);
+    return;
+  }
+
+  root.render(
+    <AuthProvider>
+      <App />
+    </AuthProvider>
+  );
+}
+
+bootstrap();

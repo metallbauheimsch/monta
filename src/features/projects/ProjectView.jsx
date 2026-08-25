@@ -14,7 +14,6 @@ export default function ProjectView({
   allItems,
   structureRows,
   backToDetail,
-  isNarrow,
   fullModuleAccess,
   tab,
   setTab,
@@ -24,7 +23,7 @@ export default function ProjectView({
   replaceItem,
   setBaugruppeCompletion,
 }) {
-  const visibleTabs = visibleTabsFor(isNarrow, { fullAccess: fullModuleAccess });
+  const visibleTabs = visibleTabsFor();
 
   useEffect(() => {
     if (!visibleTabs.includes(tab)) {

@@ -190,6 +190,31 @@ th{background:#eee;font-weight:700}
 .herkunftCell{max-width:280px}
 .herkunftNames{overflow-wrap:anywhere;word-break:break-word}
 .herkunftPos{margin-top:2px}
+/* Lager-Spaltenbreiten (Praxisfeedback): Bezeichnung war zu schmal,
+   Menge/Größe/Länge unnötig breit. Nur die Lager-Tabelle betroffen (eigene
+   Klasse), TB/Warenkorb/Druck unverändert. Ausführung und Herkunft bleiben
+   vollständig lesbar (keine Ausblendung, nur Breitenanteil angepasst). */
+.lagerTable{width:100%}
+.lagerTable .colBez{width:24%;overflow-wrap:anywhere;word-break:break-word}
+.lagerTable .colGr{width:7%}
+.lagerTable .colLa{width:7%}
+.lagerTable .colMenge{width:7%}
+/* Direktbearbeitung im Lager (Sprint: Lager-Offline-Praxis): eingeblendete
+   Bearbeitungszeile direkt unter der betroffenen Lagerzeile, gleiche Optik
+   wie das bisherige Ersetzen-Formular (entryGrid), jetzt inline statt in
+   einem separaten Panel. */
+.editingRow{background:#fbf7ea}
+.lagerEditRow>td{background:#fbf7ea;padding:10px}
+.lagerEditForm .entryGrid{margin-top:8px}
+.lagerEditForm .hint button{margin-left:8px}
+/* Abschluss-Checkboxen projektweit (Sprint: Lager-Offline-Praxis): eine
+   je Baugruppe, wenn kein einzelner Baugruppen-Kontext vorliegt. */
+.completionListWrap{display:flex;flex-direction:column;gap:2px}
+/* Offline-Modus vorbereiten (Sprint: Lager-Offline-Praxis). */
+.offlinePrepare{margin:10px 0}
+.offlinePrepare button{width:auto}
+.offlinePrepareOk{color:#1a7a3a}
+.offlineBanner{background:#54585a;color:#fff;padding:8px 12px;border-radius:10px;font-weight:700;margin:0 0 12px}
 .printFilterHint{font-size:12px;color:#555;margin:4px 0 8px}
 .printBaugruppeSection{margin-top:18px;page-break-inside:avoid}
 .printGruppeSection{margin:8px 0 6px}
@@ -225,7 +250,7 @@ th{background:#eee;font-weight:700}
 .printMaterialTable .colRegal{width:10%}
 .printMaterialTable .colHinweis{width:26%}
 @media print{
-  header,button,.tabs,.hint,.ghost,.noPrint,.searchField,.printStationBanner,.printStationPanel{display:none!important}
+  header,button,.tabs,.hint,.ghost,.noPrint,.searchField,.printStationBanner,.printStationPanel,.offlineBanner{display:none!important}
   main{max-width:none;padding:0}
   .card{border:0;box-shadow:none;padding:0;margin:0}
   .printArea{display:block}

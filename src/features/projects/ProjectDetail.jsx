@@ -13,7 +13,6 @@ export default function ProjectDetail({
   setView,
   openBauteil,
   openProjectWide,
-  isNarrow,
   fullModuleAccess,
   setProjectArchived,
   deleteProject,
@@ -43,7 +42,7 @@ export default function ProjectDetail({
   const baugruppeMenu = useContextMenuGesture();
 
   const structure = buildProjectStructure(project, items, structureRows);
-  const projectWideTabs = projectWideTabsFor(isNarrow, { fullAccess: fullModuleAccess });
+  const projectWideTabs = projectWideTabsFor();
 
   function handleBauteilClick(baugruppe, bauteil) {
     if (bauteilMenu.consumeSuppressedClick()) return;

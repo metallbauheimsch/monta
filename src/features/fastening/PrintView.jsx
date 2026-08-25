@@ -12,6 +12,7 @@ import { groupBy, baugruppeStatus } from "../../utils/helpers";
 import { dedupeHinweisText, normalizeHinweisForCompare, sizeCompareValue } from "./fasteningRules";
 import { isActiveItem } from "./replacement";
 import SearchField from "../../components/SearchField";
+import OfflinePrepareButton from "./OfflinePrepareButton";
 
 function aggregateForPrint(items, project) {
   const groups = new Map();
@@ -145,7 +146,7 @@ function BauteilBlock({ bauteil, items, toggleSort, arrow }) {
  * Druck: Baugruppe → Bauteil in derselben Reihenfolge wie die Projektübersicht
  * (buildProjectStructure), nicht alphabetisch.
  */
-export default function PrintView({ project, baugruppe, items, projectItems, structureRows }) {
+export default function PrintView({ project, baugruppe, items, projectItems, structureRows, offline = false }) {
   const [search, setSearch] = useState("");
   const { sortKey, sortDir, toggleSort, arrow } = useSortableColumns(null);
 
@@ -207,6 +208,9 @@ export default function PrintView({ project, baugruppe, items, projectItems, str
       <div className="row noPrint">
         <button onClick={() => window.print()}>Drucken</button>
       </div>
+      {!offline && (
+        <OfflinePrepareButton project={project} items={projectItems || items} structureRows={structureRows} />
+      )}
       <div className="noPrint">
         <SearchField value={search} onChange={setSearch} />
         {searchActive && <p className="hint">Druckausgabe gefiltert</p>}
