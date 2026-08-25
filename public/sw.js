@@ -10,11 +10,26 @@
 // werden.
 //
 // Strategie: "Cache, was tatsächlich benutzt wird" (Network-first mit
-// Cache-Fallback) - kein Build-Schritt nötig, der die von Vite gehashten
-// Dateinamen im Voraus kennen müsste. Bewusst kein PWA-Framework, kein
-// Precache-Manifest - kleine, nachvollziehbare Lösung.
-
-const CACHE_NAME = "monta-shell-v1";
+// Cache-Fallback) als Basisabsicherung - kein Build-Schritt nötig, der die
+// von Vite gehashten Dateinamen im Voraus kennen müsste. Bewusst kein
+// PWA-Framework, kein Precache-Manifest - kleine, nachvollziehbare Lösung.
+//
+// GARANTIERTE Offline-Startfähigkeit entsteht NICHT allein durch diese
+// beiläufige Cache-as-you-go-Strategie, sondern erst durch den bewussten
+// Klick auf "Offline-Modus vorbereiten" (siehe
+// src/services/offlineShell.js: prepareOfflineShell()), der den unten
+// verwendeten CACHE_NAME einmal vollständig leert und aus den tatsächlich
+// von der aktuell laufenden Seite geladenen Ressourcen neu befüllt - das
+// verhindert eine Versionsmischung aus altem und neuem Build in
+// DEMSELBEN Cache.
+//
+// Cache-Versionierung über Deploys hinweg: CACHE_NAME hier manuell
+// erhöhen, wann immer sich diese Datei (Cache-Strategie) inhaltlich
+// ändert - eine geänderte sw.js wird vom Browser als neuer Service
+// Worker erkannt (Byte-Vergleich), installiert und aktiviert; das
+// activate-Event unten löscht dabei automatisch jeden Cache mit
+// abweichendem Namen (also auch alle Caches früherer CACHE_NAME-Werte).
+const CACHE_NAME = "monta-shell-v2";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
