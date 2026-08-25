@@ -39,3 +39,15 @@ export function visibleTabsFor(isNarrow, { fullAccess } = {}) {
   if (fullAccess) return [...TAB_ORDER];
   return TAB_ORDER.filter((t) => !isNarrow || !NARROW_HIDDEN_TABS.includes(t));
 }
+
+// Projektweite Reiter (Sprint: Projektnavigation): Prüfung, Lager, Warenkorb
+// und Druck sind projektbezogen und direkt aus der Projektübersicht sowie
+// untereinander erreichbar. TB bleibt bewusst bauteilbezogen und ist NIE
+// Bestandteil dieser Liste - nur über ein konkretes Bauteil erreichbar.
+export const PROJECT_WIDE_TAB_ORDER = TAB_ORDER.filter((t) => t !== "tb");
+
+export function projectWideTabsFor(isNarrow, { fullAccess } = {}) {
+  return visibleTabsFor(isNarrow, { fullAccess }).filter((t) =>
+    PROJECT_WIDE_TAB_ORDER.includes(t)
+  );
+}

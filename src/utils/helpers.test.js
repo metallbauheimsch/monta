@@ -4,7 +4,13 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { baugruppeStatus, projectStatus, remainingQty } from "./helpers.js";
+import {
+  baugruppeStatus,
+  projectStatus,
+  remainingQty,
+  projectShortLabel,
+  allUpdatesSucceeded,
+} from "./helpers.js";
 
 describe("baugruppeStatus ignoriert ersetzte Altpositionen", () => {
   it("offene Restmenge einer ersetzten Altposition erzeugt keinen offenen Bedarf mehr", () => {
@@ -51,5 +57,36 @@ describe("Sprint 2C – Test F: Mengenreduzierung bei bereit > neue Menge", () =
 
   it("normale Restmenge bleibt korrekt (keine Regression)", () => {
     assert.equal(remainingQty({ menge: 20, bereit: 12 }), 8);
+  });
+});
+
+describe("projectShortLabel: Rücknavigation verwendet vorhandene Kurzbezeichnung", () => {
+  it("verwendet project.name (dasselbe Feld, das das Anlage-Formular 'Kurzbezeichnung' nennt)", () => {
+    assert.equal(projectShortLabel({ nr: "2024-015", name: "Pergola" }), "Pergola");
+  });
+
+  it("ist NICHT aus project.nr abgeleitet oder zusammengesetzt (kein Erraten)", () => {
+    const label = projectShortLabel({ nr: "Pergola-2024", name: "Andere Bezeichnung" });
+    assert.equal(label, "Andere Bezeichnung");
+    assert.notEqual(label, "Pergola-2024");
+  });
+
+  it("liefert bei fehlendem Projekt/Namen einen leeren String statt eines Fehlers", () => {
+    assert.equal(projectShortLabel(null), "");
+    assert.equal(projectShortLabel({}), "");
+  });
+});
+
+describe("allUpdatesSucceeded: Lager-'zuletzt geändert' nur nach vollständigem Erfolg", () => {
+  it("true nur wenn ALLE Teil-Updates einer Zeile erfolgreich waren", () => {
+    assert.equal(allUpdatesSucceeded([true, true, true]), true);
+  });
+
+  it("false sobald ein einzelnes Teil-Update fehlschlägt", () => {
+    assert.equal(allUpdatesSucceeded([true, false, true]), false);
+  });
+
+  it("leere Ergebnisliste gilt als erfolgreich (nichts zu speichern)", () => {
+    assert.equal(allUpdatesSucceeded([]), true);
   });
 });

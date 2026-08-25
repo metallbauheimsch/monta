@@ -6,6 +6,7 @@ import ProjectsList from "./features/projects/ProjectsList";
 import NewProjectForm from "./features/projects/NewProjectForm";
 import ProjectDetail from "./features/projects/ProjectDetail";
 import ProjectView from "./features/projects/ProjectView";
+import ProjectWideView from "./features/projects/ProjectWideView";
 import AuthPage from "./features/auth/AuthPage";
 import AccessPending from "./features/auth/AccessPending";
 import AccessBlocked from "./features/auth/AccessBlocked";
@@ -806,6 +807,15 @@ function App() {
     setView("project");
   }
 
+  // Prüfung/Lager/Warenkorb/Druck sind projektbezogen, nicht bauteilbezogen
+  // (Sprint: Projektnavigation) - deshalb keine Bauteilauswahl hier.
+  function openProjectWide(tabKey) {
+    setSelectedBaugruppe(null);
+    setSelectedBauteil(null);
+    setTab(tabKey);
+    setView("projectWide");
+  }
+
   async function addItem(item) {
     const newItem = {
       id: crypto.randomUUID(),
@@ -1089,6 +1099,9 @@ function App() {
           structureRows={structureRows}
           setView={setView}
           openBauteil={openBauteil}
+          openProjectWide={openProjectWide}
+          isNarrow={isNarrow}
+          fullModuleAccess={Boolean(tabFullAccess)}
           setProjectArchived={setProjectArchived}
           deleteProject={deleteProject}
           addBaugruppe={addBaugruppe}
@@ -1119,6 +1132,22 @@ function App() {
           addItem={addItem}
           updateItem={updateItem}
           deleteItem={deleteItem}
+          replaceItem={replaceItem}
+          setBaugruppeCompletion={setBaugruppeCompletion}
+        />
+      )}
+
+      {view === "projectWide" && project && (
+        <ProjectWideView
+          project={project}
+          projectItems={projectItems}
+          structureRows={structureRows}
+          backToDetail={() => setView("projectDetail")}
+          isNarrow={isNarrow}
+          fullModuleAccess={Boolean(tabFullAccess)}
+          tab={tab}
+          setTab={setTab}
+          updateItem={updateItem}
           replaceItem={replaceItem}
           setBaugruppeCompletion={setBaugruppeCompletion}
         />

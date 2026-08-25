@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import ProjectHeader from "../../components/ProjectHeader";
-import { projectStatus, baugruppeStatus } from "../../utils/helpers";
+import { projectStatus, baugruppeStatus, projectShortLabel } from "../../utils/helpers";
 import { TAB_LABELS, visibleTabsFor } from "../../utils/tabs";
 import TabContent from "./TabContent";
 
@@ -38,7 +38,7 @@ export default function ProjectView({
   return (
     <>
       <button className="ghost" onClick={backToDetail}>
-        ← Baugruppen &amp; Bauteile
+        ← {projectShortLabel(project)}
       </button>
       {isTbTab ? (
         <p className="tbContext">

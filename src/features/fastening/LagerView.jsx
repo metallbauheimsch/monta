@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { groupBy, projectStatus } from "../../utils/helpers";
+import { groupBy, projectStatus, allUpdatesSucceeded } from "../../utils/helpers";
 import { parseEinbauort, isBaugruppeRow } from "../../utils/structure";
 import { naturalCompare, useSortableColumns, compareWithSizeSecondary } from "../../utils/sorting";
 import { filterBySearch, sizeLengthSearchParts } from "../../utils/textSearch";
@@ -178,7 +178,7 @@ export default function LagerView({
     const results = await Promise.all(
       distribute(rowItems, value).map((u) => updateItem(u.id, { bereit: u.bereit }))
     );
-    return results.every(Boolean);
+    return allUpdatesSucceeded(results);
   }
 
   function rememberManualValue(rowKey, value) {

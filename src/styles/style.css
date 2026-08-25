@@ -32,7 +32,23 @@ button{background:#111;color:white;border:0;font-weight:800;cursor:pointer}.ghos
 .emptyProjectsCard{text-align:center;padding:28px 16px}
 .emptyProjectsCard button{width:auto;padding:12px 20px;margin-top:8px}
 .progress{height:12px;border-radius:999px;background:#ddd;overflow:hidden;margin:10px 0}.progress div{height:100%;background:#111}
+/* Projektkopf kompakter (Sprint: Projektnavigation) - alle Informationen
+   bleiben erhalten (Nr./Kurzbezeichnung, Status, Fortschritt, Prozent),
+   nur enger gesetzt, damit mehr Baugruppen/Bauteile gleichzeitig sichtbar
+   sind (besonders auf dem iPad). */
+.projectHeaderCard{padding:10px 14px}
+.projectHeaderCard h2{margin:0 0 2px;font-size:19px}
+.projectHeaderCard .row{align-items:flex-start}
+.projectHeaderCard p{margin:0}
+.progressLine{display:flex;align-items:center;gap:10px;margin-top:6px}
+.progressLine .progress{flex:1;margin:0;height:8px}
+.progressLine small{white-space:nowrap}
 .tabs{display:flex;gap:8px;overflow:auto;margin:12px 0}.tabs button{background:white;color:#111;border:1px solid #ccc;text-transform:capitalize;white-space:nowrap}.tabs .active{background:#111;color:white}
+/* Projektweite Navigation (Prüfung/Lager/Warenkorb/Druck) direkt in der
+   Baugruppen-/Bauteil-Übersicht (Sprint: Projektnavigation) - dieselbe
+   Reiteroptik wie in den projektweiten Ansichten selbst, aber ohne
+   "aktiven" Zustand, da hier kein Bereich bereits geöffnet ist. */
+.projectWideNav{margin:10px 0 16px}
 .line{border-top:1px solid #eee;padding:10px 0}.tableWrap{overflow:auto}.editTable input{border:0;border-radius:8px;padding:8px;min-width:80px}
 .editTable .posCell{padding:8px;text-align:center;color:#666;font-weight:700}
 .entryGrid{display:grid;grid-template-columns:90px 1.5fr 90px 90px 1fr 1.2fr auto 120px;gap:8px;align-items:center}
@@ -49,6 +65,14 @@ th{background:#eee;font-weight:700}
 /* Lager: zuletzt vom aktuellen Benutzer geänderte Zeile (rein lokal, kein
    Fehler-/Warnzustand) - dezenter blauer Rand, überlagert auch "rowDone". */
 .lastChangedRow{box-shadow:inset 4px 0 0 #3a7bde}
+/* iPad/Touch (Sprint: Projektnavigation): box-shadow auf <tr> wird von
+   Safari/WebKit auf Touch-Geräten nicht zuverlässig gerendert, dadurch war
+   die Markierung dort kaum sichtbar. Nur für Touch-Geräte zusätzlich ein
+   deutlicher Hintergrund - Desktop/Maus (siehe Regel oben) bleibt
+   unverändert. Keine neue Fachlogik, reine Darstellung. */
+@media (hover:none),(pointer:coarse){
+  .lastChangedRow{background:#dbe9fb}
+}
 .breadcrumb{color:#666;font-size:14px;margin:0 0 6px}.breadcrumb .sep{margin:0 4px}
 .checkboxLine{display:flex;align-items:center;gap:8px;font-size:14px;color:#444;margin-top:6px}.checkboxLine input{width:auto}
 .completionLine{margin:8px 0 12px;padding:6px 10px;border-radius:6px;width:fit-content;max-width:100%}
@@ -86,6 +110,15 @@ th{background:#eee;font-weight:700}
 .baugruppeSection{margin-top:20px;padding-top:12px;border-top:2px solid #eee}
 .baugruppeSection:first-child{margin-top:0;padding-top:0;border-top:0}
 .baugruppeSection h3{display:flex;align-items:center;gap:8px}
+/* Baugruppe: Umbenennen/Löschen jetzt über Kontextmenü (Rechtsklick/Long
+   Press) statt dauerhaft sichtbarer Buttons (Sprint: Projektnavigation) -
+   der Baugruppenname bleibt dafür ein <button>, damit Long Press auf
+   Touch-Geräten nicht mit der nativen Textauswahl/dem System-Callout
+   kollidiert (wie beim bereits bestehenden Bauteil-Chip). Optisch wie
+   normaler Überschriftentext, keine Button-Optik.
+   Normaler Klick löst bewusst keine Aktion aus. */
+.baugruppeHead{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.baugruppeTitleBtn{background:transparent;color:inherit;border:0;padding:6px 4px;margin:-6px 0 -6px -4px;width:auto;font:inherit;font-weight:700;cursor:pointer;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .statusPill{font-size:13px;font-weight:700;color:#444}
 .baugruppenAmpelRow{display:flex;gap:10px;margin-top:8px;font-size:14px}
 .dangerText{color:#9b111e;font-weight:700}

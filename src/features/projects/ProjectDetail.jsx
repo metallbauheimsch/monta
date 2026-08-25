@@ -1,68 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import ProjectHeader from "../../components/ProjectHeader";
+import EntityContextMenu from "../../components/EntityContextMenu";
 import { projectStatus, baugruppeStatus } from "../../utils/helpers";
 import { buildProjectStructure, parseEinbauort } from "../../utils/structure";
-
-const LONG_PRESS_MS = 600;
-const MOVE_CANCEL_PX = 10;
-
-/**
- * Bauteil-Kontextmenü (Desktop: Rechtsklick, Mobil: Long Press).
- * Position: Desktop Maus, Mobil Finger.
- */
-function BauteilContextMenu({ x, y, onClose, onRename, onDuplicate, onDelete }) {
-  const menuRef = useRef(null);
-
-  useEffect(() => {
-    function onKey(e) {
-      if (e.key === "Escape") onClose();
-    }
-    function onPointer(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onPointer, true);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", onPointer, true);
-    };
-  }, [onClose]);
-
-  useEffect(() => {
-    const el = menuRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    let left = x;
-    let top = y;
-    if (left + rect.width > window.innerWidth - 8) {
-      left = Math.max(8, window.innerWidth - rect.width - 8);
-    }
-    if (top + rect.height > window.innerHeight - 8) {
-      top = Math.max(8, window.innerHeight - rect.height - 8);
-    }
-    el.style.left = `${left}px`;
-    el.style.top = `${top}px`;
-  }, [x, y]);
-
-  return (
-    <div
-      ref={menuRef}
-      className="bauteilContextMenu"
-      style={{ left: x, top: y }}
-      role="menu"
-    >
-      <button type="button" role="menuitem" onClick={onRename}>
-        Umbenennen
-      </button>
-      <button type="button" role="menuitem" onClick={onDuplicate}>
-        Duplizieren
-      </button>
-      <button type="button" role="menuitem" className="dangerItem" onClick={onDelete}>
-        Löschen
-      </button>
-    </div>
-  );
-}
+import { useContextMenuGesture } from "../../utils/contextMenuGesture";
+import { TAB_LABELS, projectWideTabsFor } from "../../utils/tabs";
 
 export default function ProjectDetail({
   project,
@@ -70,6 +12,9 @@ export default function ProjectDetail({
   structureRows,
   setView,
   openBauteil,
+  openProjectWide,
+  isNarrow,
+  fullModuleAccess,
   setProjectArchived,
   deleteProject,
   addBaugruppe,
@@ -85,76 +30,25 @@ export default function ProjectDetail({
   const [newBauteil, setNewBauteil] = useState("");
   const [renamingBaugruppe, setRenamingBaugruppe] = useState(null);
   const [renameBaugruppeValue, setRenameBaugruppeValue] = useState("");
-  /** @type {[{ baugruppe: string, bauteil: string, x: number, y: number } | null, Function]} */
-  const [menu, setMenu] = useState(null);
   /** @type {[{ mode: 'rename'|'duplicate', baugruppe: string, bauteil: string, value: string } | null, Function]} */
   const [dialog, setDialog] = useState(null);
   const [dialogBusy, setDialogBusy] = useState(false);
   const newBaugruppeInputRef = useRef(null);
-  const suppressClickRef = useRef(false);
-  const longPressRef = useRef(null);
+
+  // Zwei unabhängige Kontextmenüs (Rechtsklick/Long Press) über dieselbe
+  // wiederverwendbare Gestenlogik - eines für Bauteil-Chips (Umbenennen/
+  // Duplizieren/Löschen), eines für Baugruppen-Überschriften (Umbenennen/
+  // Löschen). Keine zweite, abweichende Architektur.
+  const bauteilMenu = useContextMenuGesture();
+  const baugruppeMenu = useContextMenuGesture();
 
   const structure = buildProjectStructure(project, items, structureRows);
-
-  function clearLongPress() {
-    if (longPressRef.current) {
-      clearTimeout(longPressRef.current.timer);
-      longPressRef.current = null;
-    }
-  }
-
-  function openMenu(baugruppe, bauteil, x, y) {
-    setMenu({ baugruppe, bauteil, x, y });
-  }
-
-  function closeMenu() {
-    setMenu(null);
-  }
+  const projectWideTabs = projectWideTabsFor(isNarrow, { fullAccess: fullModuleAccess });
 
   function handleBauteilClick(baugruppe, bauteil) {
-    if (suppressClickRef.current) {
-      suppressClickRef.current = false;
-      return;
-    }
-    closeMenu();
+    if (bauteilMenu.consumeSuppressedClick()) return;
+    bauteilMenu.closeMenu();
     openBauteil(baugruppe, bauteil);
-  }
-
-  function handleContextMenu(e, baugruppe, bauteil) {
-    e.preventDefault();
-    e.stopPropagation();
-    clearLongPress();
-    openMenu(baugruppe, bauteil, e.clientX, e.clientY);
-  }
-
-  function handlePointerDown(e, baugruppe, bauteil) {
-    if (e.pointerType === "mouse" && e.button !== 0) return;
-    clearLongPress();
-    const startX = e.clientX;
-    const startY = e.clientY;
-    longPressRef.current = {
-      baugruppe,
-      bauteil,
-      startX,
-      startY,
-      timer: setTimeout(() => {
-        longPressRef.current = null;
-        suppressClickRef.current = true;
-        openMenu(baugruppe, bauteil, startX, startY);
-      }, LONG_PRESS_MS),
-    };
-  }
-
-  function handlePointerMove(e) {
-    const lp = longPressRef.current;
-    if (!lp) return;
-    const dx = Math.abs(e.clientX - lp.startX);
-    const dy = Math.abs(e.clientY - lp.startY);
-    if (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX) clearLongPress();
-  }
-
-  function handlePointerUp() {
-    clearLongPress();
   }
 
   async function handleAddBaugruppe(e) {
@@ -190,7 +84,8 @@ export default function ProjectDetail({
     if (!ok) return;
     try {
       await deleteBaugruppe?.(project.id, baugruppeName);
-      if (menu?.baugruppe === baugruppeName) closeMenu();
+      if (bauteilMenu.menu?.target?.baugruppe === baugruppeName) bauteilMenu.closeMenu();
+      if (baugruppeMenu.menu?.target?.baugruppe === baugruppeName) baugruppeMenu.closeMenu();
       if (dialog?.baugruppe === baugruppeName) setDialog(null);
     } catch { /* gemeldet */ }
   }
@@ -198,7 +93,6 @@ export default function ProjectDetail({
   function startRenameBaugruppe(name) {
     setRenamingBaugruppe(name);
     setRenameBaugruppeValue(name);
-    closeMenu();
   }
 
   async function submitRenameBaugruppe(e, oldName) {
@@ -212,23 +106,23 @@ export default function ProjectDetail({
   }
 
   function startRenameFromMenu() {
-    if (!menu) return;
-    const { baugruppe, bauteil } = menu;
-    closeMenu();
+    if (!bauteilMenu.menu) return;
+    const { baugruppe, bauteil } = bauteilMenu.menu.target;
+    bauteilMenu.closeMenu();
     setDialog({ mode: "rename", baugruppe, bauteil, value: bauteil });
   }
 
   function startDuplicateFromMenu() {
-    if (!menu) return;
-    const { baugruppe, bauteil } = menu;
-    closeMenu();
+    if (!bauteilMenu.menu) return;
+    const { baugruppe, bauteil } = bauteilMenu.menu.target;
+    bauteilMenu.closeMenu();
     setDialog({ mode: "duplicate", baugruppe, bauteil, value: "" });
   }
 
   async function handleDeleteFromMenu() {
-    if (!menu) return;
-    const { baugruppe, bauteil } = menu;
-    closeMenu();
+    if (!bauteilMenu.menu) return;
+    const { baugruppe, bauteil } = bauteilMenu.menu.target;
+    bauteilMenu.closeMenu();
     const ok = confirm(
       `Bauteil „${bauteil}“ wirklich löschen? Zugehörige Materialpositionen werden dauerhaft gelöscht.`
     );
@@ -236,6 +130,20 @@ export default function ProjectDetail({
     try {
       await deleteBauteil?.(project.id, baugruppe, bauteil);
     } catch { /* gemeldet */ }
+  }
+
+  function startRenameBaugruppeFromMenu() {
+    if (!baugruppeMenu.menu) return;
+    const { baugruppe } = baugruppeMenu.menu.target;
+    baugruppeMenu.closeMenu();
+    startRenameBaugruppe(baugruppe);
+  }
+
+  async function deleteBaugruppeFromMenu() {
+    if (!baugruppeMenu.menu) return;
+    const { baugruppe } = baugruppeMenu.menu.target;
+    baugruppeMenu.closeMenu();
+    await handleDeleteBaugruppe(baugruppe);
   }
 
   async function submitDialog(e) {
@@ -265,6 +173,16 @@ export default function ProjectDetail({
       <button className="ghost" onClick={() => setView("projects")}>← Projekte</button>
       <ProjectHeader project={project} status={projectStatus(project, items)} />
 
+      {openProjectWide && projectWideTabs.length > 0 && (
+        <div className="tabs projectWideNav">
+          {projectWideTabs.map((t) => (
+            <button key={t} type="button" onClick={() => openProjectWide(t)}>
+              {TAB_LABELS[t]}
+            </button>
+          ))}
+        </div>
+      )}
+
       <h3>Baugruppen &amp; Bauteile</h3>
 
       {structure.map(({ baugruppe, bauteile }) => {
@@ -288,25 +206,22 @@ export default function ProjectDetail({
                 </button>
               </form>
             ) : (
-              <h3>
-                {baugruppe}{" "}
+              <h3 className="baugruppeHead">
+                <button
+                  type="button"
+                  className="baugruppeTitleBtn"
+                  onContextMenu={(e) => baugruppeMenu.handleContextMenu(e, { baugruppe })}
+                  onPointerDown={(e) => baugruppeMenu.handlePointerDown(e, { baugruppe })}
+                  onPointerMove={baugruppeMenu.handlePointerMove}
+                  onPointerUp={baugruppeMenu.handlePointerUp}
+                  onPointerCancel={baugruppeMenu.handlePointerUp}
+                  onPointerLeave={baugruppeMenu.handlePointerUp}
+                >
+                  {baugruppe}
+                </button>{" "}
                 <span className="statusPill" title={status.label}>
                   {status.emoji} {status.label}
                 </span>
-                <button
-                  type="button"
-                  className="ghost renameBtn"
-                  onClick={() => startRenameBaugruppe(baugruppe)}
-                >
-                  Umbenennen
-                </button>
-                <button
-                  type="button"
-                  className="ghost renameBtn dangerBtnSmall"
-                  onClick={() => handleDeleteBaugruppe(baugruppe)}
-                >
-                  Löschen
-                </button>
               </h3>
             )}
 
@@ -320,12 +235,12 @@ export default function ProjectDetail({
                   type="button"
                   className="chip bauteilChip"
                   onClick={() => handleBauteilClick(baugruppe, bt)}
-                  onContextMenu={(e) => handleContextMenu(e, baugruppe, bt)}
-                  onPointerDown={(e) => handlePointerDown(e, baugruppe, bt)}
-                  onPointerMove={handlePointerMove}
-                  onPointerUp={handlePointerUp}
-                  onPointerCancel={handlePointerUp}
-                  onPointerLeave={handlePointerUp}
+                  onContextMenu={(e) => bauteilMenu.handleContextMenu(e, { baugruppe, bauteil: bt })}
+                  onPointerDown={(e) => bauteilMenu.handlePointerDown(e, { baugruppe, bauteil: bt })}
+                  onPointerMove={bauteilMenu.handlePointerMove}
+                  onPointerUp={bauteilMenu.handlePointerUp}
+                  onPointerCancel={bauteilMenu.handlePointerUp}
+                  onPointerLeave={bauteilMenu.handlePointerUp}
                 >
                   {bt}
                 </button>
@@ -387,14 +302,28 @@ export default function ProjectDetail({
         </button>
       </div>
 
-      {menu && (
-        <BauteilContextMenu
-          x={menu.x}
-          y={menu.y}
-          onClose={closeMenu}
-          onRename={startRenameFromMenu}
-          onDuplicate={startDuplicateFromMenu}
-          onDelete={handleDeleteFromMenu}
+      {bauteilMenu.menu && (
+        <EntityContextMenu
+          x={bauteilMenu.menu.x}
+          y={bauteilMenu.menu.y}
+          onClose={bauteilMenu.closeMenu}
+          items={[
+            { label: "Umbenennen", onClick: startRenameFromMenu },
+            { label: "Duplizieren", onClick: startDuplicateFromMenu },
+            { label: "Löschen", onClick: handleDeleteFromMenu, danger: true },
+          ]}
+        />
+      )}
+
+      {baugruppeMenu.menu && (
+        <EntityContextMenu
+          x={baugruppeMenu.menu.x}
+          y={baugruppeMenu.menu.y}
+          onClose={baugruppeMenu.closeMenu}
+          items={[
+            { label: "Umbenennen", onClick: startRenameBaugruppeFromMenu },
+            { label: "Löschen", onClick: deleteBaugruppeFromMenu, danger: true },
+          ]}
         />
       )}
 

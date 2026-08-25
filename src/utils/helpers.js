@@ -54,6 +54,22 @@ export function projectStatus(project, items) {
   return { pct, label: "Keine Teile bereit", cls: "red" };
 }
 
+// Projekt-Kurzbezeichnung für Rücknavigation (z. B. "← Pergola") - dasselbe
+// Feld, das auch das "Neues Projekt"-Formular als "Kurzbezeichnung"
+// bezeichnet (project.name). Zentral hier definiert, damit keine der
+// projektbezogenen Ansichten den Namen selbst zusammensetzt oder errät.
+export function projectShortLabel(project) {
+  return project?.name || "";
+}
+
+// Zentrale Erfolgsprüfung für Mehrfach-Updates (z. B. Lager: mehrere
+// Positionen einer Zeile gleichzeitig aktualisieren) - u. a. Grundlage für
+// die "zuletzt geändert"-Markierung im Lager, die nur nach vollständig
+// erfolgreichem Speichern gesetzt werden darf.
+export function allUpdatesSucceeded(results) {
+  return results.every(Boolean);
+}
+
 export function groupBy(arr, fn) {
   return arr.reduce((acc, item) => {
     const key = fn(item);
