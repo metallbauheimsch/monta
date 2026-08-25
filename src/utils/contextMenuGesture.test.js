@@ -5,7 +5,12 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { isPrimaryPointerDown, shouldCancelLongPress, MOVE_CANCEL_PX } from "./contextMenuGesture.js";
+import {
+  isPrimaryPointerDown,
+  shouldCancelLongPress,
+  isMenuActivationKey,
+  MOVE_CANCEL_PX,
+} from "./contextMenuGesture.js";
 
 describe("isPrimaryPointerDown: nur primärer Zeiger startet Long Press", () => {
   it("Touch/Stift startet einen Long Press", () => {
@@ -40,5 +45,25 @@ describe("shouldCancelLongPress: Bewegung (z. B. Scrollen) bricht Long Press ab"
 
   it("Abbruch gilt auch für vertikale Bewegung", () => {
     assert.equal(shouldCancelLongPress({ x: 10, y: 10 }, { x: 10, y: 10 + MOVE_CANCEL_PX + 1 }), true);
+  });
+});
+
+describe("isMenuActivationKey: Enter/Leertaste öffnen dasselbe Kontextmenü (Accessibility)", () => {
+  it("Enter aktiviert", () => {
+    assert.equal(isMenuActivationKey("Enter"), true);
+  });
+
+  it("Leertaste aktiviert", () => {
+    assert.equal(isMenuActivationKey(" "), true);
+  });
+
+  it("ältere Browser: 'Spacebar' aktiviert ebenfalls", () => {
+    assert.equal(isMenuActivationKey("Spacebar"), true);
+  });
+
+  it("andere Tasten aktivieren nicht (z. B. Tab, Pfeiltasten)", () => {
+    assert.equal(isMenuActivationKey("Tab"), false);
+    assert.equal(isMenuActivationKey("ArrowDown"), false);
+    assert.equal(isMenuActivationKey("Escape"), false);
   });
 });

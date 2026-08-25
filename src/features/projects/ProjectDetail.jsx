@@ -216,6 +216,7 @@ export default function ProjectDetail({
                   onPointerUp={baugruppeMenu.handlePointerUp}
                   onPointerCancel={baugruppeMenu.handlePointerUp}
                   onPointerLeave={baugruppeMenu.handlePointerUp}
+                  onKeyDown={(e) => baugruppeMenu.handleKeyDown(e, { baugruppe })}
                 >
                   {baugruppe}
                 </button>{" "}

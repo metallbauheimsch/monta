@@ -22,6 +22,14 @@ export function shouldCancelLongPress(start, current) {
   return dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX;
 }
 
+// Tastatur-Aktivierung (Accessibility): Enter/Leertaste auf dem fokussierten
+// Element öffnet dasselbe Kontextmenü wie Rechtsklick/Long Press, statt
+// ersatzlos zu verschwinden (früher sichtbare, dauerhafte Buttons waren
+// ohne Maus/Touch erreichbar). "Spacebar" zusätzlich für ältere Browser.
+export function isMenuActivationKey(key) {
+  return key === "Enter" || key === " " || key === "Spacebar";
+}
+
 /**
  * Generisches Kontextmenü-Gestenverhalten für ein beliebiges Ziel-Objekt
  * (z. B. ein Bauteil oder eine Baugruppe). Liefert Handler für
@@ -83,6 +91,19 @@ export function useContextMenuGesture() {
     clearLongPress();
   }, [clearLongPress]);
 
+  // Enter/Leertaste öffnet dasselbe Kontextmenü wie Rechtsklick/Long Press
+  // (Accessibility) - keine separate Tastatur-Architektur, nur ein weiterer
+  // Aufrufer von openMenu(). Position: unterhalb des fokussierten Elements.
+  const handleKeyDown = useCallback(
+    (e, target) => {
+      if (!isMenuActivationKey(e.key)) return;
+      e.preventDefault();
+      const rect = e.currentTarget.getBoundingClientRect();
+      openMenu(target, rect.left, rect.bottom);
+    },
+    [openMenu]
+  );
+
   // true = der gerade eingehende Klick kam direkt nach einem ausgelösten
   // Long Press und soll unterdrückt werden (kein Doppel-Effekt); setzt das
   // Flag danach zurück.
@@ -101,6 +122,7 @@ export function useContextMenuGesture() {
     handlePointerDown,
     handlePointerMove,
     handlePointerUp,
+    handleKeyDown,
     consumeSuppressedClick,
   };
 }
