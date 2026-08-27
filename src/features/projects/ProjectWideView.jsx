@@ -19,7 +19,7 @@ export default function ProjectWideView({
   setTab,
   updateItem,
   replaceItem,
-  setBaugruppeCompletion,
+  setProjectCompletion,
 }) {
   const visibleTabs = projectWideTabsFor();
 
@@ -51,7 +51,7 @@ export default function ProjectWideView({
         fullModuleAccess={fullModuleAccess}
         updateItem={updateItem}
         replaceItem={replaceItem}
-        setBaugruppeCompletion={setBaugruppeCompletion}
+        setProjectCompletion={setProjectCompletion}
       />
     </>
   );

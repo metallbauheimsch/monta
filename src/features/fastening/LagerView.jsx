@@ -17,7 +17,7 @@ import { articleIdentityKey, collectUniqueHinweise, dedupeHinweisText } from "./
 import { isActiveItem, isReplacedItem, formatReplacedHint } from "./replacement";
 import { useItemEditor } from "./useItemEditor";
 import SearchField from "../../components/SearchField";
-import BaugruppeCompletionSection from "../../components/BaugruppeCompletionSection";
+import ProjectCompletionSection from "../../components/ProjectCompletionSection";
 import SuggestionAutocomplete from "./SuggestionAutocomplete";
 
 function defaultSort(rows) {
@@ -65,9 +65,7 @@ export default function LagerView({
   replaceItem,
   hasFullModuleAccess,
   project,
-  structureRows,
-  baugruppe,
-  setBaugruppeCompletion,
+  setProjectCompletion,
 }) {
   const [manualValues, setManualValues] = useState(readManualValues);
   const [search, setSearch] = useState("");
@@ -228,14 +226,12 @@ export default function LagerView({
         Projektweite Zusammenfassung identischer Artikel. Standard: Reihenfolge im Paternoster.
         Restmenge = Gesamtmenge − Vorhanden.
       </p>
-      <BaugruppeCompletionSection
+      <ProjectCompletionSection
         project={project}
-        baugruppe={baugruppe}
-        structureRows={structureRows}
         field="lager_abgeschlossen"
-        labelPrefix="Lagerprüfung abgeschlossen"
-        confirmText={(bg) => `Lagerprüfung für „${bg}“ wirklich als abgeschlossen markieren?`}
-        setBaugruppeCompletion={setBaugruppeCompletion}
+        label="Lagerprüfung abgeschlossen"
+        confirmMessage="Lagerprüfung für das gesamte Projekt wirklich als abgeschlossen markieren?"
+        setProjectCompletion={setProjectCompletion}
       />
       <SearchField value={search} onChange={setSearch} />
       {editor.pendingReplace && (

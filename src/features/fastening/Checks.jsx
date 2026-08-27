@@ -5,7 +5,7 @@ import { filterBySearch, sizeLengthSearchParts } from "../../utils/textSearch";
 import { isHvGarnitur, sizeCompareValue } from "./fasteningRules";
 import { isActiveItem } from "./replacement";
 import SearchField from "../../components/SearchField";
-import BaugruppeCompletionSection from "../../components/BaugruppeCompletionSection";
+import ProjectCompletionSection from "../../components/ProjectCompletionSection";
 
 const LENGTH_TOLERANCE_MM = 20;
 const AUTO_HINWEIS = "Automatisch ergänzt";
@@ -64,10 +64,8 @@ function findSimilarPairs(items) {
 
 export default function Checks({
   items,
-  baugruppe,
   project,
-  structureRows,
-  setBaugruppeCompletion,
+  setProjectCompletion,
 }) {
   const [search, setSearch] = useState("");
 
@@ -112,14 +110,12 @@ export default function Checks({
           {status.emoji} {status.label}
         </span>
       </h2>
-      <BaugruppeCompletionSection
+      <ProjectCompletionSection
         project={project}
-        baugruppe={baugruppe}
-        structureRows={structureRows}
         field="tb_pruefung_abgeschlossen"
-        labelPrefix="TB / Prüfung abgeschlossen"
-        confirmText={(bg) => `TB / Prüfung für „${bg}“ wirklich als abgeschlossen markieren?`}
-        setBaugruppeCompletion={setBaugruppeCompletion}
+        label="TB / Prüfung abgeschlossen"
+        confirmMessage="TB / Prüfung für das gesamte Projekt wirklich als abgeschlossen markieren?"
+        setProjectCompletion={setProjectCompletion}
       />
       <SearchField value={search} onChange={setSearch} />
       <p className="hint">

@@ -21,7 +21,7 @@ export default function ProjectView({
   updateItem,
   deleteItem,
   replaceItem,
-  setBaugruppeCompletion,
+  setProjectCompletion,
 }) {
   const visibleTabs = visibleTabsFor();
 
@@ -80,7 +80,7 @@ export default function ProjectView({
         updateItem={updateItem}
         deleteItem={deleteItem}
         replaceItem={replaceItem}
-        setBaugruppeCompletion={setBaugruppeCompletion}
+        setProjectCompletion={setProjectCompletion}
       />
     </>
   );

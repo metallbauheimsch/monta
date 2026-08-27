@@ -36,7 +36,6 @@ import {
   removeBauteilFromRegistry,
   renameBaugruppeInRegistry,
   renameBauteilInRegistry,
-  isBaugruppeRow,
 } from "./utils/structure";
 import { defaultTabFor, resolveTabFullAccess, tabForBauteilOpen } from "./utils/tabs";
 import { renameBaugruppeInManualValues } from "./features/fastening/stock";
@@ -742,50 +741,35 @@ function App() {
   }
 
   /**
-   * Bewusste Abschlussfreigabe an der Baugruppenzeile (bauteil IS NULL).
-   * Mail nur bei false → true; Deaktivieren ohne Mail; erneutes Abschließen = neuer Zyklus.
+   * Bewusste Abschlussfreigabe für Prüfung/Lager - projektweit (nicht mehr
+   * an eine einzelne Baugruppe gebunden, siehe supabase_patch_project_completion.sql).
+   * Grund: Prüfung und Lager zeigen fachlich bereits das gesamte Projekt an
+   * (siehe Checks.jsx/LagerView.jsx, items={projectItems}); der Abschluss
+   * soll unabhängig davon sein, über welche Baugruppe/welches Bauteil der
+   * Reiter geöffnet wurde. Mail nur bei false → true; Deaktivieren ohne
+   * Mail; erneutes Abschließen = neuer Zyklus (unverändert gegenüber der
+   * bisherigen baugruppengebundenen Variante). Die alten Felder an
+   * project_structure (bauteil IS NULL) bleiben als Legacy-Daten bestehen
+   * und werden von dieser Funktion nicht mehr gelesen/geschrieben.
    */
-  async function setBaugruppeCompletion(pid, baugruppeName, field, value) {
+  async function setProjectCompletion(pid, field, value) {
     const allowed = ["tb_pruefung_abgeschlossen", "lager_abgeschlossen"];
     if (!allowed.includes(field)) return;
-    const bg = String(baugruppeName || "").trim();
-    if (!bg) return;
+    const proj = projects.find((p) => String(p.id) === String(pid));
+    if (!proj) {
+      alert("Projekt konnte nicht gefunden werden.");
+      throw new Error("project missing");
+    }
+
     const nextVal = Boolean(value);
-
-    let row = structureRowsRef.current.find(
-      (r) =>
-        String(r.project_id) === String(pid) &&
-        r.baugruppe === bg &&
-        isBaugruppeRow(r)
-    );
-    if (!row) {
-      const created = await insertStructureRow({
-        project_id: pid,
-        baugruppe: bg,
-        bauteil: null,
-      });
-      row =
-        created ||
-        structureRowsRef.current.find(
-          (r) =>
-            String(r.project_id) === String(pid) &&
-            r.baugruppe === bg &&
-            isBaugruppeRow(r)
-        );
-    }
-    if (!row) {
-      alert("Baugruppe konnte nicht gefunden werden.");
-      throw new Error("baugruppe row missing");
-    }
-
-    const prevVal = Boolean(row[field]);
+    const prevVal = Boolean(proj[field]);
     if (prevVal === nextVal) return;
 
     if (supabase) {
       const { error } = await supabase
-        .from("project_structure")
+        .from("projects")
         .update({ [field]: nextVal })
-        .eq("id", row.id);
+        .eq("id", pid);
       if (error) {
         console.error("MONTA: Abschlussstatus speichern fehlgeschlagen.", error);
         alert(`Abschlussstatus konnte nicht gespeichert werden: ${error.message || "unbekannter Fehler"}`);
@@ -794,20 +778,25 @@ function App() {
     }
 
     loadGeneration.current += 1;
-    setStructureRows((prev) =>
-      prev.map((r) => (r.id === row.id ? { ...r, [field]: nextVal } : r))
+    setProjects((prev) =>
+      prev.map((p) => (String(p.id) === String(pid) ? { ...p, [field]: nextVal } : p))
     );
 
     if (nextVal && !prevVal && supabase) {
-      const proj = projects.find((p) => String(p.id) === String(pid));
-      if (!proj) return;
+      // Projektweiter Abschluss statt einer einzelnen Baugruppe - "Gesamtprojekt"
+      // als Geltungsbereich, analog zu notifyAllItemsOrdered() (dieselbe
+      // bestehende Mail-/Dedup-Infrastruktur, keine zweite Implementierung).
+      // Der Wert dient hier nur der event_key-/Zyklus-Bildung: die Mailtexte
+      // selbst nennen nur den Projektnamen, keine Baugruppe (siehe
+      // supabase/functions/workflow-notifications/index.ts, buildMail()).
+      const scope = "Gesamtprojekt";
       try {
         if (field === "tb_pruefung_abgeschlossen") {
-          const cycle = await nextEventCycle("tb_pruefung_completed", pid, bg);
-          await notifyTbPruefungCompleted({ project: proj, baugruppe: bg, cycle });
+          const cycle = await nextEventCycle("tb_pruefung_completed", pid, scope);
+          await notifyTbPruefungCompleted({ project: proj, baugruppe: scope, cycle });
         } else if (field === "lager_abgeschlossen") {
-          const cycle = await nextEventCycle("lager_completed", pid, bg);
-          await notifyLagerCompleted({ project: proj, baugruppe: bg, cycle });
+          const cycle = await nextEventCycle("lager_completed", pid, scope);
+          await notifyLagerCompleted({ project: proj, baugruppe: scope, cycle });
         }
       } catch (err) {
         console.error("MONTA: Abschluss-Mail:", err?.message || err);
@@ -1153,7 +1142,7 @@ function App() {
           updateItem={updateItem}
           deleteItem={deleteItem}
           replaceItem={replaceItem}
-          setBaugruppeCompletion={setBaugruppeCompletion}
+          setProjectCompletion={setProjectCompletion}
         />
       )}
 
@@ -1168,7 +1157,7 @@ function App() {
           setTab={setTab}
           updateItem={updateItem}
           replaceItem={replaceItem}
-          setBaugruppeCompletion={setBaugruppeCompletion}
+          setProjectCompletion={setProjectCompletion}
         />
       )}
     </Shell>

@@ -1,72 +1,15 @@
 import { useMemo, useState } from "react";
-import { sortByPosNumber, uniqueSortedPositions } from "./technikerUtils";
-import {
-  parseEinbauort,
-  formatEinbauort,
-  buildProjectStructure,
-} from "../../utils/structure";
+import { sortByPosNumber } from "./technikerUtils";
+import { parseEinbauort, buildProjectStructure } from "../../utils/structure";
 import { naturalCompare, useSortableColumns, compareWithSizeSecondary } from "../../utils/sorting";
 import { filterBySearch, sizeLengthSearchParts } from "../../utils/textSearch";
 import { regalOrderIndex, getRegalPlatz } from "./regalOrder";
 import { groupBy, baugruppeStatus } from "../../utils/helpers";
-import { dedupeHinweisText, normalizeHinweisForCompare, sizeCompareValue } from "./fasteningRules";
+import { dedupeHinweisText } from "./fasteningRules";
 import { isActiveItem } from "./replacement";
+import { aggregateForPrint } from "./printAggregation";
 import SearchField from "../../components/SearchField";
 import OfflinePrepareButton from "./OfflinePrepareButton";
-
-function aggregateForPrint(items, project) {
-  const groups = new Map();
-  items.forEach((item) => {
-    const { baugruppe, bauteil } = parseEinbauort(item.einbauort, project?.baugruppe);
-    // Größenvergleich metrisch-bewusst (siehe sizeCompareValue) - gleiche
-    // Sechskantschraube M12/"12" wird auf der Montageunterlage zusammengefasst.
-    const key = [
-      bauteil,
-      item.bezeichnung,
-      sizeCompareValue(item.bezeichnung, item.groesse),
-      item.laenge,
-      item.oberflaeche,
-    ].join("|");
-    if (!groups.has(key)) {
-      groups.set(key, {
-        id: item.id,
-        einbauort: formatEinbauort(baugruppe, bauteil),
-        baugruppe,
-        bauteil,
-        bezeichnung: item.bezeichnung,
-        groesse: item.groesse,
-        laenge: item.laenge,
-        oberflaeche: item.oberflaeche,
-        menge: 0,
-        important_note: false,
-        _items: [],
-        _hinweise: [],
-      });
-    }
-    const g = groups.get(key);
-    g.menge += Number(item.menge || 0);
-    g._items.push(item);
-    if (item.important_note) g.important_note = true;
-    if (item.hinweis) {
-      for (const part of String(item.hinweis).split(/\n|(?:\s*[·•|]\s*)/)) {
-        const t = part.trim();
-        if (
-          t &&
-          !g._hinweise.some(
-            (h) => normalizeHinweisForCompare(h) === normalizeHinweisForCompare(t)
-          )
-        ) {
-          g._hinweise.push(t);
-        }
-      }
-    }
-  });
-  return Array.from(groups.values()).map((g) => ({
-    ...g,
-    pos: uniqueSortedPositions(g._items).join(", "),
-    hinweis: dedupeHinweisText(g._hinweise.join(" · ")),
-  }));
-}
 
 function posValue(item) {
   const n = parseInt(String(item.pos ?? "").trim(), 10);

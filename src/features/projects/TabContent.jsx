@@ -18,7 +18,7 @@ export default function TabContent({
   updateItem,
   deleteItem,
   replaceItem,
-  setBaugruppeCompletion,
+  setProjectCompletion,
 }) {
   if (tab === "tb") {
     return (
@@ -39,10 +39,8 @@ export default function TabContent({
     return (
       <Checks
         items={projectItems}
-        baugruppe={baugruppe}
         project={project}
-        structureRows={structureRows}
-        setBaugruppeCompletion={setBaugruppeCompletion}
+        setProjectCompletion={setProjectCompletion}
       />
     );
   if (tab === "material")
@@ -53,9 +51,7 @@ export default function TabContent({
         replaceItem={replaceItem}
         hasFullModuleAccess={fullModuleAccess}
         project={project}
-        structureRows={structureRows}
-        baugruppe={baugruppe}
-        setBaugruppeCompletion={setBaugruppeCompletion}
+        setProjectCompletion={setProjectCompletion}
       />
     );
   if (tab === "bestellliste")

@@ -22,7 +22,7 @@ export function allocatePositions(items, count) {
   return positions;
 }
 
-export { getMitlaufForBezeichnung as getMitlaufartikel } from "./fasteningRules";
+export { getMitlaufForBezeichnung as getMitlaufartikel } from "./fasteningRules.js";
 
 // Ursprüngliche TB-Positionsnummern mehrerer zusammengefasster Positionen
 // als lesbare Liste: numerisch sortiert, ohne Duplikate, keine technischen

@@ -1,7 +1,14 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { computeAutocompleteListPosition } from "./autocompletePosition";
 
 function isPcViewport() {
   return window.matchMedia("(min-width: 1025px)").matches;
+}
+
+function visibleViewportBounds() {
+  const vv = window.visualViewport;
+  if (vv) return { top: vv.offsetTop, bottom: vv.offsetTop + vv.height };
+  return { top: 0, bottom: window.innerHeight };
 }
 
 const SuggestionAutocomplete = forwardRef(function SuggestionAutocomplete({
@@ -54,27 +61,44 @@ const SuggestionAutocomplete = forwardRef(function SuggestionAutocomplete({
   useEffect(updateTooltip, [value, ellipsis]);
 
   function updateListPosition() {
-    if (!ellipsis || !inputRef.current) {
+    if (!inputRef.current) {
       setListStyle(null);
       return;
     }
-    const r = inputRef.current.getBoundingClientRect();
-    setListStyle({ top: r.bottom + 4, left: r.left, width: r.width });
+    const rect = inputRef.current.getBoundingClientRect();
+    const { top: visibleTop, bottom: visibleBottom } = visibleViewportBounds();
+    setListStyle(
+      computeAutocompleteListPosition({
+        rect,
+        visibleTop,
+        visibleBottom,
+        layoutHeight: window.innerHeight,
+      })
+    );
   }
 
+  // Vorschlagsliste kann am unteren (oder bei wenig Platz oberen)
+  // Bildschirmrand abgeschnitten werden - deshalb für JEDES Feld dieser
+  // Komponente (Bezeichnung/Größe/Ausführung, Formular wie Tabellenzeile)
+  // viewportabhängig positioniert, nicht nur im ellipsis-Modus.
   useEffect(() => {
-    if (!showList || !ellipsis) {
+    if (!showList) {
       setListStyle(null);
       return;
     }
     updateListPosition();
+    const vv = window.visualViewport;
     window.addEventListener("scroll", updateListPosition, true);
     window.addEventListener("resize", updateListPosition);
+    vv?.addEventListener("resize", updateListPosition);
+    vv?.addEventListener("scroll", updateListPosition);
     return () => {
       window.removeEventListener("scroll", updateListPosition, true);
       window.removeEventListener("resize", updateListPosition);
+      vv?.removeEventListener("resize", updateListPosition);
+      vv?.removeEventListener("scroll", updateListPosition);
     };
-  }, [showList, ellipsis, value]);
+  }, [showList, value]);
 
   function accept(suggestion) {
     onChange(suggestion);
@@ -180,8 +204,19 @@ const SuggestionAutocomplete = forwardRef(function SuggestionAutocomplete({
       />
       {showList && (
         <ul
-          className={"autocompleteList" + (ellipsis ? " autocompleteListFixed" : "")}
-          style={listStyle || undefined}
+          className="autocompleteList autocompleteListFixed"
+          style={
+            listStyle
+              ? {
+                  top: listStyle.top,
+                  bottom: listStyle.bottom,
+                  left: listStyle.left,
+                  right: listStyle.right,
+                  width: listStyle.width,
+                  maxHeight: listStyle.maxHeight,
+                }
+              : undefined
+          }
           role="listbox"
         >
           {suggestions.map((s, idx) => (
