@@ -17,7 +17,9 @@ const featuresDir = path.join(rootDir, "src", "features", "fastening");
 const projectsDir = path.join(rootDir, "src", "features", "projects");
 
 function read(...parts) {
-  return readFileSync(path.join(...parts), "utf8");
+  // \r\n -> \n: macht die Regex-Prüfungen unten unabhängig von
+  // core.autocrlf/Checkout-Zeilenenden (Windows-Arbeitsverzeichnis).
+  return readFileSync(path.join(...parts), "utf8").replace(/\r\n/g, "\n");
 }
 
 describe("A/B) Abschlussstatus wird aus dem Projekt gelesen, nicht aus einer Baugruppen-Zeile", () => {
