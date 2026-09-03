@@ -15,7 +15,7 @@ import { ausfuehrungen, groessen } from "./constants";
 import { getDescriptionOptions, rememberDescriptionIfNew } from "./descriptionsRegistry";
 import { articleIdentityKey, collectUniqueHinweise, dedupeHinweisText } from "./fasteningRules";
 import { isActiveItem, isReplacedItem, formatReplacedHint } from "./replacement";
-import { useItemEditor } from "./useItemEditor";
+import { resolveBulkPatch, hasMixedHinweis, affectedBauteilCount } from "./lagerBulkEdit";
 import SearchField from "../../components/SearchField";
 import ProjectCompletionSection from "../../components/ProjectCompletionSection";
 import SuggestionAutocomplete from "./SuggestionAutocomplete";
@@ -57,12 +57,12 @@ function sortLagerRows(rows, sortKey, sortDir) {
   return [...open, ...done];
 }
 
-const EDIT_COLSPAN = 10;
+const EDIT_COLSPAN = 9;
 
 export default function LagerView({
   items,
   updateItem,
-  replaceItem,
+  replaceItemsBulk,
   hasFullModuleAccess,
   project,
   setProjectCompletion,
@@ -76,27 +76,90 @@ export default function LagerView({
   const { sortKey, sortDir, toggleSort, arrow } = useSortableColumns(null);
   const descriptionOptions = getDescriptionOptions();
 
-  // Direktbearbeitung im Lager (Sprint: Lager-Direktbearbeitung) - dieselbe
-  // zentrale Entscheidung wie in TB (useItemEditor), keine zweite
-  // Lager-Sonderlogik. `items` ist hier projektweit, da eine Lagerzeile
-  // Positionen unterschiedlicher Bauteile zusammenfassen kann.
-  const editor = useItemEditor({ items, updateItem, replaceItem });
-  // Welche aggregierte Zeile gerade bearbeitet wird, und - bei mehreren
-  // zusammengefassten Ursprungspositionen - welche davon konkret gewählt
-  // wurde. Bei genau einer Ursprungsposition sofort eindeutig.
+  // Lager-Gesamtänderung (Praxis-Sprint): eine Änderung an einer
+  // aggregierten Lagerzeile gilt für ALLE zusammengefassten
+  // Ursprungspositionen - kein separates "Bearbeiten"-Panel, keine
+  // Ursprungsauswahl mehr. Die fachliche Entscheidung je Position
+  // (direkt ändern vs. ersetzen) kommt zentral aus lagerBulkEdit.js /
+  // replacement.js - keine zweite, abweichende Lagerlogik. Einzelne,
+  // gezielte Änderung EINER Ursprungsposition bleibt weiterhin über TB
+  // möglich.
   const [editingKey, setEditingKey] = useState(null);
-  const [editingSourceId, setEditingSourceId] = useState(null);
+  const [rowDraft, setRowDraft] = useState({});
+  const [pendingBulkEdit, setPendingBulkEdit] = useState(null);
+  const [bulkEditBusy, setBulkEditBusy] = useState(false);
 
   function startEdit(row) {
     setEditingKey(row.key);
-    setEditingSourceId(row.items.length === 1 ? row.items[0].id : null);
+    setRowDraft({});
+    setPendingBulkEdit(null);
   }
 
   function stopEdit() {
     setEditingKey(null);
-    setEditingSourceId(null);
-    editor.cancelReplace();
-    editor.cancelMengeReset();
+    setRowDraft({});
+    setPendingBulkEdit(null);
+  }
+
+  function fieldDisplayValue(row, key) {
+    if (rowDraft[key] !== undefined) return rowDraft[key];
+    if (key === "hinweis") {
+      return hasMixedHinweis(row.items) ? "" : String(row.items[0]?.hinweis || "");
+    }
+    return row[key] || "";
+  }
+
+  function handleFieldChange(key, value) {
+    setRowDraft((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function openBulkConfirm(row, rawPatch) {
+    if (!Object.keys(rawPatch).length) return;
+    const mixedHinweisOverwrite = rawPatch.hinweis !== undefined && hasMixedHinweis(row.items);
+    const { directUpdates, replacements, warnings } = resolveBulkPatch(row.items, rawPatch);
+    setPendingBulkEdit({ row, directUpdates, replacements, warnings, mixedHinweisOverwrite });
+  }
+
+  function commitDraft(row) {
+    const rawPatch = { ...rowDraft };
+    setRowDraft({});
+    openBulkConfirm(row, rawPatch);
+  }
+
+  function handleImportantNoteChange(row, checked) {
+    const draftHinweis = rowDraft.hinweis;
+    const hasAnyHinweis =
+      draftHinweis !== undefined
+        ? String(draftHinweis).trim()
+        : row.items.some((i) => String(i.hinweis || "").trim());
+    if (checked && !hasAnyHinweis) {
+      alert("Bitte zuerst einen Hinweis eintragen.");
+      return;
+    }
+    const rawPatch = { ...rowDraft, important_note: checked };
+    setRowDraft({});
+    openBulkConfirm(row, rawPatch);
+  }
+
+  function cancelBulkEdit() {
+    setPendingBulkEdit(null);
+  }
+
+  async function confirmBulkEdit() {
+    if (!pendingBulkEdit || bulkEditBusy) return;
+    setBulkEditBusy(true);
+    try {
+      await replaceItemsBulk({
+        replacements: pendingBulkEdit.replacements,
+        directUpdates: pendingBulkEdit.directUpdates,
+      });
+      setLastChangedKey(pendingBulkEdit.row.key);
+      setPendingBulkEdit(null);
+    } catch {
+      setPendingBulkEdit(null);
+    } finally {
+      setBulkEditBusy(false);
+    }
   }
 
   const enriched = items.map((i) => {
@@ -234,68 +297,60 @@ export default function LagerView({
         setProjectCompletion={setProjectCompletion}
       />
       <SearchField value={search} onChange={setSearch} />
-      {editor.pendingReplace && (
+      {pendingBulkEdit && (
         <div className="completionConfirm replaceConfirm">
           <div>
             <p>
-              Diese Position wurde bereits{" "}
-              {editor.pendingReplace.current.bereit > 0 && editor.pendingReplace.current.bestellt
-                ? "vorbereitet und bestellt"
-                : editor.pendingReplace.current.bereit > 0
-                ? "vorbereitet"
-                : "bestellt"}
-              .
+              Diese Änderung gilt für alle {pendingBulkEdit.row.items.length} Position
+              {pendingBulkEdit.row.items.length === 1 ? "" : "en"} dieser Lagerzeile (
+              {affectedBauteilCount(pendingBulkEdit.row.items)} Bauteil
+              {affectedBauteilCount(pendingBulkEdit.row.items) === 1 ? "" : "e"}, Gesamtmenge{" "}
+              {pendingBulkEdit.row.menge}).
             </p>
-            {editor.pendingReplace.current.bereit > 0 && (
-              <p>
-                {editor.pendingReplace.current.bereit} × {editor.pendingReplace.current.bezeichnung}{" "}
-                {editor.pendingReplace.current.groesse}
-                {editor.pendingReplace.current.laenge ? `×${editor.pendingReplace.current.laenge}` : ""}{" "}
-                bleiben als vorbereitete Altposition erhalten.
-              </p>
+            {pendingBulkEdit.replacements.length > 0 && (
+              <>
+                <p>
+                  {pendingBulkEdit.replacements.length} davon{" "}
+                  {pendingBulkEdit.replacements.length === 1 ? "ist" : "sind"} bereits vorbereitet
+                  oder bestellt - diese werden durch eine neue Position ersetzt, die bisherige
+                  Menge bleibt als vorbereitete/bestellte Altposition unverändert erhalten:
+                </p>
+                <ul>
+                  {pendingBulkEdit.replacements.map((r) => (
+                    <li key={r.source.id}>
+                      {r.source.bauteil} · Pos. {r.source.pos}
+                      {r.source.bereit > 0 ? ` · ${r.source.bereit} vorbereitet` : ""}
+                      {r.source.bestellt ? " · bestellt" : ""}
+                    </li>
+                  ))}
+                </ul>
+                {pendingBulkEdit.replacements.some((r) => r.source.bestellt) && (
+                  <p className="dangerText">
+                    Mindestens eine bereits bestellte Position ist betroffen. Bestellung ggf.
+                    manuell stornieren oder korrigieren.
+                  </p>
+                )}
+              </>
             )}
-            <p>
-              Die neue Position{" "}
-              {editor.pendingReplace.newFields.bezeichnung ?? editor.pendingReplace.current.bezeichnung}{" "}
-              {editor.pendingReplace.newFields.groesse ?? editor.pendingReplace.current.groesse}
-              {(editor.pendingReplace.newFields.laenge ?? editor.pendingReplace.current.laenge)
-                ? `×${editor.pendingReplace.newFields.laenge ?? editor.pendingReplace.current.laenge}`
-                : ""}{" "}
-              startet im Lager mit 0.
-            </p>
-            {editor.pendingReplace.current.bestellt && (
+            {pendingBulkEdit.mixedHinweisOverwrite && (
               <p className="dangerText">
-                Diese Position wurde bereits bestellt. Bestellung ggf. manuell stornieren oder
-                korrigieren.
+                Die Positionen dieser Zeile hatten bisher unterschiedliche Hinweistexte - der neue
+                Text ersetzt alle.
               </p>
             )}
-            <p>Position wirklich ersetzen?</p>
+            {pendingBulkEdit.warnings.map((w) => (
+              <p key={w} className="hint">
+                {w}
+              </p>
+            ))}
+            <p>Änderung wirklich für die gesamte Lagerzeile übernehmen?</p>
           </div>
           <div className="completionConfirmButtons">
-            <button type="button" className="ghost" onClick={editor.cancelReplace}>
+            <button type="button" className="ghost" onClick={cancelBulkEdit} disabled={bulkEditBusy}>
               Abbrechen
             </button>
-            <button type="button" onClick={editor.confirmReplace}>
-              Ersetzen
-            </button>
-          </div>
-        </div>
-      )}
-      {editor.pendingMengeReset && (
-        <div className="completionConfirm replaceConfirm">
-          <div>
-            <p>
-              Die benötigte Menge wurde erhöht. Der bisherige Bestellstatus deckt die
-              zusätzliche Menge möglicherweise nicht ab.
-            </p>
-            <p>Menge übernehmen und Bestellstatus zurücksetzen?</p>
-          </div>
-          <div className="completionConfirmButtons">
-            <button type="button" className="ghost" onClick={editor.cancelMengeReset}>
-              Abbrechen
-            </button>
-            <button type="button" onClick={editor.confirmMengeReset}>
-              Bestätigen
+            <button type="button" onClick={confirmBulkEdit} disabled={bulkEditBusy}>
+              Übernehmen
             </button>
           </div>
         </div>
@@ -333,7 +388,6 @@ export default function LagerView({
                 <th className="sortableTh colHerkunft" onClick={() => toggleSort("herkunft")}>
                   Herkunft{arrow("herkunft")}
                 </th>
-                {hasFullModuleAccess && <th></th>}
               </tr>
               {sortedRows.map((row) => {
                 const vis = herkunftVisibleParts(row.herkunft, search);
@@ -346,17 +400,24 @@ export default function LagerView({
                 ]
                   .filter(Boolean)
                   .join(" ") || undefined;
-                const source = isEditing
-                  ? row.items.find((i) => i.id === editingSourceId) || null
-                  : null;
+                const editableCell = hasFullModuleAccess ? "lagerEditableCell" : undefined;
+                const openEdit = () => (isEditing ? undefined : startEdit(row));
                 return (
                   <Fragment key={row.key}>
                     <tr className={rowClass} title={isLastChanged ? "Zuletzt geändert" : undefined}>
                       <td>{getRegalPlatz(row)}</td>
-                      <td>{row.bezeichnung}</td>
-                      <td>{row.groesse}</td>
-                      <td>{row.laenge}</td>
-                      <td>{row.oberflaeche}</td>
+                      <td className={editableCell} onClick={hasFullModuleAccess ? openEdit : undefined}>
+                        {row.bezeichnung}
+                      </td>
+                      <td className={editableCell} onClick={hasFullModuleAccess ? openEdit : undefined}>
+                        {row.groesse}
+                      </td>
+                      <td className={editableCell} onClick={hasFullModuleAccess ? openEdit : undefined}>
+                        {row.laenge}
+                      </td>
+                      <td className={editableCell} onClick={hasFullModuleAccess ? openEdit : undefined}>
+                        {row.oberflaeche}
+                      </td>
                       <td>{row.menge}</td>
                       <td>
                         <div className="lagerVorhanden">
@@ -381,7 +442,10 @@ export default function LagerView({
                       <td>
                         <span className={"badge " + (row.rest > 0 ? "red" : "green")}>{row.rest}</span>
                       </td>
-                      <td className="colHerkunft">
+                      <td
+                        className={"colHerkunft" + (editableCell ? " " + editableCell : "")}
+                        onClick={hasFullModuleAccess ? openEdit : undefined}
+                      >
                         <div className="herkunftCell">
                           <div className="herkunftNames">{vis.names.join(", ") || "–"}</div>
                           {vis.showPos && vis.posList.length > 0 && (
@@ -397,156 +461,78 @@ export default function LagerView({
                           ))}
                         </div>
                       </td>
-                      {hasFullModuleAccess && (
-                        <td>
-                          <button
-                            type="button"
-                            className="ghost lagerReplaceBtn"
-                            onClick={() => (isEditing ? stopEdit() : startEdit(row))}
-                          >
-                            {isEditing ? "Fertig" : "Bearbeiten"}
-                          </button>
-                        </td>
-                      )}
                     </tr>
                     {isEditing && (
                       <tr className="lagerEditRow">
                         <td colSpan={EDIT_COLSPAN}>
-                          {!source ? (
-                            <div className="lagerEditForm">
-                              <p className="hint">
-                                Diese Lagerzeile fasst mehrere Ursprungspositionen zusammen. Bitte
-                                genau eine auswählen - eine Änderung darf nie alle gleichzeitig
-                                betreffen.
-                              </p>
-                              <div className="tableWrap">
-                                <table>
-                                  <tbody>
-                                    <tr>
-                                      <th>Baugruppe</th>
-                                      <th>Bauteil</th>
-                                      <th>Pos.</th>
-                                      <th>Menge</th>
-                                      <th>Vorhanden</th>
-                                      <th>Bestellt</th>
-                                      <th></th>
-                                    </tr>
-                                    {row.items.map((i) => (
-                                      <tr key={i.id}>
-                                        <td>{i.baugruppe}</td>
-                                        <td>{i.bauteil}</td>
-                                        <td>{i.pos}</td>
-                                        <td>{i.menge}</td>
-                                        <td>{i.bereit || 0}</td>
-                                        <td>{i.bestellt ? "Ja" : "Nein"}</td>
-                                        <td>
-                                          <button
-                                            type="button"
-                                            onClick={() => setEditingSourceId(i.id)}
-                                          >
-                                            Auswählen
-                                          </button>
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
+                          <div className="lagerEditForm">
+                            <p className="hint">
+                              {row.items.length > 1
+                                ? `Änderung gilt für alle ${row.items.length} zusammengefassten Ursprungspositionen dieser Zeile. Einzeländerung einer einzelnen Position: über TB.`
+                                : "Änderung gilt für diese Position."}{" "}
+                              <button type="button" className="ghost" onClick={stopEdit}>
+                                Schließen
+                              </button>
+                            </p>
+                            <div className="entryGrid">
+                              <SuggestionAutocomplete
+                                value={fieldDisplayValue(row, "bezeichnung")}
+                                onChange={(v) => handleFieldChange("bezeichnung", v)}
+                                onCommit={(v) => {
+                                  rememberDescriptionIfNew(v);
+                                  commitDraft(row);
+                                }}
+                                options={descriptionOptions}
+                                placeholder="Bezeichnung"
+                              />
+                              <input
+                                placeholder="Größe"
+                                value={fieldDisplayValue(row, "groesse")}
+                                onChange={(e) => handleFieldChange("groesse", e.target.value)}
+                                onBlur={() => commitDraft(row)}
+                              />
+                              <input
+                                placeholder="Länge"
+                                value={fieldDisplayValue(row, "laenge")}
+                                onChange={(e) => handleFieldChange("laenge", e.target.value)}
+                                onBlur={() => commitDraft(row)}
+                              />
+                              <SuggestionAutocomplete
+                                value={fieldDisplayValue(row, "oberflaeche")}
+                                onChange={(v) => handleFieldChange("oberflaeche", v)}
+                                onCommit={() => commitDraft(row)}
+                                options={ausfuehrungen}
+                                placeholder="Ausführung"
+                              />
+                              <input
+                                placeholder={
+                                  hasMixedHinweis(row.items) && rowDraft.hinweis === undefined
+                                    ? "Mehrere unterschiedliche Hinweise – neuer Text ersetzt alle"
+                                    : "Hinweis"
+                                }
+                                value={fieldDisplayValue(row, "hinweis")}
+                                onChange={(e) =>
+                                  handleFieldChange("hinweis", dedupeHinweisText(e.target.value))
+                                }
+                                onBlur={() => commitDraft(row)}
+                              />
+                              <label
+                                className="checkboxLine entryImportantNote"
+                                title="Wichtiger Hinweis"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={
+                                    rowDraft.important_note !== undefined
+                                      ? rowDraft.important_note
+                                      : row.items.every((i) => i.important_note)
+                                  }
+                                  onChange={(e) => handleImportantNoteChange(row, e.target.checked)}
+                                />
+                                Wichtig
+                              </label>
                             </div>
-                          ) : (
-                            <div className="lagerEditForm">
-                              {row.items.length > 1 && (
-                                <p className="hint">
-                                  Ursprung: {source.baugruppe} · {source.bauteil} · Pos.{" "}
-                                  {source.pos}{" "}
-                                  <button
-                                    type="button"
-                                    className="ghost"
-                                    onClick={() => setEditingSourceId(null)}
-                                  >
-                                    Andere Position wählen
-                                  </button>
-                                </p>
-                              )}
-                              <div className="entryGrid">
-                                <input
-                                  type="number"
-                                  inputMode="numeric"
-                                  placeholder="Menge"
-                                  value={editor.fieldDisplayValue(source, "menge")}
-                                  onChange={(e) =>
-                                    editor.handleFieldChange(source, "menge", Number(e.target.value))
-                                  }
-                                />
-                                <SuggestionAutocomplete
-                                  value={editor.fieldDisplayValue(source, "bezeichnung")}
-                                  onChange={(v) => editor.handleFieldChange(source, "bezeichnung", v)}
-                                  onCommit={(v) => {
-                                    rememberDescriptionIfNew(v);
-                                    editor.commitFieldDraft(source, "bezeichnung");
-                                  }}
-                                  options={descriptionOptions}
-                                  placeholder="Bezeichnung"
-                                />
-                                <input
-                                  placeholder="Größe"
-                                  value={editor.fieldDisplayValue(source, "groesse")}
-                                  onChange={(e) =>
-                                    editor.handleFieldChange(source, "groesse", e.target.value)
-                                  }
-                                  onBlur={() => editor.commitFieldDraft(source, "groesse")}
-                                />
-                                <input
-                                  placeholder="Länge"
-                                  value={editor.fieldDisplayValue(source, "laenge")}
-                                  onChange={(e) =>
-                                    editor.handleFieldChange(source, "laenge", e.target.value)
-                                  }
-                                  onBlur={() => editor.commitFieldDraft(source, "laenge")}
-                                />
-                                <SuggestionAutocomplete
-                                  value={editor.fieldDisplayValue(source, "oberflaeche")}
-                                  onChange={(v) => editor.handleFieldChange(source, "oberflaeche", v)}
-                                  onCommit={() => editor.commitFieldDraft(source, "oberflaeche")}
-                                  options={ausfuehrungen}
-                                  placeholder="Ausführung"
-                                />
-                                <input
-                                  placeholder="Hinweis"
-                                  value={editor.fieldDisplayValue(source, "hinweis")}
-                                  onChange={(e) =>
-                                    editor.handleFieldChange(source, "hinweis", e.target.value)
-                                  }
-                                  onBlur={(e) => {
-                                    const cleaned = dedupeHinweisText(e.target.value);
-                                    if (cleaned !== String(source.hinweis || "")) {
-                                      editor.patchItem(source.id, { hinweis: cleaned });
-                                    }
-                                  }}
-                                />
-                                <label
-                                  className="checkboxLine entryImportantNote"
-                                  title="Wichtiger Hinweis"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={Boolean(source.important_note)}
-                                    onChange={(e) => {
-                                      if (
-                                        e.target.checked &&
-                                        !String(source.hinweis || "").trim()
-                                      ) {
-                                        alert("Bitte zuerst einen Hinweis eintragen.");
-                                        return;
-                                      }
-                                      updateItem(source.id, { important_note: e.target.checked });
-                                    }}
-                                  />
-                                  Wichtig
-                                </label>
-                              </div>
-                            </div>
-                          )}
+                          </div>
                         </td>
                       </tr>
                     )}

@@ -1,22 +1,17 @@
 import { useState } from "react";
-import { groupBy, baugruppeStatus, projectStatus } from "../../utils/helpers";
-import { parseEinbauort } from "../../utils/structure";
+import { baugruppeStatus, projectStatus } from "../../utils/helpers";
 import { naturalCompare, useSortableColumns, compareWithSizeSecondary } from "../../utils/sorting";
 import { filterBySearch, sizeLengthSearchParts } from "../../utils/textSearch";
 import { distribute, readManualValues, writeManualValues } from "./stock";
+import { herkunftSearchParts, herkunftVisibleParts } from "./herkunft";
+import { collectUniqueHinweise } from "./fasteningRules";
 import {
-  buildHerkunftProject,
-  herkunftSearchParts,
-  herkunftVisibleParts,
-} from "./herkunft";
-import { articleIdentityKey, collectUniqueHinweise } from "./fasteningRules";
-import { isActiveItem } from "./replacement";
+  buildWarenkorbRows,
+  buildMailRowsForProject,
+  aggregateMailRowsAcrossProjects,
+} from "./warenkorbRows";
 import { prepareAndOpenMailRequest } from "../../utils/mailRequest";
 import SearchField from "../../components/SearchField";
-
-function comboKey(item) {
-  return [item.bezeichnung, item.groesse, item.laenge, item.oberflaeche].join("|");
-}
 
 function defaultSort(rows) {
   return [...rows].sort(
@@ -49,60 +44,21 @@ function sortCartRows(rows, sortKey, sortDir) {
   return [...open, ...done];
 }
 
-function buildMailRows(rows) {
-  const open = rows.filter((r) => r.fehlmenge > 0 && !r.bestellt && !r.vollstaendig);
-  const groups = groupBy(open, (r) => comboKey(r));
-  return Object.values(groups).map((arr) => ({
-    bezeichnung: arr[0].bezeichnung,
-    groesse: arr[0].groesse,
-    laenge: arr[0].laenge,
-    oberflaeche: arr[0].oberflaeche,
-    menge: arr.reduce((s, r) => s + Number(r.fehlmenge || 0), 0),
-  }));
-}
-
 const ALL_BESTELLT_CONFIRM = "Alle offenen Positionen dieses Projekts wirklich als bestellt markieren?";
 
-export default function EinkaufView({ items, project, updateItem }) {
+export default function EinkaufView({ items, project, updateItem, allItems, allProjects }) {
   const [mailError, setMailError] = useState(null);
   const [manualValues, setManualValues] = useState(readManualValues);
   const [search, setSearch] = useState("");
   const [pendingAllBestellt, setPendingAllBestellt] = useState(false);
   const { sortKey, sortDir, toggleSort, arrow } = useSortableColumns(null);
+  // "Anfrage per Mail" (Praxis-Sprint: Mehrprojekt-Anfrage): null = Button
+  // noch nicht geklickt, "choose" = Auswahl Ein-/Mehrprojekt, "multi" =
+  // Projektauswahl sichtbar.
+  const [mailStep, setMailStep] = useState(null);
+  const [selectedProjectIds, setSelectedProjectIds] = useState(() => new Set());
 
-  const enriched = items.map((i) => {
-    const parsed = parseEinbauort(i.einbauort, project?.baugruppe);
-    return { ...i, ...parsed };
-  });
-
-  // Ersetzte Altpositionen sind kein aktueller Bestellbedarf mehr (Sprint 2B):
-  // nicht erneut bestellbar, nicht in "Alle Positionen bestellt" einbezogen.
-  const combos = groupBy(enriched.filter(isActiveItem), articleIdentityKey);
-  const rows = Object.values(combos)
-    .map((arr) => {
-      const first = arr[0];
-      const menge = arr.reduce((s, i) => s + Number(i.menge || 0), 0);
-      const geliefert = arr.reduce((s, i) => s + Number(i.bereit || 0), 0);
-      const fehlmenge = Math.max(0, menge - geliefert);
-      const vollstaendig = menge > 0 && fehlmenge === 0;
-      const herkunft = buildHerkunftProject(arr);
-      return {
-        key: `${project.id}|${comboKey(first)}`,
-        bezeichnung: first.bezeichnung,
-        groesse: first.groesse,
-        laenge: first.laenge,
-        oberflaeche: first.oberflaeche,
-        menge,
-        geliefert,
-        fehlmenge,
-        vollstaendig,
-        herkunft,
-        bestellt: arr.every((i) => i.bestellt),
-        important_note: arr.some((i) => i.important_note),
-        items: arr,
-      };
-    })
-    .filter((r) => r.fehlmenge > 0 || r.vollstaendig);
+  const rows = buildWarenkorbRows(items, project);
 
   const filtered = filterBySearch(rows, search, (row) => [
     project?.nr,
@@ -118,7 +74,7 @@ export default function EinkaufView({ items, project, updateItem }) {
     ...sizeLengthSearchParts(row.groesse, row.laenge),
   ]);
   const allRows = sortCartRows(filtered, sortKey, sortDir);
-  const status = baugruppeStatus(enriched);
+  const status = baugruppeStatus(items);
   const pStatus = projectStatus(project, items);
 
   function handleBestelltChange(row, checked) {
@@ -170,18 +126,74 @@ export default function EinkaufView({ items, project, updateItem }) {
     }
   }
 
-  async function handleMailRequest() {
+  // "Anfrage per Mail" (Praxis-Sprint: Mehrprojekt-Anfrage): erst Auswahl
+  // Ein-/Mehrprojekt, dann bei Mehrprojekt die konkrete Projektauswahl.
+  // Bestellrelevanz (offen, nicht bestellt, nicht vollständig) und
+  // Artikelidentität (articleIdentityKey, inkl. Größennormalisierung)
+  // kommen zentral aus warenkorbRows.js - dieselbe Regel für ein und
+  // mehrere Projekte.
+  function startMailFlow() {
     setMailError(null);
-    const mailRows = buildMailRows(allRows);
+    setMailStep("choose");
+  }
+
+  function cancelMailFlow() {
+    setMailStep(null);
+    setSelectedProjectIds(new Set());
+  }
+
+  async function sendSingleProjectMail() {
+    setMailError(null);
+    const mailRows = buildMailRowsForProject(items, project);
     if (!mailRows.length) {
       setMailError("Es sind keine noch anzufragenden Positionen vorhanden.");
+      setMailStep(null);
       return;
     }
     const result = await prepareAndOpenMailRequest({
-      projectName: project.name,
+      projectLabels: [`${project.nr || ""} ${project.name || ""}`.trim()],
       rows: mailRows,
     });
     if (!result.ok) setMailError(result.error);
+    setMailStep(null);
+  }
+
+  function openMultiProjectPicker() {
+    setSelectedProjectIds(new Set([project.id]));
+    setMailStep("multi");
+  }
+
+  function toggleSelectedProject(id) {
+    setSelectedProjectIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function sendMultiProjectMail() {
+    setMailError(null);
+    const selectedProjects = (allProjects || []).filter((p) => selectedProjectIds.has(p.id));
+    if (!selectedProjects.length) {
+      setMailError("Bitte mindestens ein Projekt auswählen.");
+      return;
+    }
+    const rowsPerProject = selectedProjects.map((p) =>
+      buildMailRowsForProject((allItems || []).filter((i) => i.project_id === p.id), p)
+    );
+    const mailRows = aggregateMailRowsAcrossProjects(rowsPerProject);
+    if (!mailRows.length) {
+      setMailError("Es sind keine noch anzufragenden Positionen in den ausgewählten Projekten vorhanden.");
+      return;
+    }
+    const result = await prepareAndOpenMailRequest({
+      projectLabels: selectedProjects.map((p) => `${p.nr || ""} ${p.name || ""}`.trim()),
+      rows: mailRows,
+    });
+    if (!result.ok) setMailError(result.error);
+    setMailStep(null);
+    setSelectedProjectIds(new Set());
   }
 
   return (
@@ -194,12 +206,68 @@ export default function EinkaufView({ items, project, updateItem }) {
           </span>
         </h2>
         <div className="toolbarButtons">
-          <button className="ghost" onClick={handleMailRequest}>
-            Anfrage per Mail
-          </button>
+          {mailStep === null && (
+            <button className="ghost" onClick={startMailFlow}>
+              Anfrage per Mail
+            </button>
+          )}
         </div>
       </div>
       {mailError && <p className="hint dangerText">{mailError}</p>}
+      {mailStep === "choose" && (
+        <div className="completionConfirm">
+          <span>Anfrage für welche Baustelle(n)?</span>
+          <div className="completionConfirmButtons">
+            <button type="button" className="ghost" onClick={cancelMailFlow}>
+              Abbrechen
+            </button>
+            <button type="button" className="ghost" onClick={sendSingleProjectMail}>
+              Nur dieses Projekt
+            </button>
+            <button type="button" onClick={openMultiProjectPicker}>
+              Mehrere Projekte
+            </button>
+          </div>
+        </div>
+      )}
+      {mailStep === "multi" && (
+        <div className="completionConfirm">
+          <div>
+            <p>Projekte für die gemeinsame Anfrage auswählen:</p>
+            <div className="tableWrap">
+              {(allProjects || [])
+                .filter((p) => !p.archived)
+                .map((p) => (
+                  <label key={p.id} className="checkboxLine">
+                    <input
+                      type="checkbox"
+                      checked={selectedProjectIds.has(p.id)}
+                      onChange={() => toggleSelectedProject(p.id)}
+                    />
+                    {p.nr} {p.name}
+                  </label>
+                ))}
+            </div>
+            {selectedProjectIds.size > 0 && (
+              <p className="hint">
+                Enthaltene Projekte:{" "}
+                {(allProjects || [])
+                  .filter((p) => selectedProjectIds.has(p.id))
+                  .map((p) => `${p.nr} ${p.name}`)
+                  .join(", ")}
+              </p>
+            )}
+          </div>
+          <div className="completionConfirmButtons">
+            <button type="button" className="ghost" onClick={cancelMailFlow}>
+              Abbrechen
+            </button>
+            <button type="button" onClick={sendMultiProjectMail}>
+              Anfrage senden
+            </button>
+          </div>
+        </div>
+      )}
       <p className="hint">
         Projektweite Fehlmengen. Vollständig gelieferte Positionen bleiben sichtbar (grün) und können
         wieder deaktiviert werden. Status: {pStatus.label}.

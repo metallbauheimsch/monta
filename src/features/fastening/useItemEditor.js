@@ -1,13 +1,5 @@
 import { useState } from "react";
-import {
-  applyAutoTorqueHinweis,
-  isHvGarnitur,
-  normalizeHvDesignation,
-  normalizeHvOberflaeche,
-  normalizeMetricSize,
-  dedupeHinweisText,
-  getUnavailableFinishHint,
-} from "./fasteningRules";
+import { normalizeMetricSize, resolveIdentityPatch } from "./fasteningRules";
 import {
   isOperationallyTouched,
   isReplacedItem,
@@ -15,12 +7,6 @@ import {
   needsReplacement,
   mengeIncreaseNeedsBestelltReset,
 } from "./replacement";
-
-function prepareFields(bezeichnung, groesse, hinweis) {
-  const bez = normalizeHvDesignation(bezeichnung);
-  const note = dedupeHinweisText(applyAutoTorqueHinweis(hinweis, bez, groesse));
-  return { bezeichnung: bez, hinweis: note };
-}
 
 /**
  * EIN fachliches Änderungsmodell für TB UND Lager (Sprint: Lager-
@@ -53,41 +39,9 @@ export function useItemEditor({ items, updateItem, replaceItem }) {
   // Angehaltene Bestätigung: Menge erhöht, obwohl bereits bestellt.
   const [pendingMengeReset, setPendingMengeReset] = useState(null);
 
-  /** Bisherige HV-/Drehmoment-/Hinweis-Normalisierung, unverändert. */
+  /** HV-/Drehmoment-/Hinweis-Normalisierung - geteilte Regel, siehe fasteningRules.js. */
   function resolvePatchFields(current, patch) {
-    let next = { ...patch };
-    const bezIn = patch.bezeichnung !== undefined ? patch.bezeichnung : current.bezeichnung;
-    const grIn = patch.groesse !== undefined ? patch.groesse : current.groesse;
-    const hinIn = patch.hinweis !== undefined ? patch.hinweis : current.hinweis;
-    const ausfIn = patch.oberflaeche !== undefined ? patch.oberflaeche : current.oberflaeche;
-    if (
-      patch.bezeichnung !== undefined ||
-      patch.groesse !== undefined ||
-      patch.hinweis !== undefined
-    ) {
-      const prepared = prepareFields(bezIn, grIn, hinIn);
-      if (patch.bezeichnung !== undefined || isHvGarnitur(bezIn)) {
-        next.bezeichnung = prepared.bezeichnung;
-      }
-      next.hinweis = prepared.hinweis;
-    }
-    // Bewusste Bearbeitung der Bezeichnung zu HV-Garnitur: Ausführung
-    // fachlich immer feuerverzinkt. Keine rückwirkende Änderung bei
-    // Bearbeitung anderer Felder derselben Position.
-    if (patch.bezeichnung !== undefined && isHvGarnitur(bezIn)) {
-      next.oberflaeche = normalizeHvOberflaeche(bezIn, ausfIn);
-    }
-    if (patch.bezeichnung !== undefined || patch.oberflaeche !== undefined) {
-      const warn = getUnavailableFinishHint(
-        next.bezeichnung !== undefined ? next.bezeichnung : bezIn,
-        ausfIn
-      );
-      if (warn) {
-        // Nur Hinweis - keine automatische Korrektur von Werkstoff/Artikel
-        alert(warn);
-      }
-    }
-    return next;
+    return resolveIdentityPatch(current, patch, { onUnavailableFinish: (hint) => alert(hint) });
   }
 
   function patchItem(id, patch) {

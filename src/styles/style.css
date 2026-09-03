@@ -203,6 +203,7 @@ th{background:#eee;font-weight:700}
    Bearbeitungszeile direkt unter der betroffenen Lagerzeile, gleiche Optik
    wie das bisherige Ersetzen-Formular (entryGrid), jetzt inline statt in
    einem separaten Panel. */
+.lagerEditableCell{cursor:pointer}
 .editingRow{background:#fbf7ea}
 .lagerEditRow>td{background:#fbf7ea;padding:10px}
 .lagerEditForm .entryGrid{margin-top:8px}
@@ -244,8 +245,7 @@ th{background:#eee;font-weight:700}
 .printMaterialTable .colGr{width:8%}
 .printMaterialTable .colLa{width:8%}
 .printMaterialTable .colAus{width:12%}
-.printMaterialTable .colRegal{width:10%}
-.printMaterialTable .colHinweis{width:26%}
+.printMaterialTable .colHinweis{width:36%}
 @media print{
   header,button,.tabs,.hint,.ghost,.noPrint,.searchField,.printStationBanner,.printStationPanel,.offlineBanner{display:none!important}
   main{max-width:none;padding:0}

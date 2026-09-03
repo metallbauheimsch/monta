@@ -387,6 +387,56 @@ export function getUnavailableFinishHint(bezeichnung, oberflaeche) {
   return null;
 }
 
+/**
+ * Vollständige Feld-Normalisierung für eine fachliche Änderung an EINER
+ * Position: HV-Garnitur-Vereinheitlichung, automatischer Drehmoment-
+ * Hinweis, HV-Ausführung, Warnhinweis bei fachlich nicht vorgesehener
+ * Ausführung. Aus useItemEditor.js extrahiert (Praxis-Sprint: Lager-
+ * Gesamtänderung), damit TB (useItemEditor) UND die Lager-
+ * Sammelbearbeitung (mehrere Ursprungspositionen einer aggregierten
+ * Lagerzeile) dieselbe Regel verwenden - keine zweite, abweichende Kopie
+ * der HV-/Drehmoment-Logik. `onUnavailableFinish` (optional) empfängt
+ * einen reinen Warnhinweis statt selbst zu alerten - der Aufrufer
+ * entscheidet, wie er angezeigt wird (Einzel-Edit: sofortiger alert();
+ * Sammel-Edit: gesammelt in der Sicherheitsabfrage statt mehrerer
+ * Alerts).
+ */
+export function resolveIdentityPatch(current, patch, { onUnavailableFinish } = {}) {
+  const next = { ...patch };
+  const bezIn = patch.bezeichnung !== undefined ? patch.bezeichnung : current?.bezeichnung;
+  const grIn = patch.groesse !== undefined ? patch.groesse : current?.groesse;
+  const hinIn = patch.hinweis !== undefined ? patch.hinweis : current?.hinweis;
+  const ausfIn = patch.oberflaeche !== undefined ? patch.oberflaeche : current?.oberflaeche;
+
+  if (
+    patch.bezeichnung !== undefined ||
+    patch.groesse !== undefined ||
+    patch.hinweis !== undefined
+  ) {
+    const bez = normalizeHvDesignation(bezIn);
+    const note = dedupeHinweisText(applyAutoTorqueHinweis(hinIn, bez, grIn));
+    if (patch.bezeichnung !== undefined || isHvGarnitur(bezIn)) {
+      next.bezeichnung = bez;
+    }
+    next.hinweis = note;
+  }
+  // Bewusste Bearbeitung der Bezeichnung zu HV-Garnitur: Ausführung
+  // fachlich immer feuerverzinkt. Keine rückwirkende Änderung bei
+  // Bearbeitung anderer Felder derselben Position.
+  if (patch.bezeichnung !== undefined && isHvGarnitur(bezIn)) {
+    next.oberflaeche = normalizeHvOberflaeche(bezIn, ausfIn);
+  }
+  if (patch.bezeichnung !== undefined || patch.oberflaeche !== undefined) {
+    const hint = getUnavailableFinishHint(
+      next.bezeichnung !== undefined ? next.bezeichnung : bezIn,
+      ausfIn
+    );
+    // Nur Hinweis - keine automatische Korrektur von Werkstoff/Artikel
+    if (hint && onUnavailableFinish) onUnavailableFinish(hint);
+  }
+  return next;
+}
+
 /** Kompakte Herkunft: nur Bauteilnamen, natürlich sortiert, ohne Duplikate. */
 export function compactBauteilNames(herkunft) {
   const names = [

@@ -12,12 +12,15 @@ export default function TabContent({
   bauteilItems,
   baugruppeItems,
   projectItems,
+  allItems,
+  allProjects,
   structureRows,
   fullModuleAccess,
   addItem,
   updateItem,
   deleteItem,
   replaceItem,
+  replaceItemsBulk,
   setProjectCompletion,
 }) {
   if (tab === "tb") {
@@ -48,7 +51,7 @@ export default function TabContent({
       <LagerView
         items={projectItems}
         updateItem={updateItem}
-        replaceItem={replaceItem}
+        replaceItemsBulk={replaceItemsBulk}
         hasFullModuleAccess={fullModuleAccess}
         project={project}
         setProjectCompletion={setProjectCompletion}
@@ -60,6 +63,8 @@ export default function TabContent({
         items={projectItems}
         project={project}
         updateItem={updateItem}
+        allItems={allItems}
+        allProjects={allProjects}
       />
     );
   if (tab === "druck")

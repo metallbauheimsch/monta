@@ -3,7 +3,6 @@ import { sortByPosNumber } from "./technikerUtils";
 import { parseEinbauort, buildProjectStructure } from "../../utils/structure";
 import { naturalCompare, useSortableColumns, compareWithSizeSecondary } from "../../utils/sorting";
 import { filterBySearch, sizeLengthSearchParts } from "../../utils/textSearch";
-import { regalOrderIndex, getRegalPlatz } from "./regalOrder";
 import { groupBy, baugruppeStatus } from "../../utils/helpers";
 import { dedupeHinweisText } from "./fasteningRules";
 import { isActiveItem } from "./replacement";
@@ -19,7 +18,6 @@ function posValue(item) {
 function compareByColumn(a, b, key) {
   if (key === "pos") return posValue(a) - posValue(b);
   if (key === "menge") return (Number(a.menge) || 0) - (Number(b.menge) || 0);
-  if (key === "regal") return regalOrderIndex(a) - regalOrderIndex(b);
   return naturalCompare(a[key], b[key]);
 }
 
@@ -45,7 +43,6 @@ function MontageTableHead({ toggleSort, arrow }) {
         <th className="sortableTh colGr" onClick={() => toggleSort("groesse")}>Größe{arrow("groesse")}</th>
         <th className="sortableTh colLa" onClick={() => toggleSort("laenge")}>Länge{arrow("laenge")}</th>
         <th className="sortableTh colAus" onClick={() => toggleSort("oberflaeche")}>Ausführung{arrow("oberflaeche")}</th>
-        <th className="sortableTh colRegal" onClick={() => toggleSort("regal")}>Regalfach{arrow("regal")}</th>
         <th className="colHinweis">Hinweis</th>
       </tr>
     </thead>
@@ -61,7 +58,6 @@ function MontageRow({ item, idx }) {
       <td className="colGr">{item.groesse}</td>
       <td className="colLa">{item.laenge}</td>
       <td className="colAus">{item.oberflaeche}</td>
-      <td className="colRegal">{getRegalPlatz(item)}</td>
       <td className={"colHinweis" + (item.important_note ? " importantNote" : "")}>
         {dedupeHinweisText(item.hinweis)}
       </td>
@@ -127,7 +123,6 @@ export default function PrintView({ project, baugruppe, items, projectItems, str
           i.laenge,
           i.oberflaeche,
           i.hinweis,
-          getRegalPlatz(i),
           `Pos ${i.pos}`,
           `Pos. ${i.pos}`,
           ...sizeLengthSearchParts(i.groesse, i.laenge),

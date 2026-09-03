@@ -38,6 +38,7 @@ import {
   renameBauteilInRegistry,
 } from "./utils/structure";
 import { defaultTabFor, resolveTabFullAccess, tabForBauteilOpen } from "./utils/tabs";
+import { parseDeepLinkParams, stripDeepLinkParams } from "./utils/deepLink";
 import { renameBaugruppeInManualValues } from "./features/fastening/stock";
 import { nextPosNumber } from "./features/fastening/technikerUtils";
 import {
@@ -123,6 +124,31 @@ function App() {
   );
 
   const visibleProjects = showArchived ? projects : projects.filter((p) => !p.archived);
+
+  // Deep-Link aus internen Workflow-Mails (Praxis-Sprint): ?project=&tab=
+  // öffnet nach Login direkt Projekt + Reiter. Läuft NACH den bestehenden
+  // Auth-Gates (isActive erforderlich) - keine Auth-Umgehung, keine
+  // Änderung an AuthContext.jsx. Genau einmal pro Laden; ungültige/
+  // fehlende Parameter oder ein unbekanntes/nicht zugängliches Projekt
+  // führen sicher zur normalen App (kein Absturz, kein Fehler).
+  const deepLinkHandledRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkHandledRef.current) return;
+    if (!isActive || loading) return;
+    const parsed = parseDeepLinkParams(window.location.search);
+    if (parsed) {
+      const targetProject = projects.find((p) => p.id === parsed.projectId);
+      if (targetProject) {
+        setProjectId(targetProject.id);
+        setSelectedBaugruppe(null);
+        setSelectedBauteil(null);
+        setTab(parsed.tab);
+        setView("projectWide");
+      }
+      stripDeepLinkParams();
+    }
+    deepLinkHandledRef.current = true;
+  }, [isActive, loading, projects]);
 
   useWorkflowWatchers({
     enabled: Boolean(isActive && supabaseConfigured),
@@ -333,6 +359,22 @@ function App() {
     setSelectedBaugruppe(null);
     setSelectedBauteil(null);
     setView("projects");
+  }
+
+  // Zentraler Zurück-Übergang je View (Praxis-Sprint: Tablet-Navigation) -
+  // spiegelt exakt dieselben Ziele wie die bestehenden, sichtbaren
+  // Zurück-Buttons (ProjectDetail/ProjectView/ProjectWideView/
+  // UserAdminView/NewProjectForm). Zusätzlicher Aufrufer für die
+  // Randwisch-Geste (Shell/useSwipeBack) - keine zweite Navigations-
+  // Architektur, kein history.back() (MONTA hat keinen Router).
+  function goBack() {
+    if (view === "projectDetail") {
+      setView("projects");
+    } else if (view === "project" || view === "projectWide") {
+      setView("projectDetail");
+    } else if (view === "adminUsers" || view === "newProject") {
+      setView("projects");
+    }
   }
 
   useEffect(() => {
@@ -966,6 +1008,73 @@ function App() {
     return newItem;
   }
 
+  /**
+   * Lager-Gesamtänderung (Praxis-Sprint): eine Änderung an einer
+   * aggregierten Lagerzeile gilt für ALLE zusammengefassten
+   * Ursprungspositionen. `replacements`/`directUpdates` kommen bereits
+   * fertig aufgelöst aus resolveBulkPatch() (lagerBulkEdit.js) - diese
+   * Funktion serialisiert sie nur für die atomare RPC
+   * `replace_material_items_bulk`
+   * (supabase_patch_lager_bulk_edit.sql): sperrt alle betroffenen Zeilen
+   * und führt Ersetzung + Direktänderung in EINER Transaktion aus - kein
+   * Teilerfolg bei einem Fehler.
+   */
+  async function replaceItemsBulk({ replacements, directUpdates }) {
+    if (!supabase) {
+      alert("Die Lager-Gesamtänderung ist ohne Supabase-Verbindung nicht möglich.");
+      throw new Error("Supabase nicht konfiguriert.");
+    }
+    const p_replacements = (replacements || []).map((r) => ({
+      source_id: r.source.id,
+      bezeichnung: r.fields.bezeichnung,
+      groesse: r.fields.groesse,
+      laenge: r.fields.laenge,
+      oberflaeche: r.fields.oberflaeche,
+      hinweis: r.fields.hinweis,
+      important_note: r.fields.important_note,
+      menge: r.fields.menge,
+    }));
+    const p_direct_updates = (directUpdates || []).map((u) => ({
+      id: u.id,
+      bezeichnung: u.fields.bezeichnung,
+      groesse: u.fields.groesse,
+      laenge: u.fields.laenge,
+      oberflaeche: u.fields.oberflaeche,
+      hinweis: u.fields.hinweis,
+      important_note: u.fields.important_note,
+    }));
+
+    const { data: rows, error } = await supabase.rpc("replace_material_items_bulk", {
+      p_replacements,
+      p_direct_updates,
+    });
+    if (error) {
+      console.error("MONTA: Lager-Gesamtänderung (RPC) fehlgeschlagen.", error);
+      const missingFunction =
+        error.code === "PGRST202" ||
+        error.code === "42883" ||
+        (/replace_material_items_bulk/i.test(error.message || "") &&
+          /(does not exist|not find|schema cache)/i.test(error.message || ""));
+      alert(
+        missingFunction
+          ? "Diese Funktion benötigt einen noch nicht angewendeten Datenbank-Patch " +
+              "(supabase_patch_lager_bulk_edit.sql). Bitte den Administrator informieren."
+          : `Gesamtänderung konnte nicht abgeschlossen werden: ${error.message || "unbekannter Fehler"}. ` +
+              "Es wurde nichts geändert."
+      );
+      throw error;
+    }
+    const returned = rows || [];
+    setItems((prev) => {
+      const byId = new Map(returned.map((r) => [r.id, r]));
+      const merged = prev.map((i) => (byId.has(i.id) ? byId.get(i.id) : i));
+      const existingIds = new Set(prev.map((i) => i.id));
+      const newOnes = returned.filter((r) => !existingIds.has(r.id));
+      return [...merged, ...newOnes];
+    });
+    return returned;
+  }
+
   async function deleteItem(id) {
     // Löschschutz (Sprint 2C): eine Position, auf die eine ältere Position
     // über ersetzt_durch verweist, darf nicht gelöscht werden - sonst
@@ -1030,6 +1139,7 @@ function App() {
     showAdmin: Boolean(isAdmin),
     onOpenAdmin: () => setView("adminUsers"),
     onLogout: handleLogout,
+    onSwipeBack: goBack,
   };
 
   function handleOpenPrintJob({ projectId: pid, baugruppe: bg }) {
@@ -1133,6 +1243,7 @@ function App() {
           baugruppeItems={baugruppeItems}
           projectItems={projectItems}
           allItems={items}
+          allProjects={projects}
           structureRows={structureRows}
           backToDetail={() => setView("projectDetail")}
           fullModuleAccess={Boolean(tabFullAccess)}
@@ -1142,6 +1253,7 @@ function App() {
           updateItem={updateItem}
           deleteItem={deleteItem}
           replaceItem={replaceItem}
+          replaceItemsBulk={replaceItemsBulk}
           setProjectCompletion={setProjectCompletion}
         />
       )}
@@ -1150,6 +1262,8 @@ function App() {
         <ProjectWideView
           project={project}
           projectItems={projectItems}
+          allItems={items}
+          allProjects={projects}
           structureRows={structureRows}
           backToDetail={() => setView("projectDetail")}
           fullModuleAccess={Boolean(tabFullAccess)}
@@ -1157,6 +1271,7 @@ function App() {
           setTab={setTab}
           updateItem={updateItem}
           replaceItem={replaceItem}
+          replaceItemsBulk={replaceItemsBulk}
           setProjectCompletion={setProjectCompletion}
         />
       )}

@@ -1,12 +1,12 @@
-import { groupBy } from "../../utils/helpers";
-import { naturalCompare } from "../../utils/sorting";
-import { uniqueSortedPositions } from "./technikerUtils";
+import { groupBy } from "../../utils/helpers.js";
+import { naturalCompare } from "../../utils/sorting.js";
+import { uniqueSortedPositions } from "./technikerUtils.js";
 import {
   compactBauteilNames,
   matchingPositionsForSearch,
   searchWantsPositions,
   displayHinweisWithoutAutoMark,
-} from "./fasteningRules";
+} from "./fasteningRules.js";
 
 export function buildHerkunft(baugruppe, items) {
   const byBauteil = groupBy(items, (i) => i.bauteil);

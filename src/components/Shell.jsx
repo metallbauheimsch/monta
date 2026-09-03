@@ -1,11 +1,15 @@
+import { useSwipeBack } from "../utils/swipeBack";
+
 export default function Shell({
   children,
   userLabel,
   showAdmin,
   onOpenAdmin,
   onLogout,
+  onSwipeBack,
   compact = false,
 }) {
+  const swipeHandlers = useSwipeBack(onSwipeBack);
   return (
     <>
       <header className={compact ? "headerAuth" : undefined}>
@@ -30,7 +34,7 @@ export default function Shell({
           </div>
         )}
       </header>
-      <main>{children}</main>
+      <main {...swipeHandlers}>{children}</main>
     </>
   );
 }

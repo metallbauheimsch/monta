@@ -12,6 +12,8 @@ import TabContent from "./TabContent";
 export default function ProjectWideView({
   project,
   projectItems,
+  allItems,
+  allProjects,
   structureRows,
   backToDetail,
   fullModuleAccess,
@@ -19,6 +21,7 @@ export default function ProjectWideView({
   setTab,
   updateItem,
   replaceItem,
+  replaceItemsBulk,
   setProjectCompletion,
 }) {
   const visibleTabs = projectWideTabsFor();
@@ -47,10 +50,13 @@ export default function ProjectWideView({
         bauteilItems={[]}
         baugruppeItems={projectItems}
         projectItems={projectItems}
+        allItems={allItems}
+        allProjects={allProjects}
         structureRows={structureRows}
         fullModuleAccess={fullModuleAccess}
         updateItem={updateItem}
         replaceItem={replaceItem}
+        replaceItemsBulk={replaceItemsBulk}
         setProjectCompletion={setProjectCompletion}
       />
     </>

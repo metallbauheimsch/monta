@@ -36,7 +36,12 @@ where status = 'processing'
 supabase secrets set MAIL_PROVIDER=resend
 supabase secrets set MAIL_API_KEY=re_xxxxxxxx
 supabase secrets set MAIL_FROM="MONTA <noreply@ihre-domain.de>"
+supabase secrets set APP_URL="https://<vercel-domain>"
 supabase functions deploy workflow-notifications
 ```
 
-Niemals Service-Role oder API-Keys in die Web-App legen.
+`APP_URL` ist optional (Praxis-Sprint: Deep-Link in Workflow-Mails). Ist es
+gesetzt, hängt jede Mail eine Zeile "Direkt zu MONTA: <APP_URL>/?project=<id>&tab=<reiter>"
+an - der Empfänger landet nach dem Login direkt im passenden Projekt/Reiter.
+Ohne gesetztes `APP_URL` bleibt der Mailtext unverändert (kein erratener
+Link). Niemals Service-Role oder API-Keys in die Web-App legen.

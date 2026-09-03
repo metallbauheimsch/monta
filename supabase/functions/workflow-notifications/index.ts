@@ -39,6 +39,18 @@ const RECIPIENT_BY_TYPE = {
   all_items_ordered: "sautter@metallbau-heimsch.de",
 };
 
+// Deep-Link-Ziel je Ereignistyp (Praxis-Sprint): der jeweils nächste
+// fachliche Arbeitsschritt aus Sicht des Empfängers, siehe Mailtexte
+// unten. Nur projektweite Reiter (aus utils/tabs.js PROJECT_WIDE_TAB_ORDER,
+// hier dupliziert da Deno-Funktionen ohne Frontend-Build laufen) - "tb"
+// benötigt zusätzlich eine Baugruppe/ein Bauteil und ist deshalb kein
+// gültiges Mail-Deep-Link-Ziel.
+const DEEP_LINK_TAB_BY_TYPE = {
+  tb_pruefung_completed: "material", // TB/Prüfung fertig -> Lager vorbereiten
+  lager_completed: "bestellliste", // "wir müssen einkaufen"
+  all_items_ordered: "material", // "Viel Spaß beim Einräumen"
+};
+
 function json(status, body) {
   return new Response(JSON.stringify(body), {
     status,
@@ -75,9 +87,21 @@ async function sendMail(opts) {
   throw new Error(`Unbekannter MAIL_PROVIDER.`);
 }
 
-function buildMail(eventType, payload, _baugruppeField) {
+// Deep-Link-Zeile (Praxis-Sprint): nur wenn APP_URL als Secret gesetzt ist -
+// sonst bleibt der bisherige Mailtext unverändert (kein Absturz, kein
+// erratener Link). Keine bestehenden Mailtexte werden inhaltlich verändert,
+// die Zeile wird nur angehängt.
+function deepLinkLine(eventType, projectId) {
+  const appUrl = Deno.env.get("APP_URL");
+  const tab = DEEP_LINK_TAB_BY_TYPE[eventType];
+  if (!appUrl || !projectId || !tab) return "";
+  return `\nDirekt zu MONTA: ${appUrl.replace(/\/$/, "")}/?project=${projectId}&tab=${tab}\n`;
+}
+
+function buildMail(eventType, payload, _baugruppeField, projectId) {
   const p = payload || {};
   const projectName = p.project_name || "Projekt";
+  const link = deepLinkLine(eventType, projectId);
 
   if (eventType === "tb_pruefung_completed") {
     return {
@@ -85,8 +109,9 @@ function buildMail(eventType, payload, _baugruppeField) {
       text:
         `Mahlzeit Tom,\n\n` +
         `du bist an der Reihe! Die technische Bearbeitung und Prüfung für das Projekt „${projectName}“ ist abgeschlossen.\n\n` +
-        `Lass den Paternoster wackeln. 😄\n\n` +
-        `MONTA\n`,
+        `Lass den Paternoster wackeln. 😄\n` +
+        link +
+        `\nMONTA\n`,
     };
   }
 
@@ -96,8 +121,9 @@ function buildMail(eventType, payload, _baugruppeField) {
       text:
         `Servus Moritz,\n\n` +
         `du bist an der Reihe! Das Lager für das Projekt „${projectName}“ ist geprüft.\n\n` +
-        `Ich habe das Lager ausgeräumt – wir müssen einkaufen. 😄\n\n` +
-        `MONTA\n`,
+        `Ich habe das Lager ausgeräumt – wir müssen einkaufen. 😄\n` +
+        link +
+        `\nMONTA\n`,
     };
   }
 
@@ -107,8 +133,9 @@ function buildMail(eventType, payload, _baugruppeField) {
       text:
         `Servus Tom,\n\n` +
         `ich war mal wieder shoppen! Die Bestellung für das Projekt „${projectName}“ ist raus.\n\n` +
-        `Viel Spaß beim Einräumen. 😄\n\n` +
-        `MONTA\n`,
+        `Viel Spaß beim Einräumen. 😄\n` +
+        link +
+        `\nMONTA\n`,
     };
   }
 
@@ -274,7 +301,7 @@ Deno.serve(async (req) => {
         continue;
       }
       try {
-        const mail = buildMail(ev.event_type, ev.payload, ev.baugruppe);
+        const mail = buildMail(ev.event_type, ev.payload, ev.baugruppe, ev.project_id);
         await sendMail({ to: recipient, subject: mail.subject, text: mail.text });
         await markSent(admin, id);
         results.push({ id, ok: true });

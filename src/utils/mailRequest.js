@@ -59,24 +59,44 @@ export function buildMaterialTableHtml(rows) {
   );
 }
 
-function buildMailBody({ tableText, includeTable }) {
-  const lines = [
-    "Guten Tag,",
-    "",
-    "bitte senden Sie uns ein Angebot für folgende Positionen.",
-    "",
-  ];
+// Formaler Anfragetext an den Schraubenhändler (Praxis-Sprint) - exakt
+// vorgegeben, gilt einheitlich für Ein- UND Mehrprojekt-Anfrage (kein
+// zweiter Text, keine internen MONTA-Formulierungen in der Lieferantenmail).
+export function buildMailBody({ tableText, includeTable }) {
+  const lines = ["Sehr geehrte Damen und Herren,", "", "Bitte bieten Sie mir an", ""];
   if (includeTable && tableText) {
     lines.push(tableText, "");
   } else {
     lines.push("(Tabelle bitte hier einfügen – sie wurde in die Zwischenablage kopiert.)", "");
   }
-  lines.push("Mit freundlichen Grüßen", "Metallbau Heimsch");
+  lines.push(
+    "Mit freundlichen Grüßen",
+    "",
+    "Moritz Stöhr",
+    "Geschäftsführer",
+    "metallbau HEIMSCH GmbH",
+    "Julius-Hölder-Straße 10",
+    "70597 Stuttgart",
+    "Fon +49 711 755171",
+    "Amtsgericht Stuttgart HRB 225939",
+    "Ust. ID DE 814207772",
+    "Geschäftsführer:",
+    "B.Eng. Moritz Stöhr",
+    "info@metallbau-heimsch.de",
+    "www.metallbau-heimsch.de"
+  );
   return lines.join("\n");
 }
 
-export function buildMailtoRequest({ projectName, rows, includeTable = true }) {
-  const subject = `Anfrage BV ${projectName || ""}`.trim();
+/** Betreff für eine oder mehrere Baustellen (Praxis-Sprint: Mehrprojekt-Anfrage). */
+export function buildMailSubject(projectLabels) {
+  const labels = (Array.isArray(projectLabels) ? projectLabels : [projectLabels]).filter(Boolean);
+  if (labels.length <= 1) return `Anfrage BV ${labels[0] || ""}`.trim();
+  return `Anfrage BV ${labels.join(", ")}`.trim();
+}
+
+export function buildMailtoRequest({ projectName, projectLabels, rows, includeTable = true }) {
+  const subject = buildMailSubject(projectLabels || projectName);
   const table = buildMaterialTableText(rows);
   const body = buildMailBody({ tableText: table, includeTable });
   const url = `mailto:${RECIPIENT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -125,19 +145,23 @@ export function openMailClient(url) {
 }
 
 // 1) HTML-Tabelle in Zwischenablage  2) Klartext-Fallback  3) Mail öffnen
-export async function prepareAndOpenMailRequest({ projectName, rows }) {
+// `projectLabels` (Praxis-Sprint: Mehrprojekt-Anfrage) ist optional - ohne
+// Angabe verhält sich der Betreff wie bisher anhand von `projectName`.
+export async function prepareAndOpenMailRequest({ projectName, projectLabels, rows }) {
   const html = buildMaterialTableHtml(rows);
   const plainTable = buildMaterialTableText(rows);
   const copied = await copyTableToClipboard(html, plainTable);
 
   let { url, tooLong } = buildMailtoRequest({
     projectName,
+    projectLabels,
     rows,
     includeTable: true,
   });
   if (tooLong) {
     ({ url, tooLong } = buildMailtoRequest({
       projectName,
+      projectLabels,
       rows,
       includeTable: false,
     }));
