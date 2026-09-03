@@ -70,6 +70,46 @@ describe("AA) bereits bestellte/vollständige Mengen nicht in der Mailanfrage", 
   });
 });
 
+describe("GPT-Code-Review-Korrektur: Lieferantenanfrage verwendet die offene Fehlmenge, nicht die Gesamtmenge", () => {
+  it("Test A: Einzelprojekt, teilweise vorhanden (Gesamt 10, bereit 4) -> Anfrage 6", () => {
+    const rows = buildMailRowsForProject([item({ menge: 10, bereit: 4 })], project());
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].menge, 6);
+  });
+
+  it("Test B: mehrere Projekte, teilweise vorhanden -> Anfrage-Mengen summiert (6 + 10 = 16, NICHT 25)", () => {
+    const rowsA = buildMailRowsForProject(
+      [item({ id: "a", project_id: "pA", menge: 10, bereit: 4 })],
+      project({ id: "pA" })
+    );
+    const rowsB = buildMailRowsForProject(
+      [item({ id: "b", project_id: "pB", menge: 15, bereit: 5 })],
+      project({ id: "pB" })
+    );
+    const combined = aggregateMailRowsAcrossProjects([rowsA, rowsB]);
+    assert.equal(combined.length, 1);
+    assert.equal(combined[0].menge, 16);
+  });
+
+  it("Test C: vollständig vorhanden (Gesamt 10, bereit 10) -> keine Mailzeile", () => {
+    const rows = buildMailRowsForProject([item({ menge: 10, bereit: 10 })], project());
+    assert.equal(rows.length, 0);
+  });
+
+  it("Test D: bereits bestellt -> keine Mailzeile, auch bei offener Fehlmenge", () => {
+    const rows = buildMailRowsForProject([item({ menge: 10, bereit: 4, bestellt: true })], project());
+    assert.equal(rows.length, 0);
+  });
+
+  it("Test E: ersetzte Altposition -> keine Mailzeile", () => {
+    const rows = buildMailRowsForProject(
+      [item({ menge: 10, bereit: 4, ersetzt_durch: "new-id" })],
+      project()
+    );
+    assert.equal(rows.length, 0);
+  });
+});
+
 describe("W/X) Mehrprojekt-Aggregation: identische Artikel werden summiert, Größennormalisierung greift", () => {
   it("gleicher Artikel in zwei Projekten -> eine summierte Zeile", () => {
     const rowsA = buildMailRowsForProject([item({ id: "a", project_id: "pA", menge: 10 })], project({ id: "pA" }));

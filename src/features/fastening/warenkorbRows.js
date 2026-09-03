@@ -54,11 +54,24 @@ export function buildWarenkorbRows(items, project) {
  * Fehlmenge, noch nicht bestellt, nicht vollständig geliefert - dieselbe
  * Regel wie bisher in EinkaufView.buildMailRows, jetzt auch für die
  * Mehrprojekt-Anfrage wiederverwendet.
+ *
+ * WICHTIG (GPT-Code-Review-Korrektur): die angefragte Menge ist IMMER die
+ * noch offene Fehlmenge, NICHT die ursprüngliche Gesamtmenge - bereits
+ * vorhandenes/geliefertes Material darf nicht erneut angefragt werden
+ * (bestehende Fachregel von main, unverändert). Die zurückgegebenen
+ * Zeilen tragen deshalb bewusst nur die für die Anfrage nötigen Felder
+ * (`menge` = Fehlmenge) statt der vollständigen Warenkorb-Zeile.
  */
 export function buildMailRowsForProject(items, project) {
-  return buildWarenkorbRows(items, project).filter(
-    (r) => r.fehlmenge > 0 && !r.bestellt && !r.vollstaendig
-  );
+  return buildWarenkorbRows(items, project)
+    .filter((r) => r.fehlmenge > 0 && !r.bestellt && !r.vollstaendig)
+    .map((r) => ({
+      bezeichnung: r.bezeichnung,
+      groesse: r.groesse,
+      laenge: r.laenge,
+      oberflaeche: r.oberflaeche,
+      menge: r.fehlmenge,
+    }));
 }
 
 /**
