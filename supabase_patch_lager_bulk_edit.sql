@@ -33,6 +33,31 @@
 -- Die bestehende Funktion replace_material_item (Einzelposition, TB)
 -- bleibt unverändert bestehen und wird von dieser neuen Funktion nicht
 -- ersetzt oder verändert.
+--
+-- GPT-Code-Review-Korrektur 2 (Datenintegrität, gegenüber der ersten
+-- Fassung ergänzt):
+--   1) Doppelte/widersprüchliche IDs im Payload werden VOR jedem
+--      Schreibvorgang abgewiesen (dieselbe source_id mehrfach in
+--      p_replacements, dieselbe id mehrfach in p_direct_updates, oder
+--      dieselbe Position gleichzeitig in beiden Listen) - ein
+--      fehlerhafter Client könnte sonst dieselbe Altposition mehrfach
+--      ersetzen oder eine gerade ersetzte Position zusätzlich direkt
+--      überschreiben.
+--   2) Race-Schutz für p_direct_updates: die Entscheidung "direkt ändern
+--      statt ersetzen" trifft der Client anhand des beim Laden bekannten
+--      Zustands (bereit/bestellt). Zwischen Laden und Bestätigen kann ein
+--      anderes Gerät die Position inzwischen vorbereitet oder bestellt
+--      haben. Nach dem Sperren ALLER betroffenen Zeilen (for update) wird
+--      deshalb für jede geplante Direktänderung der TATSÄCHLICH aktuelle
+--      Zustand geprüft: enthält der Patch eine fachliche
+--      Identitätsänderung (Bezeichnung/Größe/Länge/Ausführung - nur
+--      Felder, die im Payload wirklich vorkommen, ein fehlendes Feld ist
+--      keine Änderung) UND ist die Position inzwischen operativ bearbeitet
+--      (bereit>0 oder bestellt), bricht die GESAMTE Transaktion ab statt
+--      die Position stillschweigend direkt zu überschreiben oder
+--      automatisch umzuklassifizieren. Reine Hinweis-/Wichtig-Änderungen
+--      (keine Identitätsfelder im Payload) bleiben davon unberührt und
+--      weiterhin direkt möglich.
 
 create or replace function public.replace_material_items_bulk(
   p_replacements jsonb,
@@ -50,8 +75,38 @@ declare
   v_next_pos int;
   v_repl jsonb;
   v_upd jsonb;
+  v_repl_ids uuid[];
+  v_upd_ids uuid[];
   v_all_ids uuid[];
 begin
+  select array(
+    select (r->>'source_id')::uuid from jsonb_array_elements(coalesce(p_replacements, '[]'::jsonb)) r
+  ) into v_repl_ids;
+  select array(
+    select (u->>'id')::uuid from jsonb_array_elements(coalesce(p_direct_updates, '[]'::jsonb)) u
+  ) into v_upd_ids;
+
+  -- Doppelte/widersprüchliche IDs abweisen (Korrektur 2, Punkt 1) - vor
+  -- jedem Sperren/Schreiben, damit bei einem fehlerhaften Payload
+  -- garantiert nichts verändert wird.
+  if v_repl_ids is not null and array_length(v_repl_ids, 1) is not null
+     and (select count(*) from unnest(v_repl_ids)) <> (select count(distinct x) from unnest(v_repl_ids) as x)
+  then
+    raise exception 'Dieselbe Ursprungsposition ist mehrfach in der Ersetzungsliste enthalten.';
+  end if;
+
+  if v_upd_ids is not null and array_length(v_upd_ids, 1) is not null
+     and (select count(*) from unnest(v_upd_ids)) <> (select count(distinct x) from unnest(v_upd_ids) as x)
+  then
+    raise exception 'Dieselbe Position ist mehrfach in der Direktänderungsliste enthalten.';
+  end if;
+
+  if v_repl_ids is not null and v_upd_ids is not null
+     and exists (select 1 from unnest(v_repl_ids) as r_id where r_id = any(v_upd_ids))
+  then
+    raise exception 'Eine Position darf nicht gleichzeitig ersetzt und direkt geändert werden.';
+  end if;
+
   -- Alle betroffenen Ursprungs-IDs (Ersetzung + Direktänderung) einsammeln,
   -- in stabiler Reihenfolge sperren - verhindert Deadlocks bei zwei
   -- gleichzeitigen Gesamtänderungen, die sich teilweise überschneidende
@@ -60,9 +115,7 @@ begin
   -- Änderungen fallen dadurch atomar auf: siehe ersetzt_durch-Prüfung
   -- unten).
   select array(
-    select (r->>'source_id')::uuid from jsonb_array_elements(coalesce(p_replacements, '[]'::jsonb)) r
-    union
-    select (u->>'id')::uuid from jsonb_array_elements(coalesce(p_direct_updates, '[]'::jsonb)) u
+    select distinct x from unnest(coalesce(v_repl_ids, '{}'::uuid[]) || coalesce(v_upd_ids, '{}'::uuid[])) as x
   ) into v_all_ids;
 
   if v_all_ids is null or array_length(v_all_ids, 1) is null then
@@ -87,6 +140,25 @@ begin
 
   -- Projektweite Sperre für die Positionsvergabe (wie replace_material_item).
   perform 1 from public.projects where id = v_project_id for update;
+
+  -- Race-Schutz für Direktänderungen (Korrektur 2, Punkt 2): erst NACH dem
+  -- Sperren aller Zeilen und VOR jedem Schreibvorgang prüfen, ob sich der
+  -- operative Zustand seit dem Laden im Client geändert hat. Ein fehlendes
+  -- Feld im Payload gilt nicht als Änderung (jsonb "?"-Operator prüft
+  -- Schlüsselvorhandensein); "is distinct from" vergleicht NULL-sicher.
+  for v_upd in select * from jsonb_array_elements(coalesce(p_direct_updates, '[]'::jsonb))
+  loop
+    select * into v_source from public.material_items where id = (v_upd->>'id')::uuid;
+
+    if (coalesce(v_source.bereit, 0) > 0 or v_source.bestellt) and (
+      (v_upd ? 'bezeichnung' and (v_upd->>'bezeichnung') is distinct from v_source.bezeichnung) or
+      (v_upd ? 'groesse'     and (v_upd->>'groesse')     is distinct from v_source.groesse) or
+      (v_upd ? 'laenge'      and (v_upd->>'laenge')      is distinct from v_source.laenge) or
+      (v_upd ? 'oberflaeche' and (v_upd->>'oberflaeche') is distinct from v_source.oberflaeche)
+    ) then
+      raise exception 'Position wurde inzwischen vorbereitet oder bestellt. Bitte Lagerzeile neu laden und Änderung erneut durchführen.';
+    end if;
+  end loop;
 
   -- Ersetzungen: operativ bereits bearbeitete Positionen.
   for v_repl in select * from jsonb_array_elements(coalesce(p_replacements, '[]'::jsonb))
