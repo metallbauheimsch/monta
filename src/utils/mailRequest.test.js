@@ -162,6 +162,63 @@ describe("keine internen MONTA-Systemhinweise in der Lieferantentabelle", () => 
   });
 });
 
+describe("Praxis-Sprint (Fehlerkorrektur): Zwischenablage enthält NUR die Tabelle, keine doppelte Anrede/Signatur", () => {
+  const html = buildMaterialTableHtml(rows());
+  const text = buildMaterialTableText(rows());
+
+  it("A) Tabellen-HTML enthält weiterhin eine echte <table>", () => {
+    for (const tag of ["<table", "<thead>", "<tbody>", "<tr>", "<th ", "<td "]) {
+      assert.ok(html.includes(tag), `fehlt: ${tag}`);
+    }
+  });
+
+  it("B) Tabellen-HTML verwendet Calibri 12pt", () => {
+    assert.match(html, /Calibri/);
+    assert.match(html, /font-size:12pt/);
+  });
+
+  it("C) enthält NICHT 'Sehr geehrte Damen und Herren'", () => {
+    assert.equal(html.includes("Sehr geehrte Damen und Herren"), false);
+    assert.equal(text.includes("Sehr geehrte Damen und Herren"), false);
+  });
+
+  it("D) enthält NICHT 'Bitte bieten Sie mir an'", () => {
+    assert.equal(html.includes("Bitte bieten Sie mir an"), false);
+    assert.equal(text.includes("Bitte bieten Sie mir an"), false);
+  });
+
+  it("E) enthält NICHT 'Mit freundlichen Grüßen'", () => {
+    assert.equal(html.includes("Mit freundlichen Grüßen"), false);
+    assert.equal(text.includes("Mit freundlichen Grüßen"), false);
+  });
+
+  it("F) enthält NICHT die bisherige Signatur (Firma/Adresse/Telefon/Amtsgericht)", () => {
+    for (const forbidden of [
+      "metallbau HEIMSCH GmbH",
+      "Julius-Hölder-Straße",
+      "Fon",
+      "Amtsgericht Stuttgart",
+      "Moritz Stöhr",
+    ]) {
+      assert.equal(html.includes(forbidden), false, `HTML enthält Signaturbestandteil: ${forbidden}`);
+      assert.equal(text.includes(forbidden), false, `Text enthält Signaturbestandteil: ${forbidden}`);
+    }
+  });
+
+  it("G) Klartext-Fallback enthält ausschließlich Tabelleninhalte", () => {
+    assert.match(text, /Bezeichnung/);
+    assert.match(text, /Sechskantschraube/);
+    assert.match(text, /Sechskantmutter/);
+  });
+
+  it("Regressions-Guard: prepareAndOpenMailRequest kopiert Tabellen-Variablen (tableHtml/tableText), nicht die vollständige Mail", async () => {
+    const fs = await import("node:fs");
+    const src = fs.readFileSync(new URL("./mailRequest.js", import.meta.url), "utf8");
+    assert.match(src, /copyTableToClipboard\(tableHtml,\s*tableText\)/);
+    assert.equal(/copyTableToClipboard\(fullHtml/.test(src), false);
+  });
+});
+
 describe("buildMailSubject: Ein- und Mehrprojekt-Betreff", () => {
   it("ein Projekt -> 'Anfrage BV <Name>'", () => {
     assert.equal(buildMailSubject("32089 Pergola"), "Anfrage BV 32089 Pergola");

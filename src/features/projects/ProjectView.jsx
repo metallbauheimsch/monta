@@ -24,6 +24,7 @@ export default function ProjectView({
   replaceItem,
   replaceItemsBulk,
   setProjectCompletion,
+  openProjectTab,
 }) {
   const visibleTabs = visibleTabsFor();
 
@@ -86,6 +87,7 @@ export default function ProjectView({
         replaceItem={replaceItem}
         replaceItemsBulk={replaceItemsBulk}
         setProjectCompletion={setProjectCompletion}
+        openProjectTab={openProjectTab}
       />
     </>
   );

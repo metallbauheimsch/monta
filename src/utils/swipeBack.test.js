@@ -72,3 +72,17 @@ describe("Test D (Desktop-Maus): useSwipeBack reagiert nur auf pointerType 'touc
     assert.match(src, /pointerType !== "touch"/);
   });
 });
+
+describe("Test N: horizontales Tabellen-Scrollen (nicht am Rand begonnen) löst nie zurück aus", () => {
+  it("Start mitten in einer breiten Tabelle, deutliche Rechtsbewegung -> trotzdem kein gültiger Swipe-Start", () => {
+    assert.equal(isEdgeSwipeStart(200), false);
+  });
+});
+
+describe("Test O: keine geräte-/herstellerabhängige Prüfung in der Swipe-Logik", () => {
+  it("Quellcode enthält keine Apple-/Safari-/Hersteller-/UserAgent-Prüfung (Regressions-Guard)", async () => {
+    const fs = await import("node:fs");
+    const src = fs.readFileSync(new URL("./swipeBack.js", import.meta.url), "utf8");
+    assert.equal(/Safari|Apple|iPad|iOS|userAgent|navigator\.platform/i.test(src), false);
+  });
+});

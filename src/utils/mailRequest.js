@@ -211,19 +211,20 @@ export function openMailClient(url) {
   document.body.removeChild(link);
 }
 
-// 1) vollständige Mail (Anrede/Einleitung/Tabelle/Signatur, Calibri 12pt)
-//    als text/html + text/plain in die Zwischenablage  2) mailto öffnen
-// (Praxis-Sprint: Formatkorrektur - vorher wurde nur die Tabelle kopiert,
-// jetzt die komplette, fertig formatierte Lieferantenmail, damit sie 1:1
-// in Outlook eingefügt werden kann). `projectLabels` (Mehrprojekt-Anfrage)
-// ist optional - ohne Angabe verhält sich der Betreff wie bisher anhand
-// von `projectName`.
+// 1) NUR die Materialtabelle (text/html + text/plain) in die Zwischenablage
+//    2) mailto öffnen (Outlook erzeugt dabei selbst Anrede/Signatur aus dem
+//    mailto-body - siehe buildMailtoRequest/buildMailBody weiter unten,
+//    unverändert). Praxis-Sprint (Fehlerkorrektur): zuvor wurde die
+//    VOLLSTÄNDIGE Mail (Anrede/Aufforderung/Tabelle/Signatur) kopiert, was
+//    beim Einfügen in die von Outlook bereits vorausgefüllte Mail zu
+//    doppelter Anrede/Signatur führte. Jetzt liegt in der Zwischenablage
+//    ausschließlich die Tabelle. `projectLabels` (Mehrprojekt-Anfrage) ist
+//    optional - ohne Angabe verhält sich der Betreff wie bisher anhand von
+//    `projectName`.
 export async function prepareAndOpenMailRequest({ projectName, projectLabels, rows }) {
   const tableHtml = buildMaterialTableHtml(rows);
   const tableText = buildMaterialTableText(rows);
-  const fullHtml = buildMailBodyHtml({ tableHtml });
-  const fullPlain = buildMailBody({ tableText, includeTable: true });
-  const copied = await copyTableToClipboard(fullHtml, fullPlain);
+  const copied = await copyTableToClipboard(tableHtml, tableText);
 
   let { url, tooLong } = buildMailtoRequest({
     projectName,

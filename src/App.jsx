@@ -19,6 +19,7 @@ import { useWorkflowWatchers } from "./services/useWorkflowWatchers";
 import {
   notifyTbPruefungCompleted,
   notifyLagerCompleted,
+  notifyWarenkorbCompleted,
   nextEventCycle,
 } from "./services/workflowNotifications";
 import { loadPrintStationSettings } from "./services/printStation";
@@ -131,20 +132,26 @@ function App() {
   // Änderung an AuthContext.jsx. Genau einmal pro Laden; ungültige/
   // fehlende Parameter oder ein unbekanntes/nicht zugängliches Projekt
   // führen sicher zur normalen App (kein Absturz, kein Fehler).
+  // Projektweiter Reiter-Wechsel, auch projektübergreifend (Praxis-Sprint:
+  // globale Lager-Suche) - dieselbe Navigation wie der bestehende Mail-
+  // Deep-Link unten, jetzt als wiederverwendbare Funktion statt Duplikat.
+  function openProjectTab(pid, tabKey) {
+    const targetProject = projects.find((p) => p.id === pid);
+    if (!targetProject) return;
+    setProjectId(targetProject.id);
+    setSelectedBaugruppe(null);
+    setSelectedBauteil(null);
+    setTab(tabKey);
+    setView("projectWide");
+  }
+
   const deepLinkHandledRef = useRef(false);
   useEffect(() => {
     if (deepLinkHandledRef.current) return;
     if (!isActive || loading) return;
     const parsed = parseDeepLinkParams(window.location.search);
     if (parsed) {
-      const targetProject = projects.find((p) => p.id === parsed.projectId);
-      if (targetProject) {
-        setProjectId(targetProject.id);
-        setSelectedBaugruppe(null);
-        setSelectedBauteil(null);
-        setTab(parsed.tab);
-        setView("projectWide");
-      }
+      openProjectTab(parsed.projectId, parsed.tab);
       stripDeepLinkParams();
     }
     deepLinkHandledRef.current = true;
@@ -795,7 +802,11 @@ function App() {
    * und werden von dieser Funktion nicht mehr gelesen/geschrieben.
    */
   async function setProjectCompletion(pid, field, value) {
-    const allowed = ["tb_pruefung_abgeschlossen", "lager_abgeschlossen"];
+    const allowed = [
+      "tb_pruefung_abgeschlossen",
+      "lager_abgeschlossen",
+      "warenkorb_abgeschlossen",
+    ];
     if (!allowed.includes(field)) return;
     const proj = projects.find((p) => String(p.id) === String(pid));
     if (!proj) {
@@ -839,6 +850,9 @@ function App() {
         } else if (field === "lager_abgeschlossen") {
           const cycle = await nextEventCycle("lager_completed", pid, scope);
           await notifyLagerCompleted({ project: proj, baugruppe: scope, cycle });
+        } else if (field === "warenkorb_abgeschlossen") {
+          const cycle = await nextEventCycle("warenkorb_completed", pid, scope);
+          await notifyWarenkorbCompleted({ project: proj, baugruppe: scope, cycle });
         }
       } catch (err) {
         console.error("MONTA: Abschluss-Mail:", err?.message || err);
@@ -1255,6 +1269,7 @@ function App() {
           replaceItem={replaceItem}
           replaceItemsBulk={replaceItemsBulk}
           setProjectCompletion={setProjectCompletion}
+          openProjectTab={openProjectTab}
         />
       )}
 
@@ -1273,6 +1288,7 @@ function App() {
           replaceItem={replaceItem}
           replaceItemsBulk={replaceItemsBulk}
           setProjectCompletion={setProjectCompletion}
+          openProjectTab={openProjectTab}
         />
       )}
     </Shell>

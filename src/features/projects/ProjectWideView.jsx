@@ -23,6 +23,7 @@ export default function ProjectWideView({
   replaceItem,
   replaceItemsBulk,
   setProjectCompletion,
+  openProjectTab,
 }) {
   const visibleTabs = projectWideTabsFor();
 
@@ -58,6 +59,7 @@ export default function ProjectWideView({
         replaceItem={replaceItem}
         replaceItemsBulk={replaceItemsBulk}
         setProjectCompletion={setProjectCompletion}
+        openProjectTab={openProjectTab}
       />
     </>
   );

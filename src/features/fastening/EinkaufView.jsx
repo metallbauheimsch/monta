@@ -12,6 +12,7 @@ import {
 } from "./warenkorbRows";
 import { prepareAndOpenMailRequest } from "../../utils/mailRequest";
 import SearchField from "../../components/SearchField";
+import ProjectCompletionSection from "../../components/ProjectCompletionSection";
 
 function defaultSort(rows) {
   return [...rows].sort(
@@ -46,7 +47,14 @@ function sortCartRows(rows, sortKey, sortDir) {
 
 const ALL_BESTELLT_CONFIRM = "Alle offenen Positionen dieses Projekts wirklich als bestellt markieren?";
 
-export default function EinkaufView({ items, project, updateItem, allItems, allProjects }) {
+export default function EinkaufView({
+  items,
+  project,
+  updateItem,
+  allItems,
+  allProjects,
+  setProjectCompletion,
+}) {
   const [mailError, setMailError] = useState(null);
   const [manualValues, setManualValues] = useState(readManualValues);
   const [search, setSearch] = useState("");
@@ -272,6 +280,13 @@ export default function EinkaufView({ items, project, updateItem, allItems, allP
         Projektweite Fehlmengen. Vollständig gelieferte Positionen bleiben sichtbar (grün) und können
         wieder deaktiviert werden. Status: {pStatus.label}.
       </p>
+      <ProjectCompletionSection
+        project={project}
+        field="warenkorb_abgeschlossen"
+        label="Warenkorb abgeschlossen"
+        confirmMessage="Warenkorb für das gesamte Projekt wirklich als abgeschlossen markieren? Dies ist ein zusätzlicher manueller Abschluss und ändert keine Positionen, Mengen oder Bestellstatus."
+        setProjectCompletion={setProjectCompletion}
+      />
       <SearchField value={search} onChange={setSearch} />
       {allRows.length === 0 && <p>Keine Positionen im Warenkorb.</p>}
       {allRows.length > 0 && (

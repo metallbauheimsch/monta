@@ -1,5 +1,5 @@
 import { Fragment, useState } from "react";
-import { groupBy, projectStatus, allUpdatesSucceeded } from "../../utils/helpers";
+import { groupBy, projectStatus, allUpdatesSucceeded, projectShortLabel } from "../../utils/helpers";
 import { parseEinbauort } from "../../utils/structure";
 import { naturalCompare, useSortableColumns, compareWithSizeSecondary } from "../../utils/sorting";
 import { filterBySearch, sizeLengthSearchParts } from "../../utils/textSearch";
@@ -16,6 +16,7 @@ import { getDescriptionOptions, rememberDescriptionIfNew } from "./descriptionsR
 import { articleIdentityKey, collectUniqueHinweise, dedupeHinweisText } from "./fasteningRules";
 import { isActiveItem, isReplacedItem, formatReplacedHint } from "./replacement";
 import { resolveBulkPatch, hasMixedHinweis, affectedBauteilCount } from "./lagerBulkEdit";
+import { buildGlobalSearchResults } from "./globalSearch";
 import SearchField from "../../components/SearchField";
 import ProjectCompletionSection from "../../components/ProjectCompletionSection";
 import SuggestionAutocomplete from "./SuggestionAutocomplete";
@@ -66,9 +67,16 @@ export default function LagerView({
   hasFullModuleAccess,
   project,
   setProjectCompletion,
+  allItems,
+  allProjects,
+  openProjectTab,
 }) {
   const [manualValues, setManualValues] = useState(readManualValues);
   const [search, setSearch] = useState("");
+  // Projektübergreifende Suche (Praxis-Sprint): zweites, klar getrenntes
+  // Suchfeld - überschreibt nie die lokale Projektsuche und wird von ihr
+  // nie überschrieben. Ergebnisse: reine Anzeige, keine Datenänderung.
+  const [globalSearch, setGlobalSearch] = useState("");
   // Rein lokale UI-Markierung "zuletzt geändert" (kein Undo, keine
   // Datenbankhistorie, kein Persistieren über Neuladen hinaus) - hilft nur,
   // eine versehentlich geänderte Lagerzeile sofort wiederzufinden.
@@ -216,6 +224,26 @@ export default function LagerView({
   const sortedRows = sortLagerRows(filteredRows, sortKey, sortDir);
   const status = projectStatus(project, items);
 
+  // Projektübergreifende Suche (Praxis-Sprint): dieselbe zentrale
+  // Fehlmengen-/Ersetzungslogik wie Lager/Warenkorb (siehe globalSearch.js),
+  // keine zweite Definition von "offen". Läuft ausschließlich auf bereits
+  // im App-State vorhandenen Daten (allItems/allProjects) - keine
+  // zusätzliche Supabase-Abfrage.
+  const globalResults = buildGlobalSearchResults(globalSearch, {
+    projects: allProjects,
+    items: allItems,
+  });
+
+  function openGlobalResult(result) {
+    if (!openProjectTab) return;
+    // Übernimmt die gesuchte Position in die lokale Projektsuche des
+    // Zielprojekts, damit sie dort weiterhin über die bestehende Suche/
+    // Markierung erkennbar bleibt - keine neue Persistenz, kein Router.
+    setSearch(globalSearch);
+    setGlobalSearch("");
+    openProjectTab(result.project.id, "material");
+  }
+
   // Ersetzte Altpositionen (Sprint 2B): real vorbereitete/bestellte Ware
   // bleibt einzeln (nicht aggregiert) nachvollziehbar, zählt aber nicht mehr
   // als offener Restbedarf und fließt nicht in die Statusampel ein.
@@ -296,7 +324,65 @@ export default function LagerView({
         confirmMessage="Lagerprüfung für das gesamte Projekt wirklich als abgeschlossen markieren?"
         setProjectCompletion={setProjectCompletion}
       />
-      <SearchField value={search} onChange={setSearch} />
+      <div className="searchRow">
+        <SearchField
+          value={search}
+          onChange={setSearch}
+          placeholder={`In ${projectShortLabel(project) || "diesem Projekt"} suchen`}
+        />
+        <SearchField
+          value={globalSearch}
+          onChange={setGlobalSearch}
+          placeholder="In allen Projekten suchen"
+        />
+      </div>
+      {globalSearch.trim() !== "" && (
+        <div className="globalSearchResults">
+          {globalResults.length === 0 && (
+            <p className="hint">Keine offenen Positionen in anderen Projekten gefunden.</p>
+          )}
+          {globalResults.length > 0 && (
+            <div className="tableWrap">
+              <table>
+                <tbody>
+                  <tr>
+                    <th>Projekt</th>
+                    <th>Bezeichnung</th>
+                    <th>Größe</th>
+                    <th>Länge</th>
+                    <th>Ausführung</th>
+                    <th>Fehlmenge</th>
+                    <th>Herkunft</th>
+                  </tr>
+                  {globalResults.map(({ project: p, row }) => {
+                    const vis = herkunftVisibleParts(row.herkunft, "");
+                    return (
+                      <tr
+                        key={row.key}
+                        className="clickable"
+                        onClick={() => openGlobalResult({ project: p, row })}
+                        title="Zu diesem Projekt im Lager wechseln"
+                      >
+                        <td>
+                          {p.nr} {p.name}
+                        </td>
+                        <td>{row.bezeichnung}</td>
+                        <td>{row.groesse}</td>
+                        <td>{row.laenge}</td>
+                        <td>{row.oberflaeche}</td>
+                        <td>
+                          <span className="badge red">{row.fehlmenge}</span>
+                        </td>
+                        <td>{vis.names.join(", ") || "–"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
       {pendingBulkEdit && (
         <div className="completionConfirm replaceConfirm">
           <div>

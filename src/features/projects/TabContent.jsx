@@ -22,6 +22,7 @@ export default function TabContent({
   replaceItem,
   replaceItemsBulk,
   setProjectCompletion,
+  openProjectTab,
 }) {
   if (tab === "tb") {
     return (
@@ -55,6 +56,9 @@ export default function TabContent({
         hasFullModuleAccess={fullModuleAccess}
         project={project}
         setProjectCompletion={setProjectCompletion}
+        allItems={allItems}
+        allProjects={allProjects}
+        openProjectTab={openProjectTab}
       />
     );
   if (tab === "bestellliste")
@@ -65,6 +69,7 @@ export default function TabContent({
         updateItem={updateItem}
         allItems={allItems}
         allProjects={allProjects}
+        setProjectCompletion={setProjectCompletion}
       />
     );
   if (tab === "druck")

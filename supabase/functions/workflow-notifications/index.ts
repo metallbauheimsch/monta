@@ -22,6 +22,7 @@ const ALLOWED_TYPES = new Set([
   "tb_pruefung_completed",
   "lager_completed",
   "all_items_ordered",
+  "warenkorb_completed",
   // historisch (werden nicht mehr versendet, nur geclaimt/abgeschlossen)
   "baugruppe_created",
   "cart_items_added",
@@ -31,12 +32,14 @@ const ACTIVE_TYPES = new Set([
   "tb_pruefung_completed",
   "lager_completed",
   "all_items_ordered",
+  "warenkorb_completed",
 ]);
 
 const RECIPIENT_BY_TYPE = {
   tb_pruefung_completed: "sautter@metallbau-heimsch.de",
   lager_completed: "stoehr@metallbau-heimsch.de",
   all_items_ordered: "sautter@metallbau-heimsch.de",
+  warenkorb_completed: "sautter@metallbau-heimsch.de",
 };
 
 // Deep-Link-Ziel je Ereignistyp (Praxis-Sprint): der jeweils nächste
@@ -49,6 +52,7 @@ const DEEP_LINK_TAB_BY_TYPE = {
   tb_pruefung_completed: "material", // TB/Prüfung fertig -> Lager vorbereiten
   lager_completed: "bestellliste", // "wir müssen einkaufen"
   all_items_ordered: "material", // "Viel Spaß beim Einräumen"
+  warenkorb_completed: "bestellliste", // Warenkorb-Abschluss -> zurück zum Warenkorb
 };
 
 function json(status, body) {
@@ -134,6 +138,18 @@ function buildMail(eventType, payload, _baugruppeField, projectId) {
         `Servus Tom,\n\n` +
         `ich war mal wieder shoppen! Die Bestellung für das Projekt „${projectName}“ ist raus.\n\n` +
         `Viel Spaß beim Einräumen. 😄\n` +
+        link +
+        `\nMONTA\n`,
+    };
+  }
+
+  if (eventType === "warenkorb_completed") {
+    return {
+      subject: `MONTA – Warenkorb abgeschlossen – ${projectName}`,
+      text:
+        `Servus Tom,\n\n` +
+        `der Bestellvorgang für das Projekt „${projectName}“ ist abgeschlossen.\n\n` +
+        `Der Warenkorb wurde bewusst als fertig markiert.\n` +
         link +
         `\nMONTA\n`,
     };

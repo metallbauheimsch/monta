@@ -14,7 +14,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const sql = fs.readFileSync(path.join(__dirname, "supabase_patch_lager_bulk_edit.sql"), "utf8");
+// \r\n -> \n: macht die Literal-/Regex-Prüfungen unten unabhängig von
+// core.autocrlf/Checkout-Zeilenenden (Windows-Arbeitsverzeichnis) - gleiches
+// Muster wie in den übrigen Tests dieses Projekts (siehe z. B.
+// ProjectCompletionSection.test.js).
+const sql = fs
+  .readFileSync(path.join(__dirname, "supabase_patch_lager_bulk_edit.sql"), "utf8")
+  .replace(/\r\n/g, "\n");
 
 describe("Doppelte/widersprüchliche IDs werden vor jedem Schreibvorgang abgewiesen", () => {
   it("prüft auf doppelte source_id innerhalb p_replacements", () => {

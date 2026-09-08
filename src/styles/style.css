@@ -181,6 +181,12 @@ th{background:#eee;font-weight:700}
 }
 .searchField{position:relative;margin:8px 0 12px;max-width:420px}
 .searchField input{width:100%;padding-right:40px}
+/* Zwei getrennte Suchfelder (Praxis-Sprint: projektübergreifende Suche) -
+   nebeneinander auf breiten Ansichten, umbrechen auf schmalen; kein Feld
+   wird abhängig von der Bildschirmbreite ausgeblendet. */
+.searchRow{display:flex;flex-wrap:wrap;column-gap:16px}
+.searchRow .searchField{flex:1 1 260px}
+.globalSearchResults{margin:0 0 12px}
 .searchClear{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:auto;padding:4px 10px;background:transparent;color:#666;border:0;font-size:18px;line-height:1}
 .bauteilgruppeBlock{margin:10px 0 8px}
 .bauteilgruppeHead{display:flex;align-items:center;gap:8px;margin:0 0 4px}

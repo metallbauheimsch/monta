@@ -4,6 +4,7 @@ export const MAIL_RECIPIENTS = {
   tb_pruefung_completed: "sautter@metallbau-heimsch.de",
   lager_completed: "stoehr@metallbau-heimsch.de",
   all_items_ordered: "sautter@metallbau-heimsch.de",
+  warenkorb_completed: "sautter@metallbau-heimsch.de",
 };
 
 async function invokeWorkflow(eventIds) {
@@ -119,6 +120,32 @@ export async function notifyAllItemsOrdered({ project, baugruppe, cycle }) {
       eventType: "all_items_ordered",
       eventKey: key,
       recipient: MAIL_RECIPIENTS.all_items_ordered,
+      projectId: project.id,
+      baugruppe: scope,
+      payload: {
+        project_name: `${project.nr} ${project.name}`.trim(),
+        baugruppe: scope,
+        project_wide: true,
+      },
+    },
+  ]);
+}
+
+/**
+ * Warenkorb abgeschlossen (Praxis-Sprint): bewusster manueller Abschluss des
+ * Bestellvorgangs durch den Benutzer - fachlich eigenständig von
+ * "Alle Pos. bestellt" (notifyAllItemsOrdered bleibt unverändert, eigener
+ * Event-Typ/eigener Zyklus). Nutzt dieselbe Mail-/Dedup-Infrastruktur wie
+ * die übrigen Abschluss-Mails, kein zweiter Mailmechanismus.
+ */
+export async function notifyWarenkorbCompleted({ project, baugruppe, cycle }) {
+  const scope = baugruppe || "Gesamtprojekt";
+  const key = `warenkorb_completed:${project.id}:project:${cycle}`;
+  return enqueueAndSend([
+    {
+      eventType: "warenkorb_completed",
+      eventKey: key,
+      recipient: MAIL_RECIPIENTS.warenkorb_completed,
       projectId: project.id,
       baugruppe: scope,
       payload: {
