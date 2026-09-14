@@ -167,3 +167,56 @@ describe("AP) kein SQL-Fallback auf ein fachlich falsches Feld", () => {
     assert.match(warenkorbBranch[0], /"warenkorb_completed"/);
   });
 });
+
+describe("I/J/K/L) Korrektur nach GPT-Code-Review: beide Abschlussfunktionen stehen gemeinsam im selben Bereich", () => {
+  const source = read(dir, "EinkaufView.jsx");
+  const groupStart = source.indexOf('className="completionGroup"');
+  const groupEnd = source.indexOf("<SearchField", groupStart);
+  const group = groupStart >= 0 && groupEnd > groupStart ? source.slice(groupStart, groupEnd) : "";
+
+  it("I) beide Labels liegen im selben Abschlussbereich (.completionGroup), nicht mehr durch das Suchfeld getrennt", () => {
+    assert.ok(groupStart >= 0, "gemeinsamer Abschlussbereich .completionGroup fehlt");
+    assert.ok(groupEnd > groupStart, "SearchField muss nach dem Abschlussbereich stehen");
+    assert.match(group, /Alle Positionen bestellt/);
+    assert.match(group, /label="Warenkorb abgeschlossen"/);
+  });
+
+  it("I) 'Alle Positionen bestellt' steht zuerst, 'Warenkorb abgeschlossen' unmittelbar daneben", () => {
+    assert.ok(
+      group.indexOf("Alle Positionen bestellt") < group.indexOf("Warenkorb abgeschlossen"),
+      "Reihenfolge im Abschlussbereich weicht ab"
+    );
+  });
+
+  it("J) 'Alle Positionen bestellt' ist unverändert vorhanden (Checkbox, Sammel-Handler, Bestätigung)", () => {
+    assert.match(group, /type="checkbox"/);
+    assert.match(group, /allRows\.every\(\(r\) => r\.bestellt\)/);
+    assert.match(group, /handleAllBestelltChange\(allRows, e\.target\.checked\)/);
+    assert.match(group, /ALL_BESTELLT_CONFIRM/);
+    assert.match(group, /confirmAllBestellt\(allRows\)/);
+  });
+
+  it("K) 'Warenkorb abgeschlossen' verwendet weiterhin genau eine ProjectCompletionSection mit setProjectCompletion", () => {
+    const uses = source.match(/<ProjectCompletionSection/g) || [];
+    assert.equal(uses.length, 1, "es darf genau eine ProjectCompletionSection geben");
+    assert.match(group, /<ProjectCompletionSection/);
+    assert.match(group, /field="warenkorb_abgeschlossen"/);
+    assert.match(group, /setProjectCompletion=\{setProjectCompletion\}/);
+    assert.match(source, /from "\.\.\/\.\.\/components\/ProjectCompletionSection"/);
+  });
+
+  it("L) die UI-Umstellung ändert keine Materialpositionslogik (kein zusätzlicher Schreibpfad im Abschlussbereich)", () => {
+    assert.equal(/material_items/.test(group), false, "Abschlussbereich darf nicht direkt auf material_items schreiben");
+    assert.equal(/updateItem\(/.test(group), false, "Abschlussbereich darf updateItem nicht direkt aufrufen");
+    // Die Mengen-/Bestelllogik liegt unverändert in applyAllBestellt.
+    const fnMatch = source.match(/function applyAllBestellt\([\s\S]*?\n  \}/);
+    assert.ok(fnMatch, "applyAllBestellt nicht gefunden");
+    assert.match(fnMatch[0], /updateItem\(i\.id, \{ bestellt: checked \}\)/);
+  });
+
+  it("responsives Layout ist zentral im Stylesheet definiert (nebeneinander, Umbruch auf schmalen Geräten)", () => {
+    const css = read(rootDir, "src", "styles", "style.css");
+    assert.match(css, /\.completionGroup\{[^}]*display:flex/);
+    assert.match(css, /\.completionGroup\{[^}]*flex-wrap:wrap/);
+  });
+});

@@ -280,41 +280,49 @@ export default function EinkaufView({
         Projektweite Fehlmengen. Vollständig gelieferte Positionen bleiben sichtbar (grün) und können
         wieder deaktiviert werden. Status: {pStatus.label}.
       </p>
-      <ProjectCompletionSection
-        project={project}
-        field="warenkorb_abgeschlossen"
-        label="Warenkorb abgeschlossen"
-        confirmMessage="Warenkorb für das gesamte Projekt wirklich als abgeschlossen markieren? Dies ist ein zusätzlicher manueller Abschluss und ändert keine Positionen, Mengen oder Bestellstatus."
-        setProjectCompletion={setProjectCompletion}
-      />
+      {/* Abschlussbereich (Korrektur nach GPT-Code-Review): "Alle Positionen
+          bestellt" und "Warenkorb abgeschlossen" stehen als fachlich
+          zusammengehörige Abschlussfunktionen unmittelbar nebeneinander
+          (auf schmalen Geräten untereinander, siehe .completionGroup).
+          Beide behalten ihre bisherige Fachlogik unverändert - dies ist
+          ausschließlich eine Platzierung. */}
+      <div className="completionGroup">
+        {allRows.length > 0 && (
+          <div className="completionWrap">
+            <label className="checkboxLine allBestelltLine">
+              <input
+                type="checkbox"
+                checked={allRows.length > 0 && allRows.every((r) => r.bestellt)}
+                disabled={pendingAllBestellt}
+                onChange={(e) => handleAllBestelltChange(allRows, e.target.checked)}
+              />
+              Alle Positionen bestellt
+            </label>
+            {pendingAllBestellt && (
+              <div className="completionConfirm">
+                <span>{ALL_BESTELLT_CONFIRM}</span>
+                <div className="completionConfirmButtons">
+                  <button type="button" className="ghost" onClick={cancelAllBestellt}>
+                    Abbrechen
+                  </button>
+                  <button type="button" onClick={() => confirmAllBestellt(allRows)}>
+                    Bestätigen
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        <ProjectCompletionSection
+          project={project}
+          field="warenkorb_abgeschlossen"
+          label="Warenkorb abgeschlossen"
+          confirmMessage="Warenkorb für das gesamte Projekt wirklich als abgeschlossen markieren? Dies ist ein zusätzlicher manueller Abschluss und ändert keine Positionen, Mengen oder Bestellstatus."
+          setProjectCompletion={setProjectCompletion}
+        />
+      </div>
       <SearchField value={search} onChange={setSearch} />
       {allRows.length === 0 && <p>Keine Positionen im Warenkorb.</p>}
-      {allRows.length > 0 && (
-        <div className="completionWrap">
-          <label className="checkboxLine allBestelltLine">
-            <input
-              type="checkbox"
-              checked={allRows.length > 0 && allRows.every((r) => r.bestellt)}
-              disabled={pendingAllBestellt}
-              onChange={(e) => handleAllBestelltChange(allRows, e.target.checked)}
-            />
-            Alle Positionen bestellt
-          </label>
-          {pendingAllBestellt && (
-            <div className="completionConfirm">
-              <span>{ALL_BESTELLT_CONFIRM}</span>
-              <div className="completionConfirmButtons">
-                <button type="button" className="ghost" onClick={cancelAllBestellt}>
-                  Abbrechen
-                </button>
-                <button type="button" onClick={() => confirmAllBestellt(allRows)}>
-                  Bestätigen
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
       {allRows.length > 0 && (
         <div className="tableWrap">
           <table>

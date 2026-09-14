@@ -219,6 +219,83 @@ describe("Praxis-Sprint (Fehlerkorrektur): Zwischenablage enthält NUR die Tabel
   });
 });
 
+describe("Korrektur nach GPT-Code-Review: Tabelle steht NUR in der Zwischenablage, nicht zusätzlich im mailto-Body", () => {
+  const tableText = buildMaterialTableText(rows());
+  const tableHtml = buildMaterialTableHtml(rows());
+  const mailtoBody = buildMailBody({ tableText, includeTable: false });
+  const { url } = buildMailtoRequest({ projectName: "32089 Pergola", rows: rows(), includeTable: false });
+  const decodedBody = decodeURIComponent(url.split("&body=")[1]);
+
+  it("A) Zwischenablage enthält ausschließlich die Tabelle (HTML und Klartext ohne Anrede/Aufforderung/Signatur)", () => {
+    for (const forbidden of [
+      "Sehr geehrte Damen und Herren",
+      "Bitte bieten Sie mir an",
+      "Mit freundlichen Grüßen",
+      "metallbau HEIMSCH GmbH",
+    ]) {
+      assert.equal(tableHtml.includes(forbidden), false, `Clipboard-HTML enthält: ${forbidden}`);
+      assert.equal(tableText.includes(forbidden), false, `Clipboard-Text enthält: ${forbidden}`);
+    }
+    assert.match(tableText, /Bezeichnung/);
+    assert.match(tableHtml, /<table/);
+  });
+
+  it("B) mailto-Body enthält KEINE Tabellenzeilen (keine Materialdaten, keine Kopfzeile)", () => {
+    for (const forbidden of [
+      "Sechskantschraube",
+      "Sechskantmutter",
+      "feuerverzinkt",
+      "Bezeichnung",
+      "Ausführung",
+    ]) {
+      assert.equal(mailtoBody.includes(forbidden), false, `mailto-Body enthält Tabelleninhalt: ${forbidden}`);
+      assert.equal(decodedBody.includes(forbidden), false, `mailto-URL enthält Tabelleninhalt: ${forbidden}`);
+    }
+  });
+
+  it("C) mailto-Body enthält KEINEN HTML-Tabelleninhalt", () => {
+    for (const forbidden of ["<table", "<thead", "<tbody", "<tr", "<th", "<td"]) {
+      assert.equal(mailtoBody.includes(forbidden), false, `mailto-Body enthält HTML: ${forbidden}`);
+      assert.equal(decodedBody.includes(forbidden), false, `mailto-URL enthält HTML: ${forbidden}`);
+    }
+  });
+
+  it("D) mailto-Body enthält weiterhin 'Sehr geehrte Damen und Herren,'", () => {
+    assert.match(mailtoBody, /^Sehr geehrte Damen und Herren,\n/);
+    assert.ok(decodedBody.startsWith("Sehr geehrte Damen und Herren,"));
+  });
+
+  it("E) mailto-Body enthält weiterhin 'Bitte bieten Sie mir an'", () => {
+    assert.match(mailtoBody, /\nBitte bieten Sie mir an\n/);
+    assert.ok(decodedBody.includes("Bitte bieten Sie mir an"));
+  });
+
+  it("F) mailto-Body enthält weiterhin die bestehende Signatur (unverändert, Wort für Wort)", () => {
+    assert.ok(mailtoBody.includes(EXACT_SIGNATURE_PLAIN), "Signaturblock fehlt oder weicht ab");
+    assert.ok(decodedBody.includes(EXACT_SIGNATURE_PLAIN), "Signaturblock fehlt in der mailto-URL");
+  });
+
+  it("G) zwischen Aufforderung und Grußformel steht eine leere Einfügestelle ohne zu löschenden Platzhaltertext", () => {
+    assert.match(mailtoBody, /Bitte bieten Sie mir an\n\n\nMit freundlichen Grüßen/);
+    assert.equal(
+      /Tabelle bitte hier einfügen/.test(mailtoBody),
+      false,
+      "Platzhaltertext müsste vom Benutzer gelöscht werden und darf nicht mehr erscheinen"
+    );
+    assert.equal(/Zwischenablage/.test(mailtoBody), false);
+  });
+
+  it("Regressions-Guard: prepareAndOpenMailRequest baut den mailto-Body mit includeTable: false", async () => {
+    const fs = await import("node:fs");
+    const src = fs.readFileSync(new URL("./mailRequest.js", import.meta.url), "utf8");
+    const fnMatch = src.match(/export async function prepareAndOpenMailRequest\([\s\S]*?\n\}/);
+    assert.ok(fnMatch, "prepareAndOpenMailRequest nicht gefunden");
+    assert.match(fnMatch[0], /includeTable: false/);
+    assert.equal(/includeTable: true/.test(fnMatch[0]), false, "mailto darf die Tabelle nicht mehr enthalten");
+    assert.match(fnMatch[0], /buildMailtoRequest\(/);
+  });
+});
+
 describe("buildMailSubject: Ein- und Mehrprojekt-Betreff", () => {
   it("ein Projekt -> 'Anfrage BV <Name>'", () => {
     assert.equal(buildMailSubject("32089 Pergola"), "Anfrage BV 32089 Pergola");

@@ -85,7 +85,12 @@ export function buildMailBody({ tableText, includeTable }) {
   if (includeTable && tableText) {
     lines.push(tableText, "");
   } else {
-    lines.push("(Tabelle bitte hier einfügen – sie wurde in die Zwischenablage kopiert.)", "");
+    // Bewusst KEIN Platzhaltertext (Korrektur nach GPT-Code-Review): der
+    // Benutzer fügt die kopierte Tabelle genau an dieser Stelle ein - ein
+    // zusätzlicher Hinweistext müsste vorher gelöscht werden. Stattdessen
+    // bleibt eine klare leere Einfügestelle zwischen Aufforderung und
+    // Grußformel.
+    lines.push("");
   }
   lines.push(
     "Mit freundlichen Grüßen",
@@ -213,7 +218,7 @@ export function openMailClient(url) {
 
 // 1) NUR die Materialtabelle (text/html + text/plain) in die Zwischenablage
 //    2) mailto öffnen (Outlook erzeugt dabei selbst Anrede/Signatur aus dem
-//    mailto-body - siehe buildMailtoRequest/buildMailBody weiter unten,
+//    mailto-body - siehe buildMailtoRequest/buildMailBody weiter oben,
 //    unverändert). Praxis-Sprint (Fehlerkorrektur): zuvor wurde die
 //    VOLLSTÄNDIGE Mail (Anrede/Aufforderung/Tabelle/Signatur) kopiert, was
 //    beim Einfügen in die von Outlook bereits vorausgefüllte Mail zu
@@ -221,25 +226,24 @@ export function openMailClient(url) {
 //    ausschließlich die Tabelle. `projectLabels` (Mehrprojekt-Anfrage) ist
 //    optional - ohne Angabe verhält sich der Betreff wie bisher anhand von
 //    `projectName`.
+//
+//    Korrektur nach GPT-Code-Review: der mailto-Body wird bewusst mit
+//    `includeTable: false` erzeugt. Vorher enthielt der von Outlook
+//    geöffnete Mailtext die Tabelle bereits - der Benutzer fügte die
+//    kopierte Tabelle anschließend ein und hatte sie doppelt. Jetzt öffnet
+//    Outlook nur Anrede, Aufforderung, leere Einfügestelle und Signatur;
+//    die Tabelle kommt ausschließlich aus der Zwischenablage.
 export async function prepareAndOpenMailRequest({ projectName, projectLabels, rows }) {
   const tableHtml = buildMaterialTableHtml(rows);
   const tableText = buildMaterialTableText(rows);
   const copied = await copyTableToClipboard(tableHtml, tableText);
 
-  let { url, tooLong } = buildMailtoRequest({
+  const { url, tooLong } = buildMailtoRequest({
     projectName,
     projectLabels,
     rows,
-    includeTable: true,
+    includeTable: false,
   });
-  if (tooLong) {
-    ({ url, tooLong } = buildMailtoRequest({
-      projectName,
-      projectLabels,
-      rows,
-      includeTable: false,
-    }));
-  }
   if (tooLong) {
     return {
       ok: false,

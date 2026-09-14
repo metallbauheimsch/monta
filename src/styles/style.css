@@ -79,6 +79,13 @@ th{background:#eee;font-weight:700}
 .completionLine.completionDone{background:#eef8ee;color:#1a5c2e}
 .completionBadge{font-size:12px;font-weight:600;color:#1a5c2e;margin-left:4px}
 .completionWrap{margin-top:6px}
+/* Warenkorb-Abschlussbereich: "Alle Positionen bestellt" und "Warenkorb
+   abgeschlossen" gehören fachlich zusammen und stehen deshalb nebeneinander;
+   auf schmalen Geräten (Tablet/Smartphone) brechen sie untereinander um. */
+.completionGroup{display:flex;flex-wrap:wrap;align-items:flex-start;gap:0 28px;margin:10px 0 4px}
+.completionGroup>*{flex:1 1 260px;min-width:min(100%,260px);margin-top:0}
+.completionGroup .allBestelltLine{margin:0 0 4px}
+.completionGroup .completionLine{margin:0 0 4px}
 .completionConfirm{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:4px 0 12px;padding:10px 12px;border-radius:6px;background:#fff6e5;border:1px solid #e8c675;font-size:14px;color:#444}
 .completionConfirmButtons{display:flex;gap:8px}
 .completionConfirmButtons button{width:auto}
