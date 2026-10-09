@@ -89,8 +89,9 @@ function loadServiceWorker({ fetchImpl }) {
         return stores.delete(name);
       },
     },
-    fetch(request, init) {
-      fetchCalls.push({ request, init });
+    fetch(...args) {
+      const [request, init] = args;
+      fetchCalls.push({ request, init, argCount: args.length });
       return fetchImpl(request, init);
     },
     setTimeout(fn, ms) {
@@ -409,5 +410,137 @@ describe("F) Bestehende Regeln bleiben unverändert", () => {
     await done;
 
     assert.deepEqual([...sw.stores.keys()], ["monta-shell-v2"]);
+  });
+});
+
+describe("Review-Korrektur: Navigationen ohne zusätzliches init, Assets weiterhin mit AbortController", () => {
+  const TIMEOUT_MS = 15000;
+
+  /** fetch, dessen Ergebnis der Test nachträglich (auch nach dem Timeout) festlegen kann. */
+  function deferredFetch() {
+    const calls = [];
+    const impl = () =>
+      new Promise((resolve, reject) => {
+        calls.push({ resolve, reject });
+      });
+    return { impl, calls };
+  }
+
+  it("A) Navigation wird mit dem Original-Request und ohne init-Objekt an fetch übergeben", async () => {
+    const sw = loadServiceWorker({ fetchImpl: async () => makeResponse("<html>neu</html>") });
+    const request = makeRequest("/projekt/42", { mode: "navigate" });
+    sw.dispatchFetch(request);
+    await flush();
+
+    assert.equal(sw.fetchCalls.length, 1);
+    assert.equal(sw.fetchCalls[0].request, request);
+    assert.equal(sw.fetchCalls[0].argCount, 1, "fetch(request) - exakt wie vor dem Erststart-Fix");
+  });
+
+  it("B) hängende Navigation mit App-Shell-Cache: erst nach 15 s, dann gecachte Shell", async () => {
+    const { impl } = hangingFetch();
+    const sw = loadServiceWorker({ fetchImpl: impl });
+    const shell = makeResponse("<html>shell</html>");
+    sw.seed(sw.cacheName(), "/index.html", shell);
+
+    const state = sw.dispatchFetch(makeRequest("/lager", { mode: "navigate" }));
+    await sw.advance(TIMEOUT_MS - 1);
+    assert.equal(state.settled, false, "vor Ablauf von 15 s wird weiter auf das Netzwerk gewartet");
+
+    await sw.advance(1);
+    assert.equal(state.settled, true);
+    assert.equal(state.value, shell);
+  });
+
+  it("C) hängende Navigation ohne Cache endet nach 15 s kontrolliert mit Fehler", async () => {
+    const { impl } = hangingFetch();
+    const sw = loadServiceWorker({ fetchImpl: impl });
+
+    const state = sw.dispatchFetch(makeRequest("/", { mode: "navigate" }));
+    await sw.advance(TIMEOUT_MS - 1);
+    assert.equal(state.settled, false);
+
+    await sw.advance(1);
+    assert.equal(state.settled, true);
+    assert.ok(state.error instanceof Error);
+    assert.match(state.error.message, /Timeout/);
+  });
+
+  it("D) hängender JS-/CSS-Asset-Request wird nach 15 s weiterhin per AbortController abgebrochen", async () => {
+    for (const pathname of ["/assets/index-abc.js", "/assets/index-abc.css"]) {
+      const { impl, signals } = hangingFetch();
+      const sw = loadServiceWorker({ fetchImpl: impl });
+
+      sw.dispatchFetch(makeRequest(pathname, { mode: "cors" }));
+      await flush();
+      assert.equal(signals.length, 1, `${pathname}: fetch erhält ein AbortSignal`);
+      assert.equal(sw.fetchCalls[0].argCount, 2);
+
+      await sw.advance(TIMEOUT_MS - 1);
+      assert.equal(signals[0].aborted, false, `${pathname}: vor 15 s nicht abgebrochen`);
+      await sw.advance(1);
+      assert.equal(signals[0].aborted, true, `${pathname}: nach 15 s abgebrochen`);
+    }
+  });
+
+  it("D) hängende Navigation erhält kein AbortSignal und wird nicht künstlich abgebrochen", async () => {
+    const { impl, signals } = hangingFetch();
+    const sw = loadServiceWorker({ fetchImpl: impl });
+
+    sw.dispatchFetch(makeRequest("/", { mode: "navigate" }));
+    await sw.advance(MAX_ALLOWED_WAIT_MS);
+
+    assert.equal(signals.length, 0);
+  });
+
+  it("E) erfolgreiche Navigation und erfolgreicher Asset-Request verwenden die Netzwerkantwort", async () => {
+    const page = makeResponse("<html>neu</html>");
+    const bundle = makeResponse("bundle neu");
+    const sw = loadServiceWorker({
+      fetchImpl: async (request) => (request.mode === "navigate" ? page : bundle),
+    });
+    sw.seed(sw.cacheName(), "/index.html", makeResponse("<html>alt</html>"));
+    sw.seed(sw.cacheName(), "/assets/index-abc.js", makeResponse("bundle alt"));
+
+    const nav = sw.dispatchFetch(makeRequest("/index.html", { mode: "navigate" }));
+    const asset = sw.dispatchFetch(makeRequest("/assets/index-abc.js", { mode: "cors" }));
+    await flush();
+
+    assert.equal(nav.value, page);
+    assert.equal(asset.value, bundle);
+    const store = sw.stores.get(sw.cacheName());
+    assert.equal(store.get(`${ORIGIN}/index.html`).body, "<html>neu</html>");
+    assert.equal(store.get(`${ORIGIN}/assets/index-abc.js`).body, "bundle neu");
+    assert.equal(sw.pendingTimers(), 0);
+  });
+
+  it("F) spät eintreffende Antwort nach Timeout (Navigation) bleibt folgenlos", async () => {
+    const { impl, calls } = deferredFetch();
+    const sw = loadServiceWorker({ fetchImpl: impl });
+    const shell = makeResponse("<html>shell</html>");
+    sw.seed(sw.cacheName(), "/index.html", shell);
+
+    const state = sw.dispatchFetch(makeRequest("/", { mode: "navigate" }));
+    await sw.advance(TIMEOUT_MS);
+    assert.equal(state.value, shell);
+
+    calls[0].resolve(makeResponse("<html>zu spät</html>"));
+    await flush();
+    assert.equal(state.value, shell, "bereits ausgelieferte Antwort bleibt bestehen");
+    assert.equal(sw.stores.get(sw.cacheName()).get(`${ORIGIN}/index.html`), shell, "Cache unverändert");
+  });
+
+  it("F) spät eintreffender Netzwerkfehler nach Timeout (Navigation ohne Cache) erzeugt keine unbehandelte Rejection", async () => {
+    const { impl, calls } = deferredFetch();
+    const sw = loadServiceWorker({ fetchImpl: impl });
+
+    const state = sw.dispatchFetch(makeRequest("/", { mode: "navigate" }));
+    await sw.advance(TIMEOUT_MS);
+    assert.ok(state.error instanceof Error);
+
+    calls[0].reject(new TypeError("Failed to fetch"));
+    await flush();
+    // afterEach prüft zusätzlich, dass keine unbehandelte Rejection auftrat.
+    assert.match(state.error.message, /Timeout/, "erster Fehler bleibt maßgeblich");
   });
 });

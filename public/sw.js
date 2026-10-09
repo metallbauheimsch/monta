@@ -41,14 +41,20 @@ const CACHE_NAME = "monta-shell-v2";
 // Download des Inhalts.
 const NETWORK_TIMEOUT_MS = 15000;
 
+// Navigationen werden bewusst exakt wie bisher mit fetch(request) ohne
+// zusätzliches init-Objekt angefragt: ein init (z. B. { signal }) würde
+// laut Fetch-Spezifikation eine Request-Kopie mit mode "same-origin"
+// statt "navigate" erzeugen. Der Timeout gilt trotzdem; der Request wird
+// dabei nur nicht abgebrochen, seine spätere Antwort wird ignoriert.
 function fetchWithTimeout(request) {
-  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const controller =
+    request.mode !== "navigate" && typeof AbortController === "function" ? new AbortController() : null;
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       if (controller) controller.abort();
       reject(new Error(`MONTA: Netzwerk-Timeout nach ${NETWORK_TIMEOUT_MS} ms`));
     }, NETWORK_TIMEOUT_MS);
-    fetch(request, controller ? { signal: controller.signal } : undefined).then(
+    (controller ? fetch(request, { signal: controller.signal }) : fetch(request)).then(
       (response) => {
         clearTimeout(timer);
         resolve(response);
