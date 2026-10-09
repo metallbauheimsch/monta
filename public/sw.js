@@ -31,6 +31,36 @@
 // abweichendem Namen (also auch alle Caches früherer CACHE_NAME-Werte).
 const CACHE_NAME = "monta-shell-v2";
 
+// Erststart-Bugfix: Ein Netzwerkrequest, der weder antwortet noch einen
+// Fehler wirft (z. B. hängende Verbindung beim Kaltstart), darf die
+// Navigation bzw. das JS-/CSS-Bundle nicht unbegrenzt blockieren - sonst
+// bleibt MONTA weiß, bevor React überhaupt startet. Nach dieser Wartezeit
+// wird der Request abgebrochen und der bisherige Cache-Fallback greift.
+// Bewusst großzügig gewählt (langsame Baustellen-Verbindungen): der Wert
+// begrenzt nur die Zeit bis zum Eintreffen der Antwort-Header, nicht den
+// Download des Inhalts.
+const NETWORK_TIMEOUT_MS = 15000;
+
+function fetchWithTimeout(request) {
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      if (controller) controller.abort();
+      reject(new Error(`MONTA: Netzwerk-Timeout nach ${NETWORK_TIMEOUT_MS} ms`));
+    }, NETWORK_TIMEOUT_MS);
+    fetch(request, controller ? { signal: controller.signal } : undefined).then(
+      (response) => {
+        clearTimeout(timer);
+        resolve(response);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
 self.addEventListener("install", () => {
   self.skipWaiting();
 });
@@ -56,7 +86,7 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     caches.open(CACHE_NAME).then(async (cache) => {
       try {
-        const response = await fetch(request);
+        const response = await fetchWithTimeout(request);
         if (response && response.ok) cache.put(request, response.clone());
         return response;
       } catch (err) {
