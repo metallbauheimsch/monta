@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import "./styles/style.css";
 import Shell from "./components/Shell";
 import ProjectsList from "./features/projects/ProjectsList";
+import { DEFAULT_ACTIVE_SORT } from "./features/projects/projectSorting";
 import NewProjectForm from "./features/projects/NewProjectForm";
 import ProjectDetail from "./features/projects/ProjectDetail";
 import ProjectView from "./features/projects/ProjectView";
@@ -87,6 +88,10 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
+  // Sprint 1: Sortierung der Projektübersicht - nur im Laufzeitzustand
+  // (bleibt beim Wechsel zwischen Ansichten erhalten, nach Reload Standard).
+  const [projectSortMode, setProjectSortMode] = useState(DEFAULT_ACTIVE_SORT);
+  const [archiveSortDir, setArchiveSortDir] = useState("asc");
   const [printStationUserId, setPrintStationUserId] = useState(null);
 
   // Verhindert, dass ein älterer (noch laufender) load() neuere lokale
@@ -123,8 +128,6 @@ function App() {
   const bauteilItems = baugruppeItems.filter(
     (i) => parseEinbauort(i.einbauort, project?.baugruppe).bauteil === selectedBauteil
   );
-
-  const visibleProjects = showArchived ? projects : projects.filter((p) => !p.archived);
 
   // Deep-Link aus internen Workflow-Mails (Praxis-Sprint): ?project=&tab=
   // öffnet nach Login direkt Projekt + Reiter. Läuft NACH den bestehenden
@@ -1205,17 +1208,18 @@ function App() {
       {view === "projects" && (
         <div>
           <ProjectsList
-            projects={visibleProjects}
+            projects={projects}
             items={items}
             structureRows={structureRows}
             setView={setView}
             setProjectId={setProjectId}
+            showArchived={showArchived}
+            onToggleArchived={() => setShowArchived((s) => !s)}
+            sortMode={projectSortMode}
+            onSortModeChange={setProjectSortMode}
+            archiveSortDir={archiveSortDir}
+            onArchiveSortDirChange={setArchiveSortDir}
           />
-          {visibleProjects.length > 0 && (
-            <button style={{ marginTop: 12 }} onClick={() => setShowArchived((s) => !s)}>
-              {showArchived ? "Archiv ausblenden" : "Archiv anzeigen"}
-            </button>
-          )}
           <PrintStationPanel
             userId={session?.user?.id}
             isAssignedUser={printStationUserId === session?.user?.id}

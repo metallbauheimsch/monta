@@ -310,7 +310,7 @@ export default function LagerView({
         Lager
         <span className="statusPill" title={status.label}>
           {" "}
-          {status.cls === "green" ? "🟢" : status.cls === "yellow" ? "🟡" : "🔴"} {status.label}
+          {status.emoji} {status.label}
         </span>
       </h2>
       <p className="hint">

@@ -44,14 +44,29 @@ export function baugruppeStatus(items) {
   return { key: "offen", emoji: "🔴", label: "Offen" };
 }
 
+// Projektampel (Sprint 1: einheitliche Ampellogik). Reine Anzeigefunktion -
+// Farbe und Bezeichnung folgen jetzt derselben fachlichen Regel wie die
+// Baugruppenampel (baugruppeStatus über alle Positionen des Projekts):
+// Rot = offen, Gelb = bestellt, Grün = bereit, Grau = keine Positionen.
+// Früher bedeutete Gelb hier "teilweise bereit" - diese Abweichung ist
+// bewusst beseitigt. baugruppeStatus selbst bleibt unverändert, da
+// Workflow-Mails und Druckaufträge (useWorkflowWatchers) darauf beruhen.
+// pct (Materialfortschritt) wird unverändert berechnet: Anteil aktiver
+// Positionen mit vorhandener Menge >= benötigter Menge.
+const PROJECT_AMPEL = {
+  offen: { label: "offen", cls: "red" },
+  bestellt: { label: "bestellt", cls: "yellow" },
+  bereit: { label: "bereit", cls: "green" },
+  leer: { label: "keine Positionen", cls: "grey" },
+};
+
 export function projectStatus(project, items) {
-  const own = items.filter((i) => i.project_id === project.id && isActiveItem(i));
-  if (!own.length) return { pct: 0, label: "Keine Teile bereit", cls: "red" };
-  const ready = own.filter((i) => Number(i.bereit || 0) >= Number(i.menge || 0)).length;
-  const pct = Math.round((ready / own.length) * 100);
-  if (pct === 100) return { pct, label: "Montagebereit", cls: "green" };
-  if (pct > 0) return { pct, label: "Teilweise bereit", cls: "yellow" };
-  return { pct, label: "Keine Teile bereit", cls: "red" };
+  const own = items.filter((i) => i.project_id === project.id);
+  const ampel = baugruppeStatus(own);
+  const active = own.filter(isActiveItem);
+  const ready = active.filter((i) => Number(i.bereit || 0) >= Number(i.menge || 0)).length;
+  const pct = active.length ? Math.round((ready / active.length) * 100) : 0;
+  return { key: ampel.key, emoji: ampel.emoji, pct, ...PROJECT_AMPEL[ampel.key] };
 }
 
 // Projekt-Kurzbezeichnung für Rücknavigation (z. B. "← Pergola") - dasselbe
