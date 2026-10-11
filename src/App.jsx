@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import "./styles/style.css";
 import Shell from "./components/Shell";
 import ProjectsList from "./features/projects/ProjectsList";
-import { DEFAULT_ACTIVE_SORT } from "./features/projects/projectSorting";
+import { DEFAULT_ACTIVE_SORT, DEFAULT_ACTIVE_SORT_DIR } from "./features/projects/projectSorting";
 import NewProjectForm from "./features/projects/NewProjectForm";
 import ProjectDetail from "./features/projects/ProjectDetail";
 import ProjectView from "./features/projects/ProjectView";
@@ -91,6 +91,7 @@ function App() {
   // Sprint 1: Sortierung der Projektübersicht - nur im Laufzeitzustand
   // (bleibt beim Wechsel zwischen Ansichten erhalten, nach Reload Standard).
   const [projectSortMode, setProjectSortMode] = useState(DEFAULT_ACTIVE_SORT);
+  const [projectSortDir, setProjectSortDir] = useState(DEFAULT_ACTIVE_SORT_DIR);
   const [archiveSortDir, setArchiveSortDir] = useState("asc");
   const [printStationUserId, setPrintStationUserId] = useState(null);
 
@@ -1216,7 +1217,12 @@ function App() {
             showArchived={showArchived}
             onToggleArchived={() => setShowArchived((s) => !s)}
             sortMode={projectSortMode}
-            onSortModeChange={setProjectSortMode}
+            onSortModeChange={(mode) => {
+              setProjectSortMode(mode);
+              setProjectSortDir(DEFAULT_ACTIVE_SORT_DIR);
+            }}
+            sortDir={projectSortDir}
+            onSortDirChange={setProjectSortDir}
             archiveSortDir={archiveSortDir}
             onArchiveSortDirChange={setArchiveSortDir}
           />

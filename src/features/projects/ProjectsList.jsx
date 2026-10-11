@@ -1,8 +1,10 @@
 import { projectStatus, baugruppeStatus } from "../../utils/helpers";
 import { buildProjectStructure, parseEinbauort } from "../../utils/structure";
 import {
+  ACTIVE_SORT_DIR_LABELS,
   ACTIVE_SORT_MODES,
   DEFAULT_ACTIVE_SORT,
+  DEFAULT_ACTIVE_SORT_DIR,
   isArchiveToggleVisible,
   sortActiveProjects,
   sortArchivedProjects,
@@ -71,6 +73,8 @@ export default function ProjectsList({
   onToggleArchived,
   sortMode = DEFAULT_ACTIVE_SORT,
   onSortModeChange,
+  sortDir = DEFAULT_ACTIVE_SORT_DIR,
+  onSortDirChange,
   archiveSortDir = "asc",
   onArchiveSortDirChange,
 }) {
@@ -93,7 +97,7 @@ export default function ProjectsList({
     setView("projectDetail");
   };
   const { active, archived } = splitProjects(projects);
-  const sortedActive = sortActiveProjects(active, items, sortMode);
+  const sortedActive = sortActiveProjects(active, items, sortMode, sortDir);
   const sortedArchived = sortArchivedProjects(archived, archiveSortDir);
 
   return (
@@ -102,14 +106,24 @@ export default function ProjectsList({
         <h2>Projekte</h2>
         <button onClick={() => setView("newProject")}>Neues Projekt</button>
       </div>
-      <label className="projectSort">
-        Sortieren
-        <select value={sortMode} onChange={(e) => onSortModeChange?.(e.target.value)}>
-          {ACTIVE_SORT_MODES.map((m) => (
-            <option key={m.key} value={m.key}>{m.label}</option>
-          ))}
-        </select>
-      </label>
+      <div className="projectSort">
+        <label>
+          Sortieren
+          <select value={sortMode} onChange={(e) => onSortModeChange?.(e.target.value)}>
+            {ACTIVE_SORT_MODES.map((m) => (
+              <option key={m.key} value={m.key}>{m.label}</option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="ghost sortDirBtn"
+          onClick={() => onSortDirChange?.(toggleSortDir(sortDir))}
+          title="Sortierrichtung umkehren"
+        >
+          {ACTIVE_SORT_DIR_LABELS[sortMode]?.[sortDir] || ACTIVE_SORT_DIR_LABELS.status.asc}
+        </button>
+      </div>
       {sortedActive.length === 0 && <p className="hint">Keine aktiven Projekte.</p>}
       {sortedActive.map((p) => (
         <ProjectCard key={p.id} project={p} items={items} structureRows={structureRows} onOpen={openProject} />

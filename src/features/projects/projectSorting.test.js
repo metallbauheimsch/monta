@@ -9,8 +9,10 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import {
+  ACTIVE_SORT_DIR_LABELS,
   ACTIVE_SORT_MODES,
   DEFAULT_ACTIVE_SORT,
+  DEFAULT_ACTIVE_SORT_DIR,
   isArchiveToggleVisible,
   sortActiveProjects,
   sortArchivedProjects,
@@ -180,5 +182,77 @@ describe("Archivierte Projekte öffnen und zurückholen (Verdrahtung)", () => {
   it("'Aus Archiv zurückholen' ist in der Projektdetailansicht weiterhin vorhanden", () => {
     assert.match(detailSource, /setProjectArchived\(project\.id, false\)/);
     assert.match(detailSource, /Aus Archiv zurückholen/);
+  });
+});
+
+describe("Nachbesserung: umschaltbare Sortierrichtung der aktiven Projekte", () => {
+  it("Standardrichtung ist 'asc' (Status Rot -> Grau) und entspricht dem Aufruf ohne Richtung", () => {
+    assert.equal(DEFAULT_ACTIVE_SORT_DIR, "asc");
+    for (const mode of ["status", "created", "name"]) {
+      assert.deepEqual(sortActiveProjects(projects, items, mode, "asc"), sortActiveProjects(projects, items, mode), mode);
+    }
+  });
+
+  it("Status: asc Rot -> Gelb -> Grün -> Grau, desc Grau -> Grün -> Gelb -> Rot (innerhalb der Gruppe weiter A–Z)", () => {
+    assert.deepEqual(names(sortActiveProjects(projects, items, "status", "asc")), [
+      "Ährenweg Geländer", "Balkon", "Überdachung", "Anbau", "Pergola", "Carport",
+    ]);
+    assert.deepEqual(names(sortActiveProjects(projects, items, "status", "desc")), [
+      "Carport", "Anbau", "Pergola", "Überdachung", "Ährenweg Geländer", "Balkon",
+    ]);
+  });
+
+  it("Erstellungsdatum: asc neueste zuerst, desc älteste zuerst", () => {
+    assert.deepEqual(names(sortActiveProjects(projects, items, "created", "asc")), [
+      "Anbau", "Balkon", "Carport", "Pergola", "Ährenweg Geländer", "Überdachung",
+    ]);
+    assert.deepEqual(names(sortActiveProjects(projects, items, "created", "desc")), [
+      "Überdachung", "Ährenweg Geländer", "Pergola", "Carport", "Balkon", "Anbau",
+    ]);
+  });
+
+  it("Erstellungsdatum desc: Projekte ohne gültiges Datum bleiben am Ende, Gleichstand A–Z", () => {
+    const list = [
+      { id: "a", name: "Zaun", created_at: "2026-01-01T00:00:00Z" },
+      { id: "b", name: "Alt", created_at: null },
+      { id: "c", name: "Bühne", created_at: "2026-01-01T00:00:00Z" },
+      { id: "d", name: "Neu", created_at: "2026-09-01T00:00:00Z" },
+    ];
+    assert.deepEqual(names(sortActiveProjects(list, [], "created", "desc")), ["Bühne", "Zaun", "Neu", "Alt"]);
+  });
+
+  it("Alphabetisch: asc A–Z, desc Z–A", () => {
+    assert.deepEqual(names(sortActiveProjects(projects, items, "name", "asc")), [
+      "Ährenweg Geländer", "Anbau", "Balkon", "Carport", "Pergola", "Überdachung",
+    ]);
+    assert.deepEqual(names(sortActiveProjects(projects, items, "name", "desc")), [
+      "Überdachung", "Pergola", "Carport", "Balkon", "Anbau", "Ährenweg Geländer",
+    ]);
+  });
+
+  it("jeder Klick kehrt die Richtung um (asc -> desc -> asc)", () => {
+    let dirState = DEFAULT_ACTIVE_SORT_DIR;
+    const first = names(sortActiveProjects(projects, items, "status", dirState));
+    dirState = toggleSortDir(dirState);
+    assert.notDeepEqual(names(sortActiveProjects(projects, items, "status", dirState)), first);
+    dirState = toggleSortDir(dirState);
+    assert.deepEqual(names(sortActiveProjects(projects, items, "status", dirState)), first);
+  });
+
+  it("jede Sortierart hat für beide Richtungen eine verständliche Pfeil-Beschriftung", () => {
+    for (const { key } of ACTIVE_SORT_MODES) {
+      assert.match(ACTIVE_SORT_DIR_LABELS[key].asc, /[↓↑]/, key);
+      assert.match(ACTIVE_SORT_DIR_LABELS[key].desc, /[↓↑]/, key);
+      assert.notEqual(ACTIVE_SORT_DIR_LABELS[key].asc, ACTIVE_SORT_DIR_LABELS[key].desc, key);
+    }
+    assert.equal(ACTIVE_SORT_DIR_LABELS.status.asc, "Rot → Grau ↓");
+    assert.equal(ACTIVE_SORT_DIR_LABELS.created.desc, "Älteste zuerst ↑");
+    assert.equal(ACTIVE_SORT_DIR_LABELS.name.desc, "Z–A ↑");
+  });
+
+  it("Archivsortierung bleibt davon unabhängig (eigene Richtung, nur nach Name)", () => {
+    const archived = [{ id: "1", name: "Zaun" }, { id: "2", name: "Anbau" }];
+    assert.deepEqual(names(sortArchivedProjects(archived, "asc")), ["Anbau", "Zaun"]);
+    assert.deepEqual(names(sortArchivedProjects(archived, "desc")), ["Zaun", "Anbau"]);
   });
 });

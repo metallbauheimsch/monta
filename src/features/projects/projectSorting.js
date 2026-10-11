@@ -37,27 +37,40 @@ export function splitProjects(projects) {
   return { active, archived };
 }
 
-export function sortActiveProjects(projects, items, mode = DEFAULT_ACTIVE_SORT) {
+// Sortierrichtung der aktiven Projekte (Sprint 1 Nachbesserung): "asc" ist
+// je Sortierart die Standardrichtung, "desc" kehrt das Hauptkriterium um.
+// Gleichstände bleiben in beiden Richtungen A–Z (stabil, gut lesbar),
+// Projekte ohne gültiges Erstellungsdatum bleiben immer am Ende.
+export const DEFAULT_ACTIVE_SORT_DIR = "asc";
+
+export const ACTIVE_SORT_DIR_LABELS = {
+  status: { asc: "Rot → Grau ↓", desc: "Grau → Rot ↑" },
+  created: { asc: "Neueste zuerst ↓", desc: "Älteste zuerst ↑" },
+  name: { asc: "A–Z ↓", desc: "Z–A ↑" },
+};
+
+export function sortActiveProjects(projects, items, mode = DEFAULT_ACTIVE_SORT, dir = DEFAULT_ACTIVE_SORT_DIR) {
   const list = [...(projects || [])];
+  const sign = dir === "desc" ? -1 : 1;
   if (mode === "created") {
-    // Neueste zuerst; Projekte ohne gültiges Datum ans Ende.
+    // Standard: neueste zuerst; Projekte ohne gültiges Datum ans Ende.
     return list.sort((a, b) => {
       const ta = createdTime(a);
       const tb = createdTime(b);
       if (ta !== tb) {
         if (ta === null) return 1;
         if (tb === null) return -1;
-        return tb - ta;
+        return sign * (tb - ta);
       }
       return compareProjectName(a, b);
     });
   }
-  if (mode === "name") return list.sort(compareProjectName);
+  if (mode === "name") return list.sort((a, b) => sign * compareProjectName(a, b));
 
   const rank = new Map(
     list.map((p) => [p.id, STATUS_SORT_ORDER[projectStatus(p, items || []).key]])
   );
-  return list.sort((a, b) => rank.get(a.id) - rank.get(b.id) || compareProjectName(a, b));
+  return list.sort((a, b) => sign * (rank.get(a.id) - rank.get(b.id)) || compareProjectName(a, b));
 }
 
 /** Archiv: A–Z ("asc") oder Z–A ("desc") nach Projektname. */
