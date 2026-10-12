@@ -1,4 +1,5 @@
 import { getSupabaseFunctionsUrl, supabase } from "./supabaseClient";
+import { parseProjectReadyPrintResponse } from "./workflowTransitions";
 
 export const MAIL_RECIPIENTS = {
   tb_pruefung_completed: "sautter@metallbau-heimsch.de",
@@ -155,6 +156,38 @@ export async function notifyWarenkorbCompleted({ project, baugruppe, cycle }) {
       },
     },
   ]);
+}
+
+/**
+ * Einmalige Druckmail "Projekt materialbereit" (Sprint 2C). Der Client
+ * meldet nur Kandidaten (Projekte, die er als bereit sieht); die
+ * Datenbankfunktion entscheidet allein (Aktivierungsschalter, frische
+ * Materialprüfung, einmaliger event_key je Projekt ohne Zyklus,
+ * Bestandsprojekt-Markierung) und legt das Event an. Vor dem SQL-Patch
+ * existiert die Funktion nicht -> inaktiv, keine Mail, bisherige Abläufe
+ * unverändert. Kein direkter Client-Insert in notification_events.
+ */
+export async function requestProjectReadyPrintMails(projectIds) {
+  if (!supabase) return { active: false };
+  try {
+    const { data, error } = await supabase.rpc("request_project_ready_print_mails", {
+      p_project_ids: projectIds || [],
+    });
+    if (error) {
+      // PGRST202 = Funktion (noch) nicht vorhanden: erwarteter Zustand vor
+      // dem SQL-Patch, daher ohne Fehlermeldung.
+      if (error.code !== "PGRST202") {
+        console.error("MONTA: Druckmail-Prüfung:", error.message);
+      }
+      return { active: false };
+    }
+    const { active, eventIds } = parseProjectReadyPrintResponse(data);
+    if (active && eventIds.length) await invokeWorkflow(eventIds);
+    return { active };
+  } catch (err) {
+    console.error("MONTA: Druckmail-Prüfung fehlgeschlagen.", err?.message || err);
+    return { active: false };
+  }
 }
 
 /**

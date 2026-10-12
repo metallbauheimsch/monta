@@ -1,5 +1,10 @@
 # Druckstation – lokale Einrichtung (Ricoh IM C2010)
 
+> Sprint 2C: Nach Aktivierung der einmaligen Druckmail
+> (`PROJECT_READY_PRINT_MAIL.md`) werden keine automatischen Druckjobs mehr
+> erzeugt; gedruckt wird manuell über den Link in der Mail. Bis dahin gilt
+> diese Anleitung unverändert.
+
 MONTA erzeugt Druckaufträge und öffnet die Druckansicht. Die Auswahl des
 physischen Druckers und stilles Drucken liegen beim Windows-PC / Browser.
 

@@ -1,8 +1,17 @@
 import { useEffect, useRef } from "react";
 import { baugruppeStatus } from "../utils/helpers";
 import { parseEinbauort } from "../utils/structure";
-import { notifyAllItemsOrdered, nextEventCycle } from "./workflowNotifications";
+import {
+  notifyAllItemsOrdered,
+  nextEventCycle,
+  requestProjectReadyPrintMails,
+} from "./workflowNotifications";
 import { enqueuePrintJob, nextPrintCycle } from "./printStation";
+import {
+  planWorkflowTransitions,
+  printJobsAfterReadyMail,
+  readyProjectIds,
+} from "./workflowTransitions";
 
 function statusMaps(projects, items) {
   const byBaugruppe = {};
@@ -27,6 +36,9 @@ function statusMaps(projects, items) {
 /**
  * Projektweit: alle Positionen bestellt → eine Mail.
  * Je Baugruppe: montagebereit → Druckjob.
+ * Sprint 2C: Projekt bereit → Kandidat für die einmalige Druckmail
+ * (Entscheidung serverseitig, bis zur Aktivierung wirkungslos). Ist die
+ * Druckmail aktiv, entfallen die automatischen Druckjobs.
  */
 export function useWorkflowWatchers({ enabled, projects, items, userId }) {
   const seeded = useRef(false);
@@ -52,34 +64,48 @@ export function useWorkflowWatchers({ enabled, projects, items, userId }) {
           prevBg.current = byBaugruppe;
           prevProject.current = byProject;
           seeded.current = true;
+          // Sprint 2C: Nachholen beim Laden (z. B. Grünwerden auf einem
+          // Gerät mit altem Stand). Der Server sendet höchstens einmal je
+          // Projekt und nie für markierte Bestandsprojekte. Bewusst ohne
+          // await, damit der bisherige Ablauf (busy) unverändert bleibt.
+          const ready = readyProjectIds(byProject);
+          if (ready.length) requestProjectReadyPrintMails(ready);
           return;
         }
 
-        for (const [projectId, status] of Object.entries(byProject)) {
-          const before = prevProject.current[projectId];
-          if (before === status) continue;
+        const plan = planWorkflowTransitions(
+          prevProject.current,
+          byProject,
+          prevBg.current,
+          byBaugruppe
+        );
+
+        for (const projectId of plan.allItemsOrdered) {
           const project = projects.find((p) => p.id === projectId);
           if (!project) continue;
-          if (status === "bestellt" && before && before !== "bestellt" && before !== "bereit") {
-            const cycle = await nextEventCycle("all_items_ordered", projectId, "__project__");
-            await notifyAllItemsOrdered({
-              project,
-              baugruppe: "Gesamtprojekt",
-              cycle,
-            });
-          }
+          const cycle = await nextEventCycle("all_items_ordered", projectId, "__project__");
+          await notifyAllItemsOrdered({
+            project,
+            baugruppe: "Gesamtprojekt",
+            cycle,
+          });
         }
 
-        for (const [key, status] of Object.entries(byBaugruppe)) {
-          const before = prevBg.current[key];
-          if (before === status) continue;
-          const [projectId, baugruppe] = key.split("|");
+        let printJobs = plan.printJobs;
+        if (printJobs.length) {
+          // Nur wenn ein Druckjob anstünde, muss vorher bekannt sein, ob
+          // die Druckmail aktiv ist (dann kein automatischer Druckjob).
+          const { active } = await requestProjectReadyPrintMails(plan.readyProjects);
+          printJobs = printJobsAfterReadyMail(printJobs, active);
+        } else if (plan.readyProjects.length) {
+          requestProjectReadyPrintMails(plan.readyProjects);
+        }
+
+        for (const { projectId, baugruppe } of printJobs) {
           const project = projects.find((p) => p.id === projectId);
           if (!project || !baugruppe) continue;
-          if (status === "bereit" && before && before !== "bereit") {
-            const cycle = await nextPrintCycle(projectId, baugruppe);
-            await enqueuePrintJob({ projectId, baugruppe, cycle });
-          }
+          const cycle = await nextPrintCycle(projectId, baugruppe);
+          await enqueuePrintJob({ projectId, baugruppe, cycle });
         }
 
         prevBg.current = byBaugruppe;

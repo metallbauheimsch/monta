@@ -23,6 +23,7 @@ const ALLOWED_TYPES = new Set([
   "lager_completed",
   "all_items_ordered",
   "warenkorb_completed",
+  "project_ready_print",
   // historisch (werden nicht mehr versendet, nur geclaimt/abgeschlossen)
   "baugruppe_created",
   "cart_items_added",
@@ -33,6 +34,7 @@ const ACTIVE_TYPES = new Set([
   "lager_completed",
   "all_items_ordered",
   "warenkorb_completed",
+  "project_ready_print",
 ]);
 
 const RECIPIENT_BY_TYPE = {
@@ -40,6 +42,7 @@ const RECIPIENT_BY_TYPE = {
   lager_completed: "stoehr@metallbau-heimsch.de",
   all_items_ordered: "sautter@metallbau-heimsch.de",
   warenkorb_completed: "sautter@metallbau-heimsch.de",
+  project_ready_print: "stoehr@metallbau-heimsch.de",
 };
 
 // Deep-Link-Ziel je Ereignistyp (Praxis-Sprint): der jeweils nächste
@@ -53,6 +56,7 @@ const DEEP_LINK_TAB_BY_TYPE = {
   lager_completed: "bestellliste", // "wir müssen einkaufen"
   all_items_ordered: "material", // "Viel Spaß beim Einräumen"
   warenkorb_completed: "bestellliste", // Warenkorb-Abschluss -> zurück zum Warenkorb
+  project_ready_print: "druck", // Sprint 2C: Material bereit -> Druckansicht
 };
 
 function json(status, body) {
@@ -95,11 +99,17 @@ async function sendMail(opts) {
 // sonst bleibt der bisherige Mailtext unverändert (kein Absturz, kein
 // erratener Link). Keine bestehenden Mailtexte werden inhaltlich verändert,
 // die Zeile wird nur angehängt.
-function deepLinkLine(eventType, projectId) {
+function deepLinkUrl(eventType, projectId) {
   const appUrl = Deno.env.get("APP_URL");
   const tab = DEEP_LINK_TAB_BY_TYPE[eventType];
   if (!appUrl || !projectId || !tab) return "";
-  return `\nDirekt zu MONTA: ${appUrl.replace(/\/$/, "")}/?project=${projectId}&tab=${tab}\n`;
+  return `${appUrl.replace(/\/$/, "")}/?project=${projectId}&tab=${tab}`;
+}
+
+function deepLinkLine(eventType, projectId) {
+  const url = deepLinkUrl(eventType, projectId);
+  if (!url) return "";
+  return `\nDirekt zu MONTA: ${url}\n`;
 }
 
 function buildMail(eventType, payload, _baugruppeField, projectId) {
@@ -151,6 +161,22 @@ function buildMail(eventType, payload, _baugruppeField, projectId) {
         `der Bestellvorgang für das Projekt „${projectName}“ ist abgeschlossen.\n\n` +
         `Der Warenkorb wurde bewusst als fertig markiert.\n` +
         link +
+        `\nMONTA\n`,
+    };
+  }
+
+  if (eventType === "project_ready_print") {
+    // Sprint 2C: Der Drucklink ist der eigentliche Inhalt - ohne APP_URL
+    // wird nicht gesendet (Aufrufer markiert das Ereignis als failed).
+    const url = deepLinkUrl(eventType, projectId);
+    if (!url) throw new Error("APP_URL fehlt.");
+    return {
+      subject: `MONTA – Material bereit, bitte drucken – ${projectName}`,
+      text:
+        `Servus Moritz,\n\n` +
+        `das Material für das Projekt „${projectName}“ ist vollständig bereit.\n\n` +
+        `Die Montageunterlage kann jetzt gedruckt werden:\n` +
+        `${url}\n` +
         `\nMONTA\n`,
     };
   }
@@ -321,9 +347,16 @@ Deno.serve(async (req) => {
         await sendMail({ to: recipient, subject: mail.subject, text: mail.text });
         await markSent(admin, id);
         results.push({ id, ok: true });
-      } catch {
+      } catch (err) {
         console.error("workflow-notifications send failed");
-        await markFailed(admin, id);
+        // Sprint 2C: fehlende APP_URL nachvollziehbar protokollieren; alle
+        // übrigen Fehler unverändert mit Standardtext.
+        const appUrlMissing = err instanceof Error && err.message === "APP_URL fehlt.";
+        await markFailed(
+          admin,
+          id,
+          appUrlMissing ? "APP_URL fehlt - Drucklink kann nicht erzeugt werden." : undefined
+        );
         results.push({ id, ok: false, error: "E-Mail konnte nicht gesendet werden." });
       }
     }

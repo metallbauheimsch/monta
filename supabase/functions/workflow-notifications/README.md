@@ -10,6 +10,12 @@ Versendet MONTA-Workflow-Mails. Empfänger werden **nur serverseitig** aus
 | `tb_pruefung_completed` | sautter@metallbau-heimsch.de |
 | `lager_completed` | stoehr@metallbau-heimsch.de |
 | `all_items_ordered` | sautter@metallbau-heimsch.de |
+| `warenkorb_completed` | sautter@metallbau-heimsch.de |
+| `project_ready_print` | stoehr@metallbau-heimsch.de (Sprint 2C, erst nach Aktivierung, siehe `PROJECT_READY_PRINT_MAIL.md`) |
+
+`project_ready_print` benötigt `APP_URL` zwingend (Drucklink ist der
+Mailinhalt). Fehlt es, wird das Ereignis als `failed` markiert statt eine
+Mail ohne Link zu senden.
 
 Historische Typen `baugruppe_created` / `cart_items_added` werden nicht mehr
 versendet (ggf. als erledigt ohne Mail abgeschlossen).
