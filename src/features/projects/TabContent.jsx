@@ -3,6 +3,8 @@ import EinkaufView from "../fastening/EinkaufView";
 import LagerView from "../fastening/LagerView";
 import Checks from "../fastening/Checks";
 import PrintView from "../fastening/PrintView";
+import ProjectTbOverview from "./ProjectTbOverview";
+import { PROJECT_TB_TAB } from "../../utils/tabs";
 
 export default function TabContent({
   tab,
@@ -23,7 +25,18 @@ export default function TabContent({
   replaceItemsBulk,
   setProjectCompletion,
   openProjectTab,
+  openBauteil,
 }) {
+  if (tab === PROJECT_TB_TAB) {
+    return (
+      <ProjectTbOverview
+        project={project}
+        projectItems={projectItems}
+        structureRows={structureRows}
+        openBauteil={openBauteil}
+      />
+    );
+  }
   if (tab === "tb") {
     return (
       <TechnikerEditor

@@ -871,10 +871,15 @@ function App() {
     authLoading,
   });
 
-  function openBauteil(baugruppeName, bauteilName) {
+  // explicitTab (Sprint 2A): die projektweite TB-Übersicht öffnet ein
+  // Bauteil immer direkt im Bauteil-TB. Ohne Angabe unverändert.
+  function openBauteil(baugruppeName, bauteilName, explicitTab) {
     setSelectedBaugruppe(baugruppeName);
     setSelectedBauteil(bauteilName);
-    setTab(tabForBauteilOpen(lastFachTabRef.current, isNarrow, { fullAccess: tabFullAccess }));
+    setTab(
+      explicitTab ||
+        tabForBauteilOpen(lastFachTabRef.current, isNarrow, { fullAccess: tabFullAccess })
+    );
     setView("project");
   }
 
@@ -1299,6 +1304,7 @@ function App() {
           replaceItemsBulk={replaceItemsBulk}
           setProjectCompletion={setProjectCompletion}
           openProjectTab={openProjectTab}
+          openBauteil={openBauteil}
         />
       )}
     </Shell>

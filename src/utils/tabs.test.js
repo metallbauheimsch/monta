@@ -11,6 +11,10 @@ import {
   visibleTabsFor,
   resolveTabFullAccess,
   TAB_ORDER,
+  TAB_LABELS,
+  PROJECT_TB_TAB,
+  PROJECT_NAV_TAB_ORDER,
+  projectNavTabsFor,
 } from "./tabs.js";
 
 describe("visibleTabsFor/projectWideTabsFor: Reiter sind auf jedem Gerät erreichbar (Praxistest-Korrektur)", () => {
@@ -30,13 +34,30 @@ describe("visibleTabsFor/projectWideTabsFor: Reiter sind auf jedem Gerät erreic
     assert.equal(projectWideTabsFor().includes("pruefung"), true);
   });
 
-  it("projektweite Navigation bietet genau Prüfung/Lager/Warenkorb/Druck", () => {
+  it("projektweite Reiter (= Deep-Link-Ziele) bleiben genau Prüfung/Lager/Warenkorb/Druck", () => {
     assert.deepEqual(projectWideTabsFor(), ["pruefung", "material", "bestellliste", "druck"]);
   });
 
-  it("TB ist NIEMALS Bestandteil der projektweiten Navigation", () => {
+  // Sprint 2A: angepasste frühere Annahme "TB niemals projektweit" - es gibt
+  // jetzt eine projektweite, rein lesende TB-Übersicht (eigener Schlüssel
+  // "tbProjekt"). Der bearbeitbare Bauteil-TB ("tb") bleibt bauteilgebunden.
+  it("Sprint 2A: obere Projekt-Navigation = TB-Übersicht + Prüfung/Lager/Warenkorb/Druck", () => {
+    assert.deepEqual(projectNavTabsFor(), ["tbProjekt", "pruefung", "material", "bestellliste", "druck"]);
+    assert.deepEqual(PROJECT_NAV_TAB_ORDER, projectNavTabsFor());
+    assert.equal(PROJECT_TB_TAB, "tbProjekt");
+    assert.equal(TAB_LABELS.tbProjekt, "TB");
+  });
+
+  it("der bearbeitbare Bauteil-TB ('tb') ist NIEMALS Bestandteil der projektweiten Navigation", () => {
     assert.equal(PROJECT_WIDE_TAB_ORDER.includes("tb"), false);
     assert.equal(projectWideTabsFor().includes("tb"), false);
+    assert.equal(projectNavTabsFor().includes("tb"), false);
+  });
+
+  it("die TB-Übersicht ist kein Deep-Link-Ziel und erscheint nicht in der Bauteilansicht", () => {
+    assert.equal(PROJECT_WIDE_TAB_ORDER.includes("tbProjekt"), false);
+    assert.equal(visibleTabsFor().includes("tbProjekt"), false);
+    assert.deepEqual(TAB_ORDER, ["tb", "pruefung", "material", "bestellliste", "druck"]);
   });
 });
 
@@ -80,5 +101,10 @@ describe("tabForBauteilOpen: Reiterzustand beim Bauteilwechsel (Praxistest-Korre
 
   it("gemerkter Reiter hat auch auf schmalen Geräten Vorrang vor dem Standard", () => {
     assert.equal(tabForBauteilOpen("druck", true, { fullAccess: false }), "druck");
+  });
+
+  it("Sprint 2A: zuletzt projektweite TB-Übersicht -> Bauteil öffnet den Bauteil-TB (nicht Lager)", () => {
+    assert.equal(tabForBauteilOpen("tbProjekt", false, { fullAccess: true }), "tb");
+    assert.equal(tabForBauteilOpen("tbProjekt", true, { fullAccess: false }), "tb");
   });
 });

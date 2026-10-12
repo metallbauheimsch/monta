@@ -254,6 +254,8 @@ th{background:#eee;font-weight:700}
 .radioLine input{width:auto}
 .printStationBanner{background:#111;color:#fff;padding:8px 12px;font-size:13px;font-weight:700;margin:0 0 10px;border-radius:10px}
 .printStationPanel h3,.printStationPanel h4{margin:0 0 6px}
+.tbOverviewBauteilHead{cursor:pointer;display:inline-block;padding:6px 0;text-decoration:underline;text-underline-offset:3px}
+.tbOverviewBauteilHead:hover,.tbOverviewBauteilHead:focus-visible{color:#111}
 .printMaterialTable{table-layout:fixed;width:100%;border-collapse:collapse}
 .printMaterialTable th,.printMaterialTable td{border:1px solid #d0d0d0;padding:6px 8px;vertical-align:top;word-wrap:break-word;overflow-wrap:anywhere}
 .printMaterialTable .colPos{width:7%}

@@ -42,6 +42,10 @@ describe("Test T: ungültige/fehlende Parameter führen sicher zur normalen App"
     assert.equal(parseDeepLinkParams("?project=abc&tab=tb"), null);
   });
 
+  it("Sprint 2A: die projektweite TB-Übersicht ist bewusst kein Deep-Link-Ziel", () => {
+    assert.equal(parseDeepLinkParams("?project=abc&tab=tbProjekt"), null);
+  });
+
   it("unbekannter Reiter -> null", () => {
     assert.equal(parseDeepLinkParams("?project=abc&tab=unbekannt"), null);
   });

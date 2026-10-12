@@ -4,7 +4,7 @@ import EntityContextMenu from "../../components/EntityContextMenu";
 import { projectStatus, baugruppeStatus } from "../../utils/helpers";
 import { buildProjectStructure, parseEinbauort } from "../../utils/structure";
 import { useContextMenuGesture } from "../../utils/contextMenuGesture";
-import { TAB_LABELS, projectWideTabsFor } from "../../utils/tabs";
+import { TAB_LABELS, projectNavTabsFor } from "../../utils/tabs";
 
 export default function ProjectDetail({
   project,
@@ -42,7 +42,8 @@ export default function ProjectDetail({
   const baugruppeMenu = useContextMenuGesture();
 
   const structure = buildProjectStructure(project, items, structureRows);
-  const projectWideTabs = projectWideTabsFor();
+  // Sprint 2A: inkl. projektweiter TB-Übersicht (vorne).
+  const projectWideTabs = projectNavTabsFor();
 
   function handleBauteilClick(baugruppe, bauteil) {
     if (bauteilMenu.consumeSuppressedClick()) return;

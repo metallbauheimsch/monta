@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { projectShortLabel } from "../../utils/helpers";
-import { TAB_LABELS, projectWideTabsFor } from "../../utils/tabs";
+import { TAB_LABELS, projectNavTabsFor, projectWideTabsFor } from "../../utils/tabs";
 import TabContent from "./TabContent";
 
 /**
@@ -24,11 +24,15 @@ export default function ProjectWideView({
   replaceItemsBulk,
   setProjectCompletion,
   openProjectTab,
+  openBauteil,
 }) {
-  const visibleTabs = projectWideTabsFor();
+  // Sprint 2A: zusätzlich die projektweite, rein lesende TB-Übersicht vorne.
+  const visibleTabs = projectNavTabsFor();
 
   useEffect(() => {
-    if (!visibleTabs.includes(tab)) setTab(visibleTabs[0]);
+    // Rückfall bei unbekanntem Reiter unverändert auf den ersten bisherigen
+    // projektweiten Reiter (Prüfung), nicht auf die TB-Übersicht.
+    if (!visibleTabs.includes(tab)) setTab(projectWideTabsFor()[0]);
   }, [visibleTabs, tab, setTab]);
 
   return (
@@ -60,6 +64,7 @@ export default function ProjectWideView({
         replaceItemsBulk={replaceItemsBulk}
         setProjectCompletion={setProjectCompletion}
         openProjectTab={openProjectTab}
+        openBauteil={openBauteil}
       />
     </>
   );
