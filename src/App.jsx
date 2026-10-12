@@ -22,7 +22,9 @@ import {
   notifyLagerCompleted,
   notifyWarenkorbCompleted,
   nextEventCycle,
+  loadProjectMaterialForMailCheck,
 } from "./services/workflowNotifications";
+import { decideLagerCompletedMail } from "./features/fastening/lagerCompletionMail";
 import { loadPrintStationSettings } from "./services/printStation";
 import { isMobileLike, useIsNarrow } from "./utils/helpers";
 import {
@@ -852,8 +854,17 @@ function App() {
           const cycle = await nextEventCycle("tb_pruefung_completed", pid, scope);
           await notifyTbPruefungCompleted({ project: proj, baugruppe: scope, cycle });
         } else if (field === "lager_abgeschlossen") {
-          const cycle = await nextEventCycle("lager_completed", pid, scope);
-          await notifyLagerCompleted({ project: proj, baugruppe: scope, cycle });
+          // Sprint 2B: keine Lagerabschluss-Mail, wenn alle aktiven
+          // Positionen bereits vollständig bereit sind (frisch gelesen;
+          // bei Lesefehler wie bisher senden). Checkbox/Speichern oben
+          // bleiben davon unberührt.
+          const sendLagerMail = await decideLagerCompletedMail(() =>
+            loadProjectMaterialForMailCheck(pid)
+          );
+          if (sendLagerMail) {
+            const cycle = await nextEventCycle("lager_completed", pid, scope);
+            await notifyLagerCompleted({ project: proj, baugruppe: scope, cycle });
+          }
         } else if (field === "warenkorb_abgeschlossen") {
           const cycle = await nextEventCycle("warenkorb_completed", pid, scope);
           await notifyWarenkorbCompleted({ project: proj, baugruppe: scope, cycle });

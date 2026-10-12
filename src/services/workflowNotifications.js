@@ -157,6 +157,27 @@ export async function notifyWarenkorbCompleted({ project, baugruppe, cycle }) {
   ]);
 }
 
+/**
+ * Frischer, rein lesender Abruf aller Materialpositionen eines Projekts
+ * unmittelbar vor der Lagerabschluss-Mailentscheidung (Sprint 2B) - damit
+ * kein veralteter lokaler Stand (z. B. Änderung auf einem anderen Gerät,
+ * Realtime noch nicht angekommen) entscheidet. Wirft bei jedem Fehler oder
+ * unvollständiger Antwort; der Aufrufer sendet dann wie bisher.
+ */
+export async function loadProjectMaterialForMailCheck(projectId) {
+  if (!supabase) throw new Error("Supabase nicht konfiguriert.");
+  const { data, error, count } = await supabase
+    .from("material_items")
+    .select("*", { count: "exact" })
+    .eq("project_id", projectId);
+  if (error) throw error;
+  if (!Array.isArray(data)) throw new Error("Ungültige Antwort.");
+  if (typeof count === "number" && count !== data.length) {
+    throw new Error("Materialpositionen unvollständig geladen.");
+  }
+  return data;
+}
+
 export async function nextEventCycle(eventType, projectId, baugruppe) {
   if (!supabase) return 1;
   const { data, error } = await supabase.rpc("next_notification_cycle", {
