@@ -36,7 +36,7 @@ Zusätzlich:
 
 ## Ansichten
 
-- **TB:** je Bauteil
+- **TB:** Bearbeitung je Bauteil; projektweite TB-Übersicht nur lesend
 - **Prüfung / Lager / Warenkorb:** projektweit (Aggregation nur zur Anzeige)
 - **Druck:** nach Baugruppe → Bauteil getrennt, mit Suche
 

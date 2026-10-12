@@ -63,6 +63,11 @@ Jede Ansicht (Projektübersicht, TB, Prüfung, Lager, Warenkorb, Druck) zeigt de
 
 Der TB erfasst Verbindungsmittel manuell.
 
+Bearbeitet wird der TB je Bauteil. Zusätzlich gibt es in der
+Projekt-Navigation eine projektweite, rein lesende TB-Übersicht
+(Baugruppe → Bauteil, jede Position einzeln, ohne ersetzte Positionen);
+sie ist kein Mail-Deep-Link-Ziel.
+
 Ein späterer 3D-Import bleibt vorbereitet.
 
 Bis zur Einführung eines geeigneten 3D-CAD-Programms erfolgt keine weitere Entwicklung in diesem Bereich.
@@ -327,8 +332,14 @@ Auslöser sind bewusste Abschlussaktionen bzw. der fachliche Übergang
 „vollständig bestellt“:
 
 - TB/Prüfung abgeschlossen → sautter@metallbau-heimsch.de
-- Lagerprüfung abgeschlossen → stoehr@metallbau-heimsch.de
+- Lagerprüfung abgeschlossen → stoehr@metallbau-heimsch.de, außer wenn beim
+  Abschluss bereits alle aktiven Positionen vollständig bereit sind (frisch
+  aus der Datenbank geprüft; ohne aktive Positionen oder bei Lesefehler
+  weiterhin Mail)
 - Alle offenen Positionen des **gesamten Projekts** bestellt → sautter@metallbau-heimsch.de
+- Projekt erstmals vollständig materialbereit → einmalig stoehr@ mit Link zur
+  Druckansicht (vorbereitet, aktiv erst nach Freigabe gemäß
+  `PROJECT_READY_PRINT_MAIL.md`; ersetzt dann die automatischen Druckjobs)
 
 Keine Mail beim bloßen Anlegen einer Baugruppe.
 Keine Mail allein durch neue offene Warenkorbzeilen.

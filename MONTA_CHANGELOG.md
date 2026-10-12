@@ -809,6 +809,40 @@ Keine Echtdaten verändert. Kein SQL ausgeführt.
 
 ---
 
+# Sprint 2 (nach Projektampel): TB-Reiter, Lagerabschluss, Druckmail
+
+## Projektweiter TB-Reiter
+
+- In der oberen Projekt-Navigation gibt es vorne den Reiter „TB“. Er zeigt
+  alle aktuellen TB-Positionen des Projekts, gegliedert nach Baugruppe →
+  Bauteil, jede Position einzeln (keine Zusammenfassung). Ersetzte
+  Positionen sind ausgeblendet.
+- Die Übersicht ist nur zum Lesen. Ein Tipp auf „Bauteil: …“ öffnet den
+  gewohnten TB dieses Bauteils zur Bearbeitung.
+- TB je Bauteil, Druckansicht und Mail-Links bleiben unverändert.
+
+## Lagerprüfung abgeschlossen
+
+- Die Lagerabschluss-Mail an stoehr@ entfällt, wenn beim Abschluss bereits
+  alles Material vollständig bereit ist. Fehlt noch Material (auch wenn es
+  schon bestellt ist) oder hat das Projekt keine Positionen, kommt die Mail
+  wie bisher.
+- Die Checkboxen „Lagerprüfung abgeschlossen“ und „Warenkorb abgeschlossen“
+  bleiben manuell; die Ampel setzt keine Checkbox.
+
+## Einmalige Druckmail (vorbereitet, noch nicht aktiv)
+
+- Vorbereitet: Sobald ein Projekt zum ersten Mal vollständig materialbereit
+  ist, genau eine Mail an stoehr@ mit Link zur Druckansicht; die
+  automatische Druckausgabe über die Druckstation entfällt dann.
+- Bereits grüne Projekte erhalten bei Einführung nie eine solche Mail.
+- Aktivierung nur nach Freigabe, Schritt für Schritt nach
+  `PROJECT_READY_PRINT_MAIL.md`.
+
+Keine Echtdaten verändert. Kein SQL ausgeführt. Keine Edge Function deployt.
+
+---
+
 # Regeln
 
 Nach jedem abgeschlossenen Sprint werden hier ergänzt:
