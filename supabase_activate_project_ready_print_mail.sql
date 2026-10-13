@@ -90,8 +90,12 @@ commit;
 -- D) DEAKTIVIEREN (nur bei Problemen, separat ausführen)
 -- ---------------------------------------------------------------------------
 -- Stoppt neue Druckmails sofort. Achtung: automatische Druckjobs je
--- Baugruppe werden danach wieder erzeugt (bisheriges Verhalten). Die
--- Bestandsmarkierungen bleiben erhalten. Eine spätere erneute Aktivierung
+-- Baugruppe werden danach wieder erzeugt (bisheriges Verhalten), aber nur
+-- für künftige Baugruppen-Übergänge auf grün - kein Nachdruck für die
+-- aktive Phase. Die Bestandsmarkierungen bleiben erhalten. Zum Zeitpunkt
+-- der Deaktivierung noch 'pending' stehende Druckmails werden nicht mehr
+-- versendet, auch nicht nach erneuter Aktivierung (sie bleiben sichtbar
+-- 'pending'; das Projekt erhält keine Druckmail). Eine spätere erneute Aktivierung
 -- über Abschnitt B markiert zusätzlich alle DANN grünen Projekte ohne
 -- Ereignis als Bestand (keine Mail) - vorher bewusst entscheiden.
 --
@@ -114,7 +118,9 @@ commit;
 --    update public.notification_events
 --      set status = 'pending', processing_at = null, last_error = null
 --      where id = '<event-id>' and event_type = 'project_ready_print' and status = 'failed';
--- 5. Der nächste App-Start eines aktiven Nutzers (frühestens 2 Minuten
---    nach der ursprünglichen Anlage) übergibt das Ereignis an die Edge
+-- 5. Der nächste App-Start auf einem Gerät, das die Druckmail bereits als
+--    aktiv kennt, oder der nächste Grünwechsel eines Projekts (frühestens
+--    2 Minuten nach der ursprünglichen Anlage, nur solange die Druckmail
+--    aktiv ist) übergibt das Ereignis an die Edge
 --    Function; diese beansprucht es atomar (kein Doppelversand). Kontrolle:
 --    select status, sent_at, attempts from public.notification_events where id = '<event-id>';

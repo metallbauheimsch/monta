@@ -15,6 +15,8 @@ import {
   readyProjectIds,
   printJobsAfterReadyMail,
   parseProjectReadyPrintResponse,
+  readyMailSeenActive,
+  rememberReadyMailActive,
 } from "./workflowTransitions.js";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
@@ -116,6 +118,49 @@ describe("Druckjobs nach Aktivierung der Druckmail", () => {
   });
 });
 
+describe("Gerätemerker: Druckmail auf diesem Gerät als aktiv erkannt", () => {
+  function memoryStorage() {
+    const m = new Map();
+    return {
+      getItem: (k) => (m.has(k) ? m.get(k) : null),
+      setItem: (k, v) => m.set(k, String(v)),
+      removeItem: (k) => m.delete(k),
+    };
+  }
+
+  it("Standard: nicht gesetzt -> kein Aufruf beim App-Start", () => {
+    assert.equal(readyMailSeenActive(memoryStorage()), false);
+  });
+
+  it("aktiv gemeldet -> gesetzt; danach inaktiv gemeldet -> wieder gelöscht", () => {
+    const s = memoryStorage();
+    rememberReadyMailActive(true, s);
+    assert.equal(readyMailSeenActive(s), true);
+    rememberReadyMailActive(false, s);
+    assert.equal(readyMailSeenActive(s), false);
+  });
+
+  it("nur eindeutig true setzt den Merker", () => {
+    const s = memoryStorage();
+    for (const v of [undefined, null, "true", 1]) {
+      rememberReadyMailActive(v, s);
+      assert.equal(readyMailSeenActive(s), false);
+    }
+  });
+
+  it("kein/defekter Speicher -> sicher 'nicht gesetzt', keine Ausnahme", () => {
+    const broken = {
+      getItem() { throw new Error("blocked"); },
+      setItem() { throw new Error("blocked"); },
+      removeItem() { throw new Error("blocked"); },
+    };
+    assert.equal(readyMailSeenActive(null), false);
+    assert.equal(readyMailSeenActive(broken), false);
+    assert.doesNotThrow(() => rememberReadyMailActive(true, broken));
+    assert.doesNotThrow(() => rememberReadyMailActive(true, null));
+  });
+});
+
 describe("useWorkflowWatchers / workflowNotifications: Verdrahtung", () => {
   const hook = read(dir, "useWorkflowWatchers.js");
   const svc = read(dir, "workflowNotifications.js");
@@ -132,7 +177,19 @@ describe("useWorkflowWatchers / workflowNotifications: Verdrahtung", () => {
   });
 
   it("erster Abgleich blockiert nicht (kein await) - bisheriges busy-Verhalten bleibt", () => {
-    assert.match(hook, /if \(ready\.length\) requestProjectReadyPrintMails\(ready\);/);
+    assert.match(hook, /if \(readyMailSeenActive\(\)\) requestProjectReadyPrintMails\(readyProjectIds\(byProject\)\);/);
+  });
+
+  it("inaktiv: beim App-Start kein Serveraufruf ohne Gerätemerker (nur der eine Aufruf im Seed)", () => {
+    const seed = hook.match(/if \(!seeded\.current\) \{[\s\S]*?return;\n        \}/)[0];
+    assert.equal((seed.match(/requestProjectReadyPrintMails\(/g) || []).length, 1);
+    assert.match(seed, /if \(readyMailSeenActive\(\)\) requestProjectReadyPrintMails/);
+  });
+
+  it("Gerätemerker folgt der Serverantwort; fehlende Funktion löscht ihn, Netzfehler nicht", () => {
+    const fn = svc.match(/export async function requestProjectReadyPrintMails[\s\S]*?\n\}\n/)[0];
+    assert.match(fn, /\} else \{\s*rememberReadyMailActive\(false\);\s*\}/);
+    assert.match(fn, /rememberReadyMailActive\(active\);\s*if \(active && eventIds\.length\) await invokeWorkflow\(eventIds\);/);
   });
 
   it("kein direkter Client-Insert für die Druckmail - nur die Server-RPC", () => {

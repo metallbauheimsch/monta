@@ -171,13 +171,14 @@ function buildMail(eventType, payload, _baugruppeField, projectId) {
     const url = deepLinkUrl(eventType, projectId);
     if (!url) throw new Error("APP_URL fehlt.");
     return {
-      subject: `MONTA – Material bereit, bitte drucken – ${projectName}`,
+      subject: `MONTA – Projekt bereit zur Druckausgabe`,
       text:
         `Servus Moritz,\n\n` +
         `das Material für das Projekt „${projectName}“ ist vollständig bereit.\n\n` +
-        `Die Montageunterlage kann jetzt gedruckt werden:\n` +
-        `${url}\n` +
-        `\nMONTA\n`,
+        `Die Montageunterlagen können jetzt über MONTA geöffnet und gedruckt werden:\n\n` +
+        `Direkt zur Druckansicht: ${url}\n\n` +
+        `Viele Grüße\n` +
+        `MONTA\n`,
     };
   }
 

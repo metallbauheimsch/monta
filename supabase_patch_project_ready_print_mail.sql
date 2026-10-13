@@ -112,9 +112,9 @@ revoke all on function public.project_material_ready(uuid) from public;
 --   - sonst                 -> genau ein pending-Event; nur der Aufrufer,
 --                              dessen Insert gewinnt, erhält die ID
 --                              (gleichzeitige Geräte -> on conflict).
--- Zusätzlich: seit > 2 Minuten hängende pending-Events dieses Typs (z. B.
--- Browser vor dem Versandaufruf geschlossen, oder bewusst manuell von
--- failed auf pending zurückgesetzt). Die Edge Function beansprucht atomar
+-- Zusätzlich: seit > 2 Minuten hängende pending-Events dieses Typs aus der
+-- aktuellen Aktivierung (z. B. Browser vor dem Versandaufruf geschlossen,
+-- oder bewusst manuell von failed auf pending zurückgesetzt). Die Edge Function beansprucht atomar
 -- pending -> processing, mehrfacher Aufruf führt nicht zu Doppelversand.
 -- "failed" wird NIE automatisch erneut versucht.
 create or replace function public.request_project_ready_print_mails(p_project_ids uuid[])
@@ -186,6 +186,11 @@ begin
     where n.event_type = 'project_ready_print'
       and n.status = 'pending'
       and n.created_at < now() - interval '2 minutes'
+      -- Nur Ereignisse der aktuellen Aktivierung: pending-Reste aus einer
+      -- früheren, inzwischen deaktivierten Phase werden nach erneuter
+      -- Aktivierung NICHT nachträglich versendet.
+      and cfg.activated_at is not null
+      and n.created_at >= cfg.activated_at
     order by n.created_at
     limit 20
   ) e;

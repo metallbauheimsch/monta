@@ -49,6 +49,40 @@ export function readyProjectIds(byProject) {
     .map(([projectId]) => projectId);
 }
 
+// Gerätemerker (Sprint 2C, Sicherheitsprüfung): Solange die Druckmail auf
+// diesem Gerät nie als aktiv gemeldet wurde, entfällt der Serveraufruf beim
+// App-Start (vor dem SQL-Patch bzw. bei inaktivem Schalter wäre er bei
+// jedem Start unnötig). Grünwechsel fragen weiterhin immer nach - darüber
+// wird eine spätere Aktivierung erkannt und der Merker gesetzt. Meldet der
+// Server "inaktiv", wird der Merker wieder gelöscht.
+const READY_MAIL_ACTIVE_KEY = "monta_ready_print_mail_active_v1";
+
+function defaultStorage() {
+  try {
+    return globalThis.localStorage || null;
+  } catch {
+    return null;
+  }
+}
+
+export function readyMailSeenActive(storage = defaultStorage()) {
+  try {
+    return storage?.getItem(READY_MAIL_ACTIVE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function rememberReadyMailActive(active, storage = defaultStorage()) {
+  try {
+    if (!storage) return;
+    if (active === true) storage.setItem(READY_MAIL_ACTIVE_KEY, "1");
+    else storage.removeItem(READY_MAIL_ACTIVE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 /**
  * Sobald die einmalige Druckmail serverseitig aktiviert ist, werden keine
  * automatischen Druckjobs mehr erzeugt (zusätzlich serverseitig per

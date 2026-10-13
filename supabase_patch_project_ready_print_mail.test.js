@@ -89,6 +89,13 @@ describe("Fehlgeschlagene Zustellung", () => {
     assert.equal(/status = 'failed'/.test(code(patch)), false);
   });
 
+  it("Rollback: pending-Reste aus einer früheren Aktivierung werden nie nachgereicht", () => {
+    assert.match(
+      code(patch),
+      /n\.created_at < now\(\) - interval '2 minutes'\s*and cfg\.activated_at is not null\s*and n\.created_at >= cfg\.activated_at/
+    );
+  });
+
   it("Edge Function markiert Fehler als failed (nicht als sent) - auch bei fehlender APP_URL", () => {
     assert.match(edge, /if \(!url\) throw new Error\("APP_URL fehlt\."\);/);
     assert.match(edge, /await markFailed\(\s*admin,\s*id,\s*appUrlMissing \? "APP_URL fehlt - Drucklink kann nicht erzeugt werden\." : undefined\s*\);/);
@@ -146,5 +153,15 @@ describe("Edge Function: neuer Typ, bestehende Typen unverändert", () => {
     assert.match(block, /\$\{projectName\}/);
     assert.match(block, /\$\{url\}/);
     assert.equal(/print_jobs|print\(/.test(block), false);
+  });
+
+  it("vorgegebener Betreff und Mailtext (Auftrag 3)", () => {
+    const block = edge.match(/if \(eventType === "project_ready_print"\) \{[\s\S]*?\n  \}\n/)[0];
+    assert.match(block, /subject: `MONTA – Projekt bereit zur Druckausgabe`,/);
+    assert.match(block, /`Servus Moritz,\\n\\n` \+/);
+    assert.match(block, /`das Material für das Projekt „\$\{projectName\}“ ist vollständig bereit\.\\n\\n` \+/);
+    assert.match(block, /`Die Montageunterlagen können jetzt über MONTA geöffnet und gedruckt werden:\\n\\n` \+/);
+    assert.match(block, /`Direkt zur Druckansicht: \$\{url\}\\n\\n` \+/);
+    assert.match(block, /`Viele Grüße\\n` \+\s*`MONTA\\n`,/);
   });
 });

@@ -9,6 +9,8 @@ Druckansicht).
 existiert die Datenbankfunktion nicht; mit Patch, aber ohne Aktivierung
 steht der Schalter auf `enabled = false`. In beiden Fällen entsteht kein
 Ereignis, keine Mail, und die bisherigen Druckjobs laufen unverändert.
+Beim App-Start wird im inaktiven Zustand nicht nachgefragt; nur wenn ein
+Projekt bzw. eine Baugruppe tatsächlich grün wird.
 
 ## Funktionsweise
 
@@ -16,7 +18,10 @@ Ereignis, keine Mail, und die bisherigen Druckjobs laufen unverändert.
   nicht die Checkboxen „Lagerprüfung abgeschlossen“ / „Warenkorb
   abgeschlossen“.
 - Der Browser meldet nur Kandidaten (Projekt wurde grün bzw. ist beim Laden
-  grün). Die Datenbankfunktion `request_project_ready_print_mails` prüft
+  grün). Beim Laden fragt ein Gerät nur nach, wenn es die Druckmail bereits
+  einmal als aktiv erkannt hat (lokaler Gerätemerker, wird bei „inaktiv“
+  wieder gelöscht). So entsteht im inaktiven Zustand kein Aufruf bei jedem
+  App-Start; eine Aktivierung wird beim nächsten Grünwechsel erkannt. Die Datenbankfunktion `request_project_ready_print_mails` prüft
   selbst: Schalter aktiv, Material **frisch** vollständig bereit, Schlüssel
   `project_ready_print:<projekt-id>` noch nicht vorhanden.
 - Der Schlüssel hat **keinen Zyklus** und liegt im bestehenden eindeutigen
@@ -37,8 +42,9 @@ Ereignis, keine Mail, und die bisherigen Druckjobs laufen unverändert.
   gesendet, sondern ebenfalls `failed` („APP_URL fehlt …“). `failed` wird nie
   automatisch wiederholt.
   - Hängt ein Ereignis als `pending`, etwa weil der Browser vor dem
-    Versandaufruf geschlossen wurde, reicht es der nächste App-Start
-    (frühestens nach 2 Minuten) nach.
+    Versandaufruf geschlossen wurde, reicht es der nächste App-Start eines
+    Geräts mit erkannter Aktivierung oder der nächste Grünwechsel nach
+    (frühestens nach 2 Minuten, nur Ereignisse der aktuellen Aktivierung).
   - Die Edge Function beansprucht atomar, dadurch entsteht kein
     Doppelversand.
 
@@ -132,7 +138,8 @@ Abschnitt E in `supabase_activate_project_ready_print_mail.sql`:
 3. Ursache beheben.
 4. Genau dieses Ereignis gezielt von `failed` auf `pending` setzen.
 
-Der nächste App-Start sendet es dann genau einmal.
+Der nächste App-Start eines Geräts mit erkannter Aktivierung (oder der
+nächste Grünwechsel) sendet es dann genau einmal.
 
 ## Rücknahme
 
@@ -141,3 +148,7 @@ Abschnitt D: `enabled = false`.
 - Neue Druckmails stoppen sofort.
 - Automatische Druckjobs je Baugruppe entstehen danach wieder wie bisher.
 - Bestandsmarkierungen und bereits versendete Ereignisse bleiben erhalten.
+- Bei Deaktivierung noch `pending` stehende Druckmails werden nicht mehr
+  versendet, auch nicht nach einer erneuten Aktivierung.
+- Kein Nachdruck: Druckjobs entstehen erst wieder bei künftigen Übergängen
+  einer Baugruppe auf grün.

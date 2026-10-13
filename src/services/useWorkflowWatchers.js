@@ -10,6 +10,7 @@ import { enqueuePrintJob, nextPrintCycle } from "./printStation";
 import {
   planWorkflowTransitions,
   printJobsAfterReadyMail,
+  readyMailSeenActive,
   readyProjectIds,
 } from "./workflowTransitions";
 
@@ -65,11 +66,13 @@ export function useWorkflowWatchers({ enabled, projects, items, userId }) {
           prevProject.current = byProject;
           seeded.current = true;
           // Sprint 2C: Nachholen beim Laden (z. B. Grünwerden auf einem
-          // Gerät mit altem Stand). Der Server sendet höchstens einmal je
-          // Projekt und nie für markierte Bestandsprojekte. Bewusst ohne
-          // await, damit der bisherige Ablauf (busy) unverändert bleibt.
-          const ready = readyProjectIds(byProject);
-          if (ready.length) requestProjectReadyPrintMails(ready);
+          // Gerät mit altem Stand, hängengebliebene pending-Ereignisse).
+          // Nur auf Geräten, die die Druckmail bereits als aktiv kennen -
+          // im inaktiven Zustand kein Serveraufruf bei jedem App-Start.
+          // Der Server sendet höchstens einmal je Projekt und nie für
+          // markierte Bestandsprojekte. Bewusst ohne await, damit der
+          // bisherige Ablauf (busy) unverändert bleibt.
+          if (readyMailSeenActive()) requestProjectReadyPrintMails(readyProjectIds(byProject));
           return;
         }
 
