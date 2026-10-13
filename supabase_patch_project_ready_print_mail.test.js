@@ -89,6 +89,11 @@ describe("Fehlgeschlagene Zustellung", () => {
     assert.equal(/status = 'failed'/.test(code(patch)), false);
   });
 
+  it("App-Start ohne grünes Projekt (leere Liste) ist zulässig und liefert nur Nachreichungen", () => {
+    assert.match(patch, /foreach pid in array coalesce\(p_project_ids, '\{\}'::uuid\[\]\) loop/);
+    assert.match(patch, /coalesce\(array_length\(p_project_ids, 1\), 0\) > 500/);
+  });
+
   it("Rollback: pending-Reste aus einer früheren Aktivierung werden nie nachgereicht", () => {
     assert.match(
       code(patch),

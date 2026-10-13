@@ -9,8 +9,8 @@ Druckansicht).
 existiert die Datenbankfunktion nicht; mit Patch, aber ohne Aktivierung
 steht der Schalter auf `enabled = false`. In beiden Fällen entsteht kein
 Ereignis, keine Mail, und die bisherigen Druckjobs laufen unverändert.
-Beim App-Start wird im inaktiven Zustand nicht nachgefragt; nur wenn ein
-Projekt bzw. eine Baugruppe tatsächlich grün wird.
+Jeder App-Start fragt einmal kurz nach; vor dem SQL-Patch bzw. bei
+inaktivem Schalter lautet die Antwort nur „inaktiv“ (ohne Fehlermeldung).
 
 ## Funktionsweise
 
@@ -18,10 +18,8 @@ Projekt bzw. eine Baugruppe tatsächlich grün wird.
   nicht die Checkboxen „Lagerprüfung abgeschlossen“ / „Warenkorb
   abgeschlossen“.
 - Der Browser meldet nur Kandidaten (Projekt wurde grün bzw. ist beim Laden
-  grün). Beim Laden fragt ein Gerät nur nach, wenn es die Druckmail bereits
-  einmal als aktiv erkannt hat (lokaler Gerätemerker, wird bei „inaktiv“
-  wieder gelöscht). So entsteht im inaktiven Zustand kein Aufruf bei jedem
-  App-Start; eine Aktivierung wird beim nächsten Grünwechsel erkannt. Die Datenbankfunktion `request_project_ready_print_mails` prüft
+  grün). Beim Laden fragt jedes Gerät nach, unabhängig vom lokalen
+  Browserspeicher. Die Datenbankfunktion `request_project_ready_print_mails` prüft
   selbst: Schalter aktiv, Material **frisch** vollständig bereit, Schlüssel
   `project_ready_print:<projekt-id>` noch nicht vorhanden.
 - Der Schlüssel hat **keinen Zyklus** und liegt im bestehenden eindeutigen
@@ -42,8 +40,8 @@ Projekt bzw. eine Baugruppe tatsächlich grün wird.
   gesendet, sondern ebenfalls `failed` („APP_URL fehlt …“). `failed` wird nie
   automatisch wiederholt.
   - Hängt ein Ereignis als `pending`, etwa weil der Browser vor dem
-    Versandaufruf geschlossen wurde, reicht es der nächste App-Start eines
-    Geräts mit erkannter Aktivierung oder der nächste Grünwechsel nach
+    Versandaufruf geschlossen wurde, reicht es der nächste App-Start auf
+    einem beliebigen Gerät oder der nächste Grünwechsel nach
     (frühestens nach 2 Minuten, nur Ereignisse der aktuellen Aktivierung).
   - Die Edge Function beansprucht atomar, dadurch entsteht kein
     Doppelversand.
@@ -138,8 +136,8 @@ Abschnitt E in `supabase_activate_project_ready_print_mail.sql`:
 3. Ursache beheben.
 4. Genau dieses Ereignis gezielt von `failed` auf `pending` setzen.
 
-Der nächste App-Start eines Geräts mit erkannter Aktivierung (oder der
-nächste Grünwechsel) sendet es dann genau einmal.
+Der nächste App-Start auf einem beliebigen Gerät (oder der nächste
+Grünwechsel) sendet es dann genau einmal.
 
 ## Rücknahme
 

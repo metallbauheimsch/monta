@@ -118,8 +118,8 @@ commit;
 --    update public.notification_events
 --      set status = 'pending', processing_at = null, last_error = null
 --      where id = '<event-id>' and event_type = 'project_ready_print' and status = 'failed';
--- 5. Der nächste App-Start auf einem Gerät, das die Druckmail bereits als
---    aktiv kennt, oder der nächste Grünwechsel eines Projekts (frühestens
+-- 5. Der nächste App-Start auf einem beliebigen Gerät oder der nächste
+--    Grünwechsel eines Projekts (frühestens
 --    2 Minuten nach der ursprünglichen Anlage, nur solange die Druckmail
 --    aktiv ist) übergibt das Ereignis an die Edge
 --    Function; diese beansprucht es atomar (kein Doppelversand). Kontrolle:

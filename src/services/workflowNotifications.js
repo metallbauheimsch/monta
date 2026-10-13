@@ -1,5 +1,5 @@
 import { getSupabaseFunctionsUrl, supabase } from "./supabaseClient";
-import { parseProjectReadyPrintResponse, rememberReadyMailActive } from "./workflowTransitions";
+import { parseProjectReadyPrintResponse } from "./workflowTransitions";
 
 export const MAIL_RECIPIENTS = {
   tb_pruefung_completed: "sautter@metallbau-heimsch.de",
@@ -178,13 +178,10 @@ export async function requestProjectReadyPrintMails(projectIds) {
       // dem SQL-Patch, daher ohne Fehlermeldung.
       if (error.code !== "PGRST202") {
         console.error("MONTA: Druckmail-Prüfung:", error.message);
-      } else {
-        rememberReadyMailActive(false);
       }
       return { active: false };
     }
     const { active, eventIds } = parseProjectReadyPrintResponse(data);
-    rememberReadyMailActive(active);
     if (active && eventIds.length) await invokeWorkflow(eventIds);
     return { active };
   } catch (err) {
