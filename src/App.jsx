@@ -283,6 +283,7 @@ function App() {
             .from("projects")
             .select("*")
             .order("created_at", { ascending: false })
+            .order("id", { ascending: true })
             .range(from, to)
         ),
         fetchAllPages((from, to) =>
@@ -290,9 +291,17 @@ function App() {
             .from("material_items")
             .select("*")
             .order("created_at", { ascending: true })
+            .order("id", { ascending: true })
             .range(from, to)
         ),
-        supabase.from("project_structure").select("*").order("created_at", { ascending: true }),
+        fetchAllPages((from, to) =>
+          supabase
+            .from("project_structure")
+            .select("*")
+            .order("created_at", { ascending: true })
+            .order("id", { ascending: true })
+            .range(from, to)
+        ),
       ]);
       if (projectsRes.error) {
         throw new Error(`Projekte: ${projectsRes.error.message || "unbekannter Fehler"}`);

@@ -153,19 +153,100 @@ describe("Praxisfall: neueste Position liegt hinter der ersten Seite", () => {
   });
 });
 
-describe("App.jsx lädt Material und Projekte seitenweise", () => {
-  it("verwendet fetchAllPages und die bisherige Sortierung", () => {
+function compareCreatedAtThenId(a, b, createdAtAscending) {
+  if (a.created_at !== b.created_at) {
+    const byTime = a.created_at < b.created_at ? -1 : 1;
+    return createdAtAscending ? byTime : -byTime;
+  }
+  if (a.id === b.id) return 0;
+  return a.id < b.id ? -1 : 1;
+}
+
+function pageInStableOrder(rows, createdAtAscending) {
+  const sorted = [...rows].sort((a, b) => compareCreatedAtThenId(a, b, createdAtAscending));
+  return (from, to) => Promise.resolve({ data: sorted.slice(from, to + 1), error: null });
+}
+
+describe("Seitengrenzen 1000, 1001, 2000 und 2001", () => {
+  for (const count of [1000, 1001, 2000, 2001]) {
+    it(`liefert alle ${count} Zeilen genau einmal`, async () => {
+      const all = rowsAscending(count, "letzte");
+      const calls = [];
+      const { data, error } = await fetchAllPages((from, to) => {
+        calls.push([from, to]);
+        return pageFrom(all)(from, to);
+      }, SUPABASE_PAGE_SIZE);
+      assert.equal(error, null);
+      assert.equal(data.length, count);
+      assert.deepEqual(
+        data.map((row) => row.id),
+        all.map((row) => row.id)
+      );
+      assert.equal(calls[0][0], 0);
+      assert.equal(calls.at(-1)[0], Math.floor(count / SUPABASE_PAGE_SIZE) * SUPABASE_PAGE_SIZE);
+      assert.ok(calls.every(([, to], index) => to - calls[index][0] + 1 === SUPABASE_PAGE_SIZE));
+    });
+  }
+});
+
+describe("gleiche created_at an der Seitengrenze", () => {
+  const shared = "2026-11-11T12:00:00.000Z";
+
+  function rowsAroundBoundary(createdAtAscending) {
+    const rows = [];
+    for (let index = 0; index < SUPABASE_PAGE_SIZE - 1; index += 1) {
+      rows.push({
+        id: `early-${String(index).padStart(4, "0")}`,
+        created_at: new Date(Date.UTC(2024, 0, 1) + index * 1000).toISOString(),
+      });
+    }
+    rows.push(
+      { id: "tie-b", created_at: shared },
+      { id: "tie-a", created_at: shared },
+      { id: "after-z", created_at: "2026-11-11T13:00:00.000Z" }
+    );
+    return pageInStableOrder(rows, createdAtAscending);
+  }
+
+  it("behält bei aufsteigendem created_at beide Zeilen und sortiert nur den Gleichstand nach id", async () => {
+    const { data, error } = await fetchAllPages(rowsAroundBoundary(true), SUPABASE_PAGE_SIZE);
+    assert.equal(error, null);
+    assert.equal(data.length, SUPABASE_PAGE_SIZE + 2);
+    const tie = data.filter((row) => row.created_at === shared).map((row) => row.id);
+    assert.deepEqual(tie, ["tie-a", "tie-b"]);
+    assert.equal(data.at(-1).id, "after-z");
+    assert.ok(data.at(-1).created_at > data.at(-2).created_at);
+    assert.equal(new Set(data.map((row) => row.id)).size, data.length);
+  });
+
+  it("behält bei absteigendem created_at die Zeitfolge und unterscheidet den Gleichstand nach id", async () => {
+    const { data, error } = await fetchAllPages(rowsAroundBoundary(false), SUPABASE_PAGE_SIZE);
+    assert.equal(error, null);
+    assert.equal(data[0].id, "after-z");
+    const tie = data.filter((row) => row.created_at === shared).map((row) => row.id);
+    assert.deepEqual(tie, ["tie-a", "tie-b"]);
+    assert.ok(data[0].created_at > data[1].created_at);
+    assert.equal(new Set(data.map((row) => row.id)).size, data.length);
+  });
+});
+
+describe("App.jsx lädt Projekte, Material und Struktur seitenweise", () => {
+  it("verwendet fetchAllPages, created_at und id für alle drei Tabellen", () => {
     const loadStart = appSrc.indexOf("const load = useCallback");
     const loadFn = appSrc.slice(loadStart, appSrc.indexOf("useEffect(() => {", loadStart));
-    assert.match(loadFn, /fetchAllPages\(\(from, to\) =>/);
+    assert.equal(loadFn.match(/fetchAllPages\(\(from, to\) =>/g).length, 3);
     assert.match(
       loadFn,
-      /\.from\("projects"\)[\s\S]*?\.order\("created_at", \{ ascending: false \}\)[\s\S]*?\.range\(from, to\)/
+      /\.from\("projects"\)\s*\.select\("\*"\)\s*\.order\("created_at", \{ ascending: false \}\)\s*\.order\("id", \{ ascending: true \}\)\s*\.range\(from, to\)/
     );
     assert.match(
       loadFn,
-      /\.from\("material_items"\)[\s\S]*?\.order\("created_at", \{ ascending: true \}\)[\s\S]*?\.range\(from, to\)/
+      /\.from\("material_items"\)\s*\.select\("\*"\)\s*\.order\("created_at", \{ ascending: true \}\)\s*\.order\("id", \{ ascending: true \}\)\s*\.range\(from, to\)/
     );
-    assert.match(loadFn, /\.from\("project_structure"\)\.select\("\*"\)\.order\("created_at", \{ ascending: true \}\)/);
+    assert.match(
+      loadFn,
+      /\.from\("project_structure"\)\s*\.select\("\*"\)\s*\.order\("created_at", \{ ascending: true \}\)\s*\.order\("id", \{ ascending: true \}\)\s*\.range\(from, to\)/
+    );
+    assert.match(loadFn, /if \(structureRes\.error\)/);
   });
 });
