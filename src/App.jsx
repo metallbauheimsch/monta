@@ -55,6 +55,18 @@ import OfflineApp from "./features/offline/OfflineApp";
 import { registerAppShellServiceWorker } from "./services/offlineShell";
 import { loadSnapshot } from "./services/offlineSnapshot";
 import { decideOfflineState } from "./services/offlineState";
+import {
+  createPendingItemMutations,
+  rememberAddedItems,
+  rememberRemovedItemIds,
+  applyPendingItemMutations,
+  gcPendingItemMutations,
+} from "./utils/itemSync";
+import { fetchAllPages } from "./utils/pagedSelect";
+import {
+  buildDuplicatedBauteilItems,
+  splitDuplicatedItemsForInsert,
+} from "./features/projects/duplicateBauteilItems";
 
 const SYNC_POLL_MS = 20000;
 
@@ -100,6 +112,7 @@ function App() {
   // Verhindert, dass ein älterer (noch laufender) load() neuere lokale
   // Inserts oder frischere Serverdaten überschreibt.
   const loadGeneration = useRef(0);
+  const pendingItemMutations = useRef(createPendingItemMutations());
   const migratingRef = useRef(false);
   const structureRowsRef = useRef(structureRows);
   structureRowsRef.current = structureRows;
@@ -265,8 +278,20 @@ function App() {
       }
 
       const [projectsRes, itemsRes, structureRes] = await Promise.all([
-        supabase.from("projects").select("*").order("created_at", { ascending: false }),
-        supabase.from("material_items").select("*").order("created_at", { ascending: true }),
+        fetchAllPages((from, to) =>
+          supabase
+            .from("projects")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .range(from, to)
+        ),
+        fetchAllPages((from, to) =>
+          supabase
+            .from("material_items")
+            .select("*")
+            .order("created_at", { ascending: true })
+            .range(from, to)
+        ),
         supabase.from("project_structure").select("*").order("created_at", { ascending: true }),
       ]);
       if (projectsRes.error) {
@@ -289,8 +314,12 @@ function App() {
       // Veraltete Antwort verwerfen (neuerer load oder Insert inzwischen).
       if (myGen !== loadGeneration.current) return;
 
+      const pending = pendingItemMutations.current;
+      const mergedItems = applyPendingItemMutations(nextItems, pending);
+      gcPendingItemMutations(nextItems, pending);
+
       setProjects(nextProjects);
-      setItems(nextItems);
+      setItems(mergedItems);
       setStructureRows(nextStructure);
     } catch (err) {
       console.error("MONTA: Laden der Daten fehlgeschlagen.", err);
@@ -735,22 +764,12 @@ function App() {
       sort_order: sortOrder,
     };
 
-    const newItems = srcItems.map((i) => ({
-      id: crypto.randomUUID(),
-      project_id: String(pid),
-      pos: i.pos,
-      einbauort: formatEinbauort(bg, clean),
-      menge: Number(i.menge || 0),
-      bezeichnung: i.bezeichnung,
-      groesse: i.groesse,
-      laenge: i.laenge,
-      oberflaeche: i.oberflaeche,
-      hinweis: i.hinweis,
-      important_note: Boolean(i.important_note),
-      bereit: 0,
-      bestellt: false,
-      geliefert: false,
-    }));
+    const newItems = buildDuplicatedBauteilItems(srcItems, {
+      projectId: pid,
+      baugruppe: bg,
+      newBauteilName: clean,
+      createId: () => crypto.randomUUID(),
+    });
 
     const createdStructureIds = [newStructureRow.id];
     const createdItemIds = newItems.map((r) => r.id);
@@ -762,6 +781,10 @@ function App() {
         }
         await supabase.from("project_structure").delete().in("id", createdStructureIds);
       }
+      if (createdItemIds.length) {
+        rememberRemovedItemIds(pendingItemMutations.current, createdItemIds);
+      }
+      loadGeneration.current += 1;
       setItems((prev) => prev.filter((i) => !createdItemIds.includes(i.id)));
       setStructureRows((prev) => prev.filter((r) => !createdStructureIds.includes(r.id)));
     }
@@ -773,13 +796,22 @@ function App() {
         const { error: sErr } = await supabase.from("project_structure").insert(newStructureRow);
         if (sErr) throw sErr;
         if (newItems.length) {
-          const { error: iErr } = await supabase.from("material_items").insert(newItems);
+          const { insertRows, fkUpdates } = splitDuplicatedItemsForInsert(newItems);
+          const { error: iErr } = await supabase.from("material_items").insert(insertRows);
           if (iErr) throw iErr;
+          for (const upd of fkUpdates) {
+            const { error: fkErr } = await supabase
+              .from("material_items")
+              .update({ ersetzt_durch: upd.ersetzt_durch })
+              .eq("id", upd.id);
+            if (fkErr) throw fkErr;
+          }
         }
       } else {
         addBauteilToRegistry(pid, bg, clean);
       }
 
+      if (newItems.length) rememberAddedItems(pendingItemMutations.current, newItems);
       loadGeneration.current += 1;
       setStructureRows((prev) =>
         hasStructureRow(prev, pid, bg, clean) ? prev : [...prev, newStructureRow]
@@ -928,6 +960,8 @@ function App() {
         throw error;
       }
     }
+    rememberAddedItems(pendingItemMutations.current, [newItem]);
+    loadGeneration.current += 1;
     setItems((prev) => (prev.some((i) => i.id === newItem.id) ? prev : [...prev, newItem]));
 
     const parsed = parseEinbauort(newItem.einbauort, project?.baugruppe);
@@ -1133,6 +1167,8 @@ function App() {
         return;
       }
     }
+    rememberRemovedItemIds(pendingItemMutations.current, [id]);
+    loadGeneration.current += 1;
     setItems((prev) => prev.filter((i) => i.id !== id));
   }
 
