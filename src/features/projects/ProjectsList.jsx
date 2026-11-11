@@ -39,7 +39,6 @@ function ProjectCard({ project: p, items, structureRows, onOpen }) {
       <div className="row">
         <div>
           <h3>{p.nr} {p.name}</h3>
-          <p>{p.baugruppe || "Keine Baugruppe"}</p>
         </div>
         <div className="row" style={{ gap: 8 }}>
           {p.archived && <span className="badge">Archiviert</span>}
@@ -50,9 +49,9 @@ function ProjectCard({ project: p, items, structureRows, onOpen }) {
       <small>{s.pct}% vollständig</small>
       {(bg.offen + bg.bestellt + bg.bereit) > 0 && (
         <div className="baugruppenAmpelRow">
-          {bg.offen > 0 && <span>🔴 {bg.offen}</span>}
-          {bg.bestellt > 0 && <span>🟡 {bg.bestellt}</span>}
-          {bg.bereit > 0 && <span>🟢 {bg.bereit}</span>}
+          {bg.offen > 0 && <span>🔴 {bg.offen} offen</span>}
+          {bg.bestellt > 0 && <span>🟡 {bg.bestellt} bestellt</span>}
+          {bg.bereit > 0 && <span>🟢 {bg.bereit} bereit</span>}
         </div>
       )}
     </div>

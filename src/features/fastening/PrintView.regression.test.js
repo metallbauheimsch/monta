@@ -25,4 +25,22 @@ describe("E) PrintView zeigt keine Regalfach-Spalte mehr", () => {
   it("Baugruppe/Bauteil-Gliederung bleibt (buildProjectStructure weiterhin verwendet)", () => {
     assert.match(src, /buildProjectStructure/);
   });
+
+  it("Projektbezeichnung steht in der wiederholbaren Tabellenüberschrift", () => {
+    assert.match(src, /printRepeatTitle/);
+    assert.match(src, /projectTitle/);
+  });
+});
+
+describe("Druckumbruch lässt lange Baugruppen auf der ersten Seite beginnen", () => {
+  const css = fs.readFileSync(path.join(__dirname, "../../styles/style.css"), "utf8");
+
+  it("die Baugruppe selbst wird nicht mehr komplett auf die nächste Seite geschoben", () => {
+    assert.doesNotMatch(css, /\.printBaugruppeSection\{[^}]*page-break-inside:\s*avoid/);
+  });
+
+  it("Tabellenzeilen und die wiederholte Projektzeile bleiben im Druck definiert", () => {
+    assert.match(css, /\.printMaterialTable tr\{[^}]*break-inside:\s*avoid/);
+    assert.match(css, /\.printRepeatTitle\{display:table-row\}/);
+  });
 });

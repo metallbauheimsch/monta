@@ -206,3 +206,100 @@ describe("Paternoster – Familie / Abgrenzung", () => {
     assert.equal(label("Sechskantschraube", "M3", "Edelstahl"), "Ohne Fachzuordnung");
   });
 });
+
+describe("Paternoster – Ergänzungen ohne bestehende Zuordnung", () => {
+  it("verzinkte Holzschraube ohne metrisches Maß → 24", () => {
+    assert.equal(fach("Holzschraube", "4x40", "verzinkt"), 24);
+    assert.equal(fach("Holzschrauben", "5x50", "galvanisch"), 24);
+  });
+  it("verzinkte Senkkopf-Bohrschraube → 24", () => {
+    assert.equal(fach("Senkkopf-Bohrschraube", "", "verzinkt"), 24);
+    assert.equal(fach("Senkkopf-Bohrschrauben", "4,8x25", "galvanisch"), 24);
+    assert.equal(fach("verzinkte Senkkopf-Bohrschraube", "", ""), 24);
+  });
+  it("Edelstahl-Senkkopf-Holzschraube → 7", () => {
+    assert.equal(fach("Edelstahl-Senkkopf-Holzschraube", "", ""), 7);
+    assert.equal(fach("Senkkopf-Holzschraube", "", "Edelstahl"), 7);
+    assert.equal(fach("Bohrschraube", "", "A4"), 7);
+  });
+  it("Senkkopf allein löst weder Fach 7 noch 24 aus", () => {
+    assert.equal(fach("Senkkopf", "", "Edelstahl"), null);
+    assert.equal(fach("Senkkopf", "", "verzinkt"), null);
+    assert.equal(fach("Senkkopfschraube", "M6", "verzinkt"), 1);
+    assert.equal(fach("Senkkopfschraube", "M6", "Edelstahl"), 6);
+    assert.equal(fach("Edelstahl-Senkkopfschraube", "M10", "Edelstahl"), 5);
+  });
+  it("metrische Edelstahlschraube M14 ergänzt Fach 5, M4–M6 bleiben 6", () => {
+    assert.equal(fach("Sechskantschraube", "M14", "Edelstahl"), 5);
+    assert.equal(fach("Senkkopfschraube", "M14", "A2"), 5);
+    assert.equal(fach("Sechskantschraube", "M6", "Edelstahl"), 6);
+    assert.equal(fach("Sechskantschraube", "M12", "Edelstahl"), 5);
+    assert.equal(fach("Edelstahl-Senkkopfschraube", "M6", ""), 6);
+    assert.equal(fach("Edelstahl-Senkkopfschraube", "M10", ""), 5);
+  });
+  it("Holz- und Bohrschrauben bleiben auch mit metrischer Größe in Fach 24 oder 7", () => {
+    assert.equal(fach("Holzschraube", "M6", "verzinkt"), 24);
+    assert.equal(fach("Holzschraube", "M3", "galvanisch"), 24);
+    assert.equal(fach("Bohrschraube", "M6", "verzinkt"), 24);
+    assert.equal(fach("Bohrschraube", "M8", "galvanisch"), 24);
+    assert.equal(fach("Senkkopf-Holzschraube", "M6", "verzinkt"), 24);
+    assert.equal(fach("Holzschraube", "M6", "Edelstahl"), 7);
+    assert.equal(fach("Holzschraube", "M10", "A4"), 7);
+    assert.equal(fach("Senkkopf-Bohrschraube", "M10", "Edelstahl"), 7);
+    assert.equal(fach("Holzschraube", "M10", "feuerverzinkt"), 9);
+  });
+  it("metrische Schrauben bleiben nach Werkstoff und Größe getrennt", () => {
+    assert.equal(fach("Sechskantschraube", "M6", "verzinkt"), 1);
+    assert.equal(fach("Senkkopfschraube", "M3", "galvanisch"), 1);
+    assert.equal(fach("Senkkopfschraube", "M6", "Edelstahl"), 6);
+    assert.equal(fach("Sechskantschraube", "M8", "Edelstahl"), 5);
+    assert.equal(fach("Sechskantschraube", "M16", "Edelstahl"), 5);
+    assert.equal(fach("Mutter", "M6", "verzinkt"), 1);
+  });
+  it("Stellfüße → 22", () => {
+    assert.equal(fach("Stellfuß", "", ""), 22);
+    assert.equal(fach("Stellfüße", "", ""), 22);
+    assert.equal(fach("Stellfuss", "", ""), 22);
+  });
+  it("AMF-Schloss- und Riegelteile → 20", () => {
+    assert.equal(fach("AMF Gegenkasten", "", ""), 20);
+    assert.equal(fach("AMF Schließkasten", "", ""), 20);
+    assert.equal(fach("Schließblech", "", ""), 20);
+    assert.equal(fach("AMF Schlosskasten", "", ""), 20);
+    assert.equal(fach("Torriegel", "", ""), 20);
+    assert.equal(fach("Stangenriegel", "", ""), 20);
+  });
+  it("AMF Drücker, Knauf, Knopf, Beschläge und Garnitur → 11", () => {
+    assert.equal(fach("AMF Drücker", "", ""), 11);
+    assert.equal(fach("AMF Knauf", "", ""), 11);
+    assert.equal(fach("AMF Knopf", "", ""), 11);
+    assert.equal(fach("AMF Beschläge", "", ""), 11);
+    assert.equal(fach("AMF Garnitur", "", ""), 11);
+    assert.equal(fach("Beschläge", "", ""), null);
+    assert.equal(fach("HV-Garnitur", "M16", "HV"), 26);
+  });
+  it("neue Fächer behalten untereinander die Laufweg-Reihenfolge", () => {
+    const stell = resolveFach("Stellfüße", "", "");
+    const riegel = resolveFach("Torriegel", "", "");
+    const druecker = resolveFach("AMF Drücker", "", "");
+    const silikon = resolveFach("Silikon", "", "");
+    assert.ok(stell.sortIndex < riegel.sortIndex);
+    assert.ok(riegel.sortIndex < druecker.sortIndex);
+    assert.ok(druecker.sortIndex < silikon.sortIndex);
+    assert.equal(stell.fach, 22);
+    assert.equal(riegel.fach, 20);
+    assert.equal(druecker.fach, 11);
+    assert.equal(silikon.fach, 8);
+  });
+  it("Bänder → 20, Dichtstoffe → 8", () => {
+    assert.equal(fach("Konstruktionsband", "", ""), 20);
+    assert.equal(fach("Lappenbänder", "", ""), 20);
+    assert.equal(fach("Torband", "", ""), 20);
+    assert.equal(fach("Silikon", "", ""), 8);
+    assert.equal(fach("SMP", "", ""), 8);
+    assert.equal(fach("Acryl", "", ""), 8);
+    assert.equal(fach("Klebt und Dichtet", "", ""), 8);
+    assert.equal(fach("Bauschaum", "", ""), 8);
+    assert.equal(fach("Acrylglas", "", ""), null);
+  });
+});

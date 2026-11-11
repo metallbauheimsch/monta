@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { baugruppeStatus, projectStatus } from "../../utils/helpers";
+import { baugruppeStatus } from "../../utils/helpers";
 import { naturalCompare, useSortableColumns, compareWithSizeSecondary } from "../../utils/sorting";
 import { filterBySearch, sizeLengthSearchParts } from "../../utils/textSearch";
 import { distribute, readManualValues, writeManualValues } from "./stock";
@@ -83,7 +83,6 @@ export default function EinkaufView({
   ]);
   const allRows = sortCartRows(filtered, sortKey, sortDir);
   const status = baugruppeStatus(items);
-  const pStatus = projectStatus(project, items);
 
   function handleBestelltChange(row, checked) {
     row.items.forEach((i) => updateItem(i.id, { bestellt: checked }));
@@ -276,10 +275,6 @@ export default function EinkaufView({
           </div>
         </div>
       )}
-      <p className="hint">
-        Projektweite Fehlmengen. Vollständig gelieferte Positionen bleiben sichtbar (grün) und können
-        wieder deaktiviert werden. Status: {pStatus.label}.
-      </p>
       {/* Abschlussbereich (Korrektur nach GPT-Code-Review): "Alle Positionen
           bestellt" und "Warenkorb abgeschlossen" stehen als fachlich
           zusammengehörige Abschlussfunktionen unmittelbar nebeneinander

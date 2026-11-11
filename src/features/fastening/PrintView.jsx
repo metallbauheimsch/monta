@@ -33,9 +33,14 @@ function sortRows(items, sortKey, sortDir) {
   );
 }
 
-function MontageTableHead({ toggleSort, arrow }) {
+function MontageTableHead({ toggleSort, arrow, projectTitle }) {
   return (
     <thead>
+      {projectTitle ? (
+        <tr className="printRepeatTitle">
+          <th colSpan={7}>{projectTitle}</th>
+        </tr>
+      ) : null}
       <tr>
         <th className="sortableTh colPos" onClick={() => toggleSort("pos")}>Pos.{arrow("pos")}</th>
         <th className="sortableTh colMenge" onClick={() => toggleSort("menge")}>Menge{arrow("menge")}</th>
@@ -65,12 +70,12 @@ function MontageRow({ item, idx }) {
   );
 }
 
-function BauteilBlock({ bauteil, items, toggleSort, arrow }) {
+function BauteilBlock({ bauteil, items, toggleSort, arrow, projectTitle }) {
   return (
     <div className="printBauteilSection">
       <h4>Bauteil: {bauteil}</h4>
       <table className="printMaterialTable">
-        <MontageTableHead toggleSort={toggleSort} arrow={arrow} />
+        <MontageTableHead toggleSort={toggleSort} arrow={arrow} projectTitle={projectTitle} />
         <tbody>
           {items.map((i, idx) => (
             <MontageRow key={i.id} item={i} idx={idx} />
@@ -141,6 +146,8 @@ export default function PrintView({ project, baugruppe, items, projectItems, str
       .filter((b) => b.bauteilBlocks.length > 0);
   }, [structure, byBaugruppe, project, search, sortKey, sortDir]);
 
+  const projectTitle = `${project.nr} ${project.name} · ${project.zeichnung}`;
+
   return (
     <div className="card printArea">
       <div className="row noPrint">
@@ -154,8 +161,8 @@ export default function PrintView({ project, baugruppe, items, projectItems, str
         {searchActive && <p className="hint">Druckausgabe gefiltert</p>}
       </div>
       <h2>Befestigungsmaterial</h2>
-      <p>
-        {project.nr} {project.name} · {project.zeichnung}
+      <p className={blocks.length > 0 ? "printProjectLine" : undefined}>
+        {projectTitle}
       </p>
       {searchActive && <p className="printFilterHint">Druckausgabe gefiltert</p>}
 
@@ -172,6 +179,7 @@ export default function PrintView({ project, baugruppe, items, projectItems, str
               items={btItems}
               toggleSort={toggleSort}
               arrow={arrow}
+              projectTitle={projectTitle}
             />
           ))}
         </div>

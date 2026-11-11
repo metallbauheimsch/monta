@@ -127,9 +127,9 @@ th{background:#eee;font-weight:700}
 .baugruppeHead{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 .baugruppeTitleBtn{background:transparent;color:inherit;border:0;padding:6px 4px;margin:-6px 0 -6px -4px;width:auto;font:inherit;font-weight:700;cursor:pointer;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .statusPill{font-size:13px;font-weight:700;color:#444}
-.baugruppenAmpelRow{display:flex;gap:10px;margin-top:8px;font-size:14px}
+.baugruppenAmpelRow{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;font-size:14px}
 .badge.grey{background:#e4e4e4;color:#555}
-.projectSort{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 12px;font-weight:600}.projectSort label{display:flex;align-items:center;gap:10px}.projectSort select{width:auto;padding:8px 12px}.sortDirBtn{width:auto;white-space:nowrap;padding:8px 12px}
+.projectSort{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:12px 0;font-weight:600}.projectSort label{display:flex;align-items:center;gap:10px}.projectSort select{width:auto;padding:8px 12px}.sortDirBtn{width:auto;white-space:nowrap;padding:8px 12px}
 .archiveSection{margin-top:28px;padding-top:14px;border-top:3px solid #ccc}.archiveSection h2{color:#555}
 .archiveSortBtn{width:auto;white-space:nowrap}
 .dangerText{color:#9b111e;font-weight:700}
@@ -231,7 +231,7 @@ th{background:#eee;font-weight:700}
 .offlinePrepareOk{color:#1a7a3a}
 .offlineBanner{background:#54585a;color:#fff;padding:8px 12px;border-radius:10px;font-weight:700;margin:0 0 12px}
 .printFilterHint{font-size:12px;color:#555;margin:4px 0 8px}
-.printBaugruppeSection{margin-top:18px;page-break-inside:avoid}
+.printBaugruppeSection{margin-top:18px}
 .printGruppeSection{margin:8px 0 6px}
 .printGruppeSection > h4{margin:0 0 4px;font-size:14px;color:#333}
 .printBauteilSection{margin:4px 0 10px}
@@ -241,7 +241,7 @@ th{background:#eee;font-weight:700}
 .importantNote{color:#b00000;font-weight:400}
 .importantNoteInput{color:#b00000;font-weight:400}
 .printFilterHint{font-size:12px;color:#555;margin:4px 0 8px}
-.printBaugruppeSection{margin-top:18px;page-break-inside:avoid}
+.printBaugruppeSection{margin-top:18px}
 .finishHint{margin:8px 0}
 .bauteilContextMenu{position:fixed;z-index:10000;min-width:160px;padding:4px 0;background:#fff;border:1px solid #c8c8c8;box-shadow:2px 2px 8px rgba(0,0,0,.18);border-radius:2px}
 .bauteilContextMenu button{display:block;width:100%;text-align:left;background:transparent;border:0;border-radius:0;padding:8px 16px;font:inherit;font-weight:400;color:#111;cursor:default}
@@ -256,6 +256,7 @@ th{background:#eee;font-weight:700}
 .printStationPanel h3,.printStationPanel h4{margin:0 0 6px}
 .tbOverviewBauteilHead{cursor:pointer;display:inline-block;padding:6px 0;text-decoration:underline;text-underline-offset:3px}
 .tbOverviewBauteilHead:hover,.tbOverviewBauteilHead:focus-visible{color:#111}
+.printRepeatTitle{display:none}
 .printMaterialTable{table-layout:fixed;width:100%;border-collapse:collapse}
 .printMaterialTable th,.printMaterialTable td{border:1px solid #d0d0d0;padding:6px 8px;vertical-align:top;word-wrap:break-word;overflow-wrap:anywhere}
 .printMaterialTable .colPos{width:7%}
@@ -273,8 +274,13 @@ th{background:#eee;font-weight:700}
   h2,h3{margin:0 0 4px}
   .printArea p{margin:2px 0 8px}
   .printMaterialTable{font-size:11px;table-layout:fixed;width:100%}
+  .printProjectLine{display:none!important}
+  .printRepeatTitle{display:table-row}
+  .printBaugruppeSection h3,.printBauteilSection h4{break-after:avoid;page-break-after:avoid}
   .printMaterialTable thead{display:table-header-group}
+  .printMaterialTable tr{break-inside:avoid;page-break-inside:avoid}
   .printMaterialTable th,.printMaterialTable td{padding:3px 4px;border:1px solid #999}
+  .printMaterialTable .printRepeatTitle th{text-align:left;font-weight:700;border:0;padding:0 0 4px}
   .importantNote{color:#b00000;font-weight:400;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .rowDone{background:#eef8ee}
 }

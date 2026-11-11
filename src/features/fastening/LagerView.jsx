@@ -313,10 +313,6 @@ export default function LagerView({
           {status.emoji} {status.label}
         </span>
       </h2>
-      <p className="hint">
-        Projektweite Zusammenfassung identischer Artikel. Standard: Reihenfolge im Paternoster.
-        Restmenge = Gesamtmenge − Vorhanden.
-      </p>
       <ProjectCompletionSection
         project={project}
         field="lager_abgeschlossen"

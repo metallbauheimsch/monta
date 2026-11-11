@@ -15,22 +15,27 @@
 // Sonderregeln (Vorrang): GiRo→10, Keilscheiben→26, Hilti HAS→2,
 // Dübelfamilie (Edelstahl→4, verzinkt/feuerverzinkt→25), HV→26, …
 //
-// Laufweg: 27 → 26 → 25 → 24 → 10 → 9 → 7 → 6 → 5 → 4 → 3 → 2 → 1
+// Laufweg: 27 → 26 → 25 → 24 → 22 → 20 → 11 → 10 → 9 → 8 → 7 → 6 → 5 → 4 → 3 → 2 → 1
+// 22, 20, 11 und 8 sind Ergänzungen. Die Reihenfolge der bisherigen Fächer bleibt.
 
 const FACH_SORT_INDEX = {
   27: 0,
   26: 1,
   25: 2,
   24: 3,
-  10: 4,
-  9: 5,
-  7: 6,
-  6: 7,
-  5: 8,
-  4: 9,
-  3: 10,
-  2: 11,
-  1: 12,
+  22: 4,
+  20: 5,
+  11: 6,
+  10: 7,
+  9: 8,
+  8: 9,
+  7: 10,
+  6: 11,
+  5: 12,
+  4: 13,
+  3: 14,
+  2: 15,
+  1: 16,
 };
 
 /** Verbindliche metrische Größen der Familienregeln. */
@@ -235,6 +240,14 @@ export function resolveFach(bezeichnung, oberflaeche, groesse) {
   if (isHvGarnitur(bez)) return fachResult(26);
   if (isBefestigungsFamilie(bez) && isHvAusf(ausf)) return fachResult(26);
 
+  // Artikelart vor der metrischen Familie: Holz- und Bohrschrauben sind keine
+  // metrischen Schrauben und dürfen nicht wegen M3–M6 in Fach 1 landen.
+  if (isHolzOderBohrschraube(bez)) {
+    const surface = surfaceKind(bez, ausf);
+    if (surface === "edel") return fachResult(7);
+    if (surface === "verzinkt") return fachResult(24);
+  }
+
   // Normale Befestigungsmittelfamilie → Werkstoff → Größe
   if (isBefestigungsFamilie(bez)) {
     if (isFeuerverzinkt(ausf)) return fachResult(9);
@@ -252,6 +265,73 @@ export function resolveFach(bezeichnung, oberflaeche, groesse) {
       if (sizeInList(groesse, FAMILY_SIZES_GALV_27)) return fachResult(27);
       if (sizeInList(groesse, FAMILY_SIZES_GALV_26)) return fachResult(26);
     }
+  }
+
+  // Ergänzungen nur für bisher unzugeordnete Artikel. Frühere Regeln bleiben davor.
+  const supplement = resolveSupplementaryFach(bez, ausf, groesse);
+  if (supplement) return supplement;
+
+  return null;
+}
+
+const EDEL_SCREW_FACH_6 = [4, 5, 6];
+const EDEL_SCREW_FACH_5 = [8, 10, 12, 14, 16];
+
+function surfaceKind(bez, ausf) {
+  if (isFeuerverzinkt(ausf) || /feuerverzinkt/.test(bez)) return "feuer";
+  if (isEdelstahlAusfuehrung(ausf)) return "edel";
+  if (isGalvanisch(ausf)) return "verzinkt";
+  if (bezSuggestsEdelstahl(bez)) return "edel";
+  if (/verzinkt|galvanisch|galv\./.test(bez)) return "verzinkt";
+  return "";
+}
+
+/** Holz- und Bohrschrauben, auch „Senkkopf-Holzschraube“. „Senkkopf“ allein zählt nicht. */
+function isHolzOderBohrschraube(bez) {
+  return /holz\s*-?\s*schrauben?|bohr\s*-?\s*schrauben?/.test(bez);
+}
+
+function isAmf(bez) {
+  return /\bamf\b/.test(bez);
+}
+
+function resolveSupplementaryFach(bez, ausf, groesse) {
+  if (isHolzOderBohrschraube(bez)) {
+    const surface = surfaceKind(bez, ausf);
+    if (surface === "edel") return fachResult(7);
+    if (surface === "verzinkt") return fachResult(24);
+  }
+
+  if (/schrauben?/.test(bez) && !isHolzOderBohrschraube(bez) && surfaceKind(bez, ausf) === "edel") {
+    if (sizeInList(groesse, EDEL_SCREW_FACH_6)) return fachResult(6);
+    if (sizeInList(groesse, EDEL_SCREW_FACH_5)) return fachResult(5);
+  }
+
+  if (/stellf(?:ü|ue|u)(?:ß|ss)(?:e|en)?/.test(bez)) return fachResult(22);
+
+  if (/gegenkasten|schlie(?:ss|ß)kasten|schlie(?:ss|ß)blech|schlosskasten/.test(bez)) {
+    return fachResult(20);
+  }
+  if (/torriegel|stangenriegel/.test(bez)) return fachResult(20);
+
+  if (
+    isAmf(bez) &&
+    /dr(?:ü|ue)cker|\bknauf\b|\bknopf\b|beschl(?:ä|ae|a)ge|\bgarnitur\b/.test(bez)
+  ) {
+    return fachResult(11);
+  }
+
+  if (
+    /konstruktionsb(?:ä|ae|a)nd|lappenb(?:ä|ae|a)nd|(?:^|[^a-zäöü])torb(?:ä|ae|a)nd/.test(bez)
+  ) {
+    return fachResult(20);
+  }
+
+  if (
+    /\bsilikon\b|\bsmp\b|\bacryl\b|bauschaum|klebt\s*(?:und|\+)\s*dichtet/.test(bez) &&
+    !/acrylglas/.test(bez)
+  ) {
+    return fachResult(8);
   }
 
   return null;
