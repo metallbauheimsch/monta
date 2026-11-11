@@ -95,14 +95,23 @@ export function markStructureMigrated() {
   }
 }
 
-// Sammelt alle bekannten Baugruppen/Bauteile aus lokaler Registry und
-// vorhandenen Materialpositionen – für einmalige Migration nach Supabase.
+function knownProjectIds(projects) {
+  return new Set((projects || []).map((project) => String(project?.id ?? "")));
+}
+
+// Sammelt Baugruppen/Bauteile aus lokaler Registry und Materialpositionen
+// für die Migration nach Supabase. Projekt-IDs, die nicht im geladenen
+// Projektbestand stehen, bleiben in localStorage, werden aber nicht
+// geschrieben – sonst bricht ein Fremdschlüssel die übrigen Einträge ab
+// und der Versuch wiederholt sich bei jedem Laden.
 export function collectStructureCandidates(projects, items) {
   const map = new Map();
   const projectsById = new Map((projects || []).map((p) => [p.id, p]));
+  const knownIds = knownProjectIds(projects);
   const registry = readRegistry();
 
   Object.entries(registry).forEach(([projectId, cur]) => {
+    if (!knownIds.has(String(projectId))) return;
     (cur.baugruppen || []).forEach((bg) => {
       const name = String(bg || "").trim();
       if (!name) return;
@@ -124,6 +133,7 @@ export function collectStructureCandidates(projects, items) {
   });
 
   (items || []).forEach((item) => {
+    if (!knownIds.has(String(item?.project_id ?? ""))) return;
     const project = projectsById.get(item.project_id);
     const { baugruppe, bauteil } = parseEinbauort(item.einbauort, project?.baugruppe);
     if (!baugruppe) return;
