@@ -63,6 +63,7 @@ import {
   gcPendingItemMutations,
 } from "./utils/itemSync";
 import { fetchAllPages } from "./utils/pagedSelect";
+import { beginStartupLoad, finishStartupLoad } from "./utils/startupLoad";
 import {
   buildDuplicatedBauteilItems,
   splitDuplicatedItemsForInsert,
@@ -112,6 +113,7 @@ function App() {
   // Verhindert, dass ein älterer (noch laufender) load() neuere lokale
   // Inserts oder frischere Serverdaten überschreibt.
   const loadGeneration = useRef(0);
+  const startupLoadInFlight = useRef(false);
   const pendingItemMutations = useRef(createPendingItemMutations());
   const migratingRef = useRef(false);
   const structureRowsRef = useRef(structureRows);
@@ -196,6 +198,7 @@ function App() {
 
   function clearMontaState() {
     loadGeneration.current += 1;
+    startupLoadInFlight.current = false;
     setProjects([]);
     setItems([]);
     setStructureRows([]);
@@ -256,11 +259,19 @@ function App() {
   }
 
   const load = useCallback(async ({ silent = false } = {}) => {
-    const myGen = ++loadGeneration.current;
+    const begun = beginStartupLoad(
+      { generation: loadGeneration.current, startupInFlight: startupLoadInFlight.current },
+      { silent }
+    );
+    if (!begun.started) return;
+    loadGeneration.current = begun.state.generation;
+    startupLoadInFlight.current = begun.state.startupInFlight;
+    const myGen = begun.generation;
     if (!silent) {
       setLoading(true);
       setLoadError(null);
     }
+    let ok = false;
     try {
       if (!supabase) {
         // Keine stillen Demo-/localStorage-Daten: gleiche Quelle wie Vercel erfordert Supabase-Env.
@@ -330,13 +341,23 @@ function App() {
       setProjects(nextProjects);
       setItems(mergedItems);
       setStructureRows(nextStructure);
+      ok = true;
     } catch (err) {
       console.error("MONTA: Laden der Daten fehlgeschlagen.", err);
-      if (!silent && myGen === loadGeneration.current) {
+      const failed = finishStartupLoad(
+        { generation: loadGeneration.current, startupInFlight: startupLoadInFlight.current },
+        { silent, generation: myGen, ok: false }
+      );
+      if (failed.showError) {
         setLoadError(err?.message || "Unbekannter Fehler beim Laden der Daten.");
       }
     } finally {
-      if (!silent && myGen === loadGeneration.current) setLoading(false);
+      const finished = finishStartupLoad(
+        { generation: loadGeneration.current, startupInFlight: startupLoadInFlight.current },
+        { silent, generation: myGen, ok }
+      );
+      startupLoadInFlight.current = finished.state.startupInFlight;
+      if (finished.endStartup) setLoading(false);
     }
   }, []);
 

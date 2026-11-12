@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseFunctionsUrl, supabase } from "../services/supabaseClient";
+import { createAuthStateHandler } from "./authStateListener";
 
 const AuthContext = createContext(null);
 
@@ -58,60 +59,31 @@ export function AuthProvider({ children }) {
       return undefined;
     }
 
-    let cancelled = false;
-
-    async function init() {
-      setAuthLoading(true);
-      try {
-        const { data: { session: s } } = await supabase.auth.getSession();
-        if (cancelled) return;
-        setSession(s);
-        if (s?.user) {
-          const p = await fetchOwnProfile(s.user.id);
-          if (cancelled) return;
-          setProfile(p);
-          profileUserRef.current = s.user.id;
-        } else {
-          setProfile(null);
-        }
-      } catch (err) {
-        if (!cancelled) setAuthError(err?.message || "Anmeldung konnte nicht geprüft werden.");
-      } finally {
-        if (!cancelled) setAuthLoading(false);
-      }
-    }
-
-    init();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, s) => {
-      if (event === "PASSWORD_RECOVERY") setRecoveryMode(true);
-      if (event === "SIGNED_OUT") {
-        clearAuthData();
-        setAuthLoading(false);
-        return;
-      }
-      setSession(s);
-      if (s?.user) {
-        // TOKEN_REFRESHED: Profil nicht unnötig neu laden (Endlosschleifen vermeiden)
-        if (event === "TOKEN_REFRESHED" && profileUserRef.current === s.user.id) {
-          return;
-        }
-        try {
-          const p = await fetchOwnProfile(s.user.id);
-          setProfile(p);
-          profileUserRef.current = s.user.id;
-        } catch (err) {
-          setAuthError(err?.message || "Profil konnte nicht geladen werden.");
-        }
-      } else {
-        setProfile(null);
-        profileUserRef.current = null;
-      }
-      setAuthLoading(false);
+    // Einzige Quelle für Session/Profil beim Start ist onAuthStateChange
+    // (liefert garantiert INITIAL_SESSION). Kein separater getSession()-
+    // Init-Pfad mehr, und der Callback awaited keine Supabase-Abfrage -
+    // sonst Deadlock mit initialize() beim Token-Refresh im Kaltstart
+    // (Details siehe authStateListener.js).
+    const handler = createAuthStateHandler({
+      fetchProfile: fetchOwnProfile,
+      actions: {
+        setSession,
+        setProfile,
+        setAuthError,
+        setAuthLoading,
+        setRecoveryMode,
+        clearAuthData,
+        getProfileUserId: () => profileUserRef.current,
+        setProfileUserId: (id) => {
+          profileUserRef.current = id;
+        },
+      },
     });
 
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(handler.handle);
+
     return () => {
-      cancelled = true;
+      handler.dispose();
       subscription.unsubscribe();
     };
   }, [clearAuthData]);
